@@ -1,0 +1,2 @@
+# AISlop
+Sloppy AI games
