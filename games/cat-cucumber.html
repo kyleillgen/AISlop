@@ -13,8 +13,11 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const player = {x:200, y:200, size:20, color:'pink', speed:2};
-const enemy = {x:50, y:50, size:20, color:'green', speed:1.5};
+const enemy = {x:0, y:0, size:20, color:'green', speed:1.5};
 const kibble = {x:0, y:0, size:10, color:'brown'};
+const originalWidth = canvas.width;
+const originalHeight = canvas.height;
+let playArea = {x:0, y:0, width:originalWidth, height:originalHeight};
 let score = 0;
 let highScore = parseInt(localStorage.getItem('highScore'), 10) || 0;
 let gameOver = false;
@@ -23,11 +26,34 @@ let sprintTimer = 0;
 let restartTimer = null;
 let playAgainBox = {x:0, y:0, width:0, height:0};
 
-function spawnKibble() {
-  kibble.x = Math.random() * (canvas.width - kibble.size);
-  kibble.y = Math.random() * (canvas.height - kibble.size);
+function updatePlayArea() {
+  const shrinkSteps = Math.floor(score / 20);
+  const factor = Math.pow(0.95, shrinkSteps);
+  playArea.width = originalWidth * factor;
+  playArea.height = originalHeight * factor;
+  playArea.x = (originalWidth - playArea.width) / 2;
+  playArea.y = (originalHeight - playArea.height) / 2;
 }
 
+function spawnKibble() {
+  kibble.x = playArea.x + Math.random() * (playArea.width - kibble.size);
+  kibble.y = playArea.y + Math.random() * (playArea.height - kibble.size);
+}
+
+function spawnEnemy() {
+  do {
+    enemy.x = playArea.x + Math.random() * (playArea.width - enemy.size);
+    enemy.y = playArea.y + Math.random() * (playArea.height - enemy.size);
+  } while (
+    Math.hypot(
+      enemy.x + enemy.size / 2 - (player.x + player.size / 2),
+      enemy.y + enemy.size / 2 - (player.y + player.size / 2)
+    ) < enemy.size / 2 + player.size / 2 + 5
+  );
+}
+
+updatePlayArea();
+spawnEnemy();
 spawnKibble();
 
 document.addEventListener('keydown', e => {
@@ -38,7 +64,7 @@ document.addEventListener('keydown', e => {
     player.speed = 4;
   }
   if (gameOver && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !restartTimer) {
-    restartTimer = setTimeout(resetGame, 1000);
+    restartTimer = setTimeout(resetGame, 500);
   }
 });
 
@@ -68,10 +94,10 @@ function resetGame() {
   }
   gameOver = false;
   score = 0;
-  player.x = 200;
-  player.y = 200;
-  enemy.x = 50;
-  enemy.y = 50;
+  updatePlayArea();
+  player.x = playArea.x + playArea.width / 2;
+  player.y = playArea.y + playArea.height / 2;
+  spawnEnemy();
   sprintTimer = 0;
   player.speed = 2;
   spawnKibble();
@@ -85,8 +111,8 @@ function update() {
   if (keys['ArrowLeft']) player.x -= player.speed;
   if (keys['ArrowRight']) player.x += player.speed;
 
-  player.x = Math.max(0, Math.min(380, player.x));
-  player.y = Math.max(0, Math.min(380, player.y));
+  player.x = Math.max(playArea.x, Math.min(playArea.x + playArea.width - player.size, player.x));
+  player.y = Math.max(playArea.y, Math.min(playArea.y + playArea.height - player.size, player.y));
 
   const dx = player.x - enemy.x;
   const dy = player.y - enemy.y;
@@ -95,13 +121,20 @@ function update() {
     enemy.x += (dx / dist) * enemy.speed;
     enemy.y += (dy / dist) * enemy.speed;
   }
+  enemy.x = Math.max(playArea.x, Math.min(playArea.x + playArea.width - enemy.size, enemy.x));
+  enemy.y = Math.max(playArea.y, Math.min(playArea.y + playArea.height - enemy.size, enemy.y));
 
   if (player.x < kibble.x + kibble.size &&
       player.x + player.size > kibble.x &&
       player.y < kibble.y + kibble.size &&
       player.y + player.size > kibble.y) {
     score++;
+    updatePlayArea();
     spawnKibble();
+    player.x = Math.max(playArea.x, Math.min(playArea.x + playArea.width - player.size, player.x));
+    player.y = Math.max(playArea.y, Math.min(playArea.y + playArea.height - player.size, player.y));
+    enemy.x = Math.max(playArea.x, Math.min(playArea.x + playArea.width - enemy.size, enemy.x));
+    enemy.y = Math.max(playArea.y, Math.min(playArea.y + playArea.height - enemy.size, enemy.y));
   }
 
   if (player.x < enemy.x + enemy.size &&
@@ -121,7 +154,9 @@ function update() {
     if (sprintTimer === 0) player.speed = 2;
   }
 
-  ctx.clearRect(0,0,400,400);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle = 'black';
+  ctx.strokeRect(playArea.x, playArea.y, playArea.width, playArea.height);
   ctx.fillStyle = kibble.color;
   ctx.fillRect(kibble.x, kibble.y, kibble.size, kibble.size);
   ctx.fillStyle = player.color;
