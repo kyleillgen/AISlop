@@ -12,8 +12,10 @@
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const player = {x:200, y:200, size:20, color:'pink', speed:2};
-const enemy = {x:0, y:0, size:20, color:'green', speed:1.5};
+canvas.width = Math.min(window.innerWidth, window.innerHeight);
+canvas.height = canvas.width;
+const player = {x:canvas.width / 2, y:canvas.height / 2, size:20, color:'pink', baseSpeed:2, speed:2};
+const enemy = {x:0, y:0, size:20, color:'green', baseSpeed:1.5, speed:1.5};
 const kibble = {x:0, y:0, size:10, color:'brown'};
 const originalWidth = canvas.width;
 const originalHeight = canvas.height;
@@ -25,6 +27,21 @@ let keys = {};
 let sprintTimer = 0;
 let restartTimer = null;
 let playAgainBox = {x:0, y:0, width:0, height:0};
+let speedScale = canvas.width / 400;
+let powerUp = null;
+let invincibleTimer = 0;
+let speedBoostTimer = 0;
+let scoreMultiplierTimer = 0;
+let invincibleHue = 0;
+const POWERUP_DURATION = 7 * 60; // 7 seconds at 60fps
+
+function updateSpeedScale() {
+  speedScale = canvas.width / 400;
+  player.speed = player.baseSpeed * speedScale;
+  if (speedBoostTimer > 0) player.speed *= 1.5;
+  if (sprintTimer > 0) player.speed *= 2;
+  enemy.speed = enemy.baseSpeed * speedScale;
+}
 
 function updatePlayArea() {
   const shrinkSteps = Math.floor(score / 20);
@@ -52,16 +69,34 @@ function spawnEnemy() {
   );
 }
 
+function spawnPowerUp() {
+  const types = ['invincibility', 'speed', 'score'];
+  const type = types[Math.floor(Math.random() * types.length)];
+  const size = kibble.size * 2;
+  const color = type === 'invincibility' ? 'yellow' : type === 'speed' ? 'blue' : 'purple';
+  powerUp = {
+    type,
+    color,
+    size,
+    x: playArea.x + Math.random() * (playArea.width - size),
+    y: playArea.y + Math.random() * (playArea.height - size),
+    timer: 300
+  };
+}
+
 updatePlayArea();
+player.x = playArea.x + playArea.width / 2;
+player.y = playArea.y + playArea.height / 2;
 spawnEnemy();
 spawnKibble();
+updateSpeedScale();
 
 document.addEventListener('keydown', e => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
   keys[e.key] = true;
   if (e.key === 's' && sprintTimer === 0) {
     sprintTimer = 120; // hidden sprint ability
-    player.speed = 4;
+    updateSpeedScale();
   }
   if (gameOver && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !restartTimer) {
     restartTimer = setTimeout(resetGame, 500);
@@ -99,7 +134,11 @@ function resetGame() {
   player.y = playArea.y + playArea.height / 2;
   spawnEnemy();
   sprintTimer = 0;
-  player.speed = 2;
+  invincibleTimer = 0;
+  speedBoostTimer = 0;
+  scoreMultiplierTimer = 0;
+  powerUp = null;
+  updateSpeedScale();
   spawnKibble();
   keys = {};
   requestAnimationFrame(update);
@@ -128,7 +167,7 @@ function update() {
       player.x + player.size > kibble.x &&
       player.y < kibble.y + kibble.size &&
       player.y + player.size > kibble.y) {
-    score++;
+    score += scoreMultiplierTimer > 0 ? 2 : 1;
     updatePlayArea();
     spawnKibble();
     player.x = Math.max(playArea.x, Math.min(playArea.x + playArea.width - player.size, player.x));
@@ -140,7 +179,8 @@ function update() {
   if (player.x < enemy.x + enemy.size &&
       player.x + player.size > enemy.x &&
       player.y < enemy.y + enemy.size &&
-      player.y + player.size > enemy.y) {
+      player.y + player.size > enemy.y &&
+      invincibleTimer === 0) {
     gameOver = true;
     keys = {};
     if (score > highScore) {
@@ -149,17 +189,56 @@ function update() {
     }
   }
 
+  if (powerUp &&
+      player.x < powerUp.x + powerUp.size &&
+      player.x + player.size > powerUp.x &&
+      player.y < powerUp.y + powerUp.size &&
+      player.y + player.size > powerUp.y) {
+    if (powerUp.type === 'invincibility') {
+      invincibleTimer = POWERUP_DURATION;
+    } else if (powerUp.type === 'speed') {
+      speedBoostTimer = POWERUP_DURATION;
+      updateSpeedScale();
+    } else if (powerUp.type === 'score') {
+      scoreMultiplierTimer = POWERUP_DURATION;
+    }
+    powerUp = null;
+  }
+
+  if (powerUp) {
+    powerUp.timer--;
+    if (powerUp.timer === 0) powerUp = null;
+  } else if (score >= 5 && Math.random() < 0.005) {
+    spawnPowerUp();
+  }
+
   if (sprintTimer > 0) {
     sprintTimer--;
-    if (sprintTimer === 0) player.speed = 2;
+    if (sprintTimer === 0) updateSpeedScale();
   }
+
+  if (invincibleTimer > 0) invincibleTimer--;
+  if (speedBoostTimer > 0) {
+    speedBoostTimer--;
+    if (speedBoostTimer === 0) updateSpeedScale();
+  }
+  if (scoreMultiplierTimer > 0) scoreMultiplierTimer--;
 
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.strokeStyle = 'black';
   ctx.strokeRect(playArea.x, playArea.y, playArea.width, playArea.height);
   ctx.fillStyle = kibble.color;
   ctx.fillRect(kibble.x, kibble.y, kibble.size, kibble.size);
-  ctx.fillStyle = player.color;
+  if (powerUp) {
+    ctx.fillStyle = powerUp.color;
+    ctx.fillRect(powerUp.x, powerUp.y, powerUp.size, powerUp.size);
+  }
+  let playerDrawColor = player.color;
+  if (invincibleTimer > 0) {
+    playerDrawColor = `hsl(${invincibleHue},100%,70%)`;
+    invincibleHue = (invincibleHue + 20) % 360;
+  }
+  ctx.fillStyle = playerDrawColor;
   ctx.fillRect(player.x, player.y, player.size, player.size);
   ctx.fillStyle = enemy.color;
   ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
