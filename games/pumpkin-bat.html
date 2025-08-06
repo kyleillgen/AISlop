@@ -17,6 +17,7 @@ const enemy = {x:350, y:50, size:20, color:'black', speed:1.5};
 let keys = {};
 
 document.addEventListener('keydown', e => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
   keys[e.key] = true;
   if (e.key === 'b') {
     // hidden blink ability

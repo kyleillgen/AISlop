@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "description": "Collection of simple HTML games",
   "scripts": {
-    "test": "echo 'No tests configured'"
+    "lint": "eslint . --ext .js,.html",
+    "test": "npm run lint -- --fix"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "eslint-plugin-html": "^7.1.0"
   }
 }

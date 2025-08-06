@@ -17,6 +17,7 @@ const enemy = {x:20, y:350, size:20, color:'green', speed:1.4};
 let keys = {};
 
 document.addEventListener('keydown', e => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
   keys[e.key] = true;
   if (e.key === 'u') {
     // hidden unicorn burst pushes goblin back

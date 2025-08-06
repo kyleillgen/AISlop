@@ -17,6 +17,7 @@ const enemy = {x:100, y:100, size:20, color:'red', speed:1.5, frozen:0};
 let keys = {};
 
 document.addEventListener('keydown', e => {
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
   keys[e.key] = true;
   if (e.key === 'f') {
     enemy.frozen = 120; // hidden ability freezes flame
