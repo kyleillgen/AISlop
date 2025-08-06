@@ -33,7 +33,13 @@ let invincibleTimer = 0;
 let speedBoostTimer = 0;
 let scoreMultiplierTimer = 0;
 let invincibleHue = 0;
-const POWERUP_DURATION = 7 * 60; // 7 seconds at 60fps
+let activePowerUpName = '';
+const POWERUP_DURATION = 10 * 60; // 10 seconds at 60fps
+const POWERUP_NAMES = {
+  invincibility: 'Invincibility',
+  speed: 'Speed Boost',
+  score: 'Score Multiplier'
+};
 const POWERUP_SPAWN_INTERVAL = 10 * 60; // average 10 seconds at 60fps
 let powerUpSpawnTimer = 0;
 let nextPowerUpSpawn = POWERUP_SPAWN_INTERVAL * (0.5 + Math.random());
@@ -146,6 +152,7 @@ function resetGame() {
   speedBoostTimer = 0;
   scoreMultiplierTimer = 0;
   powerUp = null;
+  activePowerUpName = '';
   resetPowerUpSpawnTimer();
   updateSpeedScale();
   spawnKibble();
@@ -211,13 +218,14 @@ function update() {
     } else if (powerUp.type === 'score') {
       scoreMultiplierTimer = POWERUP_DURATION;
     }
+    activePowerUpName = POWERUP_NAMES[powerUp.type];
     powerUp = null;
   }
 
   if (powerUp) {
     powerUp.timer--;
     if (powerUp.timer === 0) powerUp = null;
-  } else if (score >= 5) {
+  } else if (score >= 5 && invincibleTimer === 0 && speedBoostTimer === 0 && scoreMultiplierTimer === 0) {
     powerUpSpawnTimer++;
     if (powerUpSpawnTimer >= nextPowerUpSpawn) {
       spawnPowerUp();
@@ -232,12 +240,21 @@ function update() {
     if (sprintTimer === 0) updateSpeedScale();
   }
 
-  if (invincibleTimer > 0) invincibleTimer--;
+  if (invincibleTimer > 0) {
+    invincibleTimer--;
+    if (invincibleTimer === 0) activePowerUpName = '';
+  }
   if (speedBoostTimer > 0) {
     speedBoostTimer--;
-    if (speedBoostTimer === 0) updateSpeedScale();
+    if (speedBoostTimer === 0) {
+      updateSpeedScale();
+      activePowerUpName = '';
+    }
   }
-  if (scoreMultiplierTimer > 0) scoreMultiplierTimer--;
+  if (scoreMultiplierTimer > 0) {
+    scoreMultiplierTimer--;
+    if (scoreMultiplierTimer === 0) activePowerUpName = '';
+  }
 
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.strokeStyle = 'black';
@@ -266,6 +283,13 @@ function update() {
   ctx.fillStyle = 'black';
   ctx.textAlign = 'right';
   ctx.fillText('Score: ' + score, canvas.width - 10, 10);
+
+  if (activePowerUpName) {
+    ctx.fillStyle = 'black';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(activePowerUpName, canvas.width / 2, canvas.height - 10);
+  }
 
   if (gameOver) {
     ctx.fillStyle = 'black';
