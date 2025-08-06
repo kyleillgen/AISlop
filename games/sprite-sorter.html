@@ -4,10 +4,10 @@
   <meta charset="UTF-8" />
   <title>Sprite Sorter</title>
   <style>
-    body { text-align: center; font-family: sans-serif; background: #f0f8ff; }
+    body { text-align: center; font-family: sans-serif; background-color: #f0f8ff; }
     #game { display: flex; align-items: center; justify-content: center; }
-    #playfield { width: 400px; height: 300px; margin: 20px; border: 2px dashed #aaa; display: flex; align-items: center; justify-content: center; background: white; overflow: hidden; }
-    #creature { font-size: 64px; transition: transform 0.5s; }
+    #playfield { width: 400px; height: 300px; margin: 20px; border: 2px dashed #aaa; display: flex; align-items: center; justify-content: center; background: white; }
+    #creature { font-size: 64px; transition: transform 0.5s; display: inline-block; }
     #stats { margin-top: 10px; }
     .basket { font-size: 48px; margin: 0 20px; }
     .cry { animation: shake 0.5s; }
@@ -42,9 +42,8 @@
       current = creatures[Math.floor(Math.random() * creatures.length)];
       const creatureEl = document.getElementById('creature');
       creatureEl.textContent = current.emoji;
-      creatureEl.style.transition = '';
+      creatureEl.className = '';
       creatureEl.style.transform = '';
-      creatureEl.classList.remove('cry');
       spawnTime = performance.now();
     }
 
@@ -54,22 +53,21 @@
 
     function handleResult(correct) {
       const creatureEl = document.getElementById('creature');
-      document.body.style.cursor = 'grabbing';
-      const x = current.basket === 'left' ? -200 : 200;
-      creatureEl.style.transition = 'transform 0.5s';
-      creatureEl.style.transform = `translateX(${x}px) scale(0.5)`;
-      setTimeout(() => {
-        document.body.style.cursor = 'default';
-        if (correct) {
-          creatureEl.style.transform = `translate(${x}px, -200px) scale(0.5)`;
-        } else {
-          creatureEl.textContent = '😢';
-          creatureEl.classList.add('cry');
-        }
+      if (correct) {
+        const x = current.basket === 'left' ? -200 : 200;
+        creatureEl.style.transform = `translate(${x}px, -200px) scale(0.5)`;
         setTimeout(() => {
+          creatureEl.style.transform = '';
           spawn();
         }, 500);
-      }, 500);
+      } else {
+        creatureEl.textContent = '😢';
+        creatureEl.classList.add('cry');
+        setTimeout(() => {
+          creatureEl.classList.remove('cry');
+          spawn();
+        }, 500);
+      }
     }
 
     document.addEventListener('keydown', e => {
