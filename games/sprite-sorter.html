@@ -3,13 +3,52 @@
 <head>
   <meta charset="UTF-8" />
   <title>Sprite Sorter</title>
+  <link href="https://fonts.googleapis.com/css2?family=Uncial+Antiqua&display=swap" rel="stylesheet" />
   <style>
-    body { text-align: center; font-family: sans-serif; background-color: #f0f8ff; }
-    #game { display: flex; align-items: center; justify-content: center; }
-    #playfield { width: 400px; height: 300px; margin: 20px; border: 2px dashed #aaa; display: flex; align-items: center; justify-content: center; background: white; }
-    #creature { font-size: 64px; transition: transform 0.5s; display: inline-block; }
+    body {
+      text-align: center;
+      font-family: 'Uncial Antiqua', serif;
+      background: radial-gradient(circle, #1b2735, #090a0f);
+      color: #fff4e6;
+    }
+    #game {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 70vh;
+    }
+    #playfield {
+      width: 300px;
+      height: 300px;
+      margin: 20px;
+      border: 3px solid #9d4edd;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.3);
+      box-shadow: 0 0 15px #9d4edd;
+    }
+    #creature {
+      font-size: 64px;
+      transition: transform 0.5s;
+      display: inline-block;
+      animation: float 2s infinite ease-in-out;
+    }
     #stats { margin-top: 10px; }
-    .basket { font-size: 48px; margin: 0 20px; }
+    .basket {
+      width: 80px;
+      height: 80px;
+      border: 3px solid #9d4edd;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      background: rgba(157, 78, 221, 0.2);
+      box-shadow: 0 0 10px #9d4edd;
+    }
     .cry { animation: shake 0.5s; }
     @keyframes shake {
       0% { transform: translateX(0); }
@@ -17,21 +56,25 @@
       75% { transform: translateX(10px); }
       100% { transform: translateX(0); }
     }
+    @keyframes float {
+      0% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
-  <h1>Sprite Sorter</h1>
   <div id="game">
-    <div id="leftBasket" class="basket">🧺</div>
+    <div id="topBasket" class="basket">🔮</div>
     <div id="playfield"><span id="creature"></span></div>
-    <div id="rightBasket" class="basket">🧺</div>
+    <div id="bottomBasket" class="basket">🔥</div>
   </div>
   <div id="stats">Combo: 0 | High Combo: 0</div>
   <div>Press ↑ for Goblin, ↓ for Faerie</div>
   <script>
     const creatures = [
-      { emoji: '🧌', key: 'ArrowUp', basket: 'left' },
-      { emoji: '🧚', key: 'ArrowDown', basket: 'right' }
+      { emoji: '🧌', key: 'ArrowUp', basket: 'top' },
+      { emoji: '🧚', key: 'ArrowDown', basket: 'bottom' }
     ];
     let current = null;
     let comboString = '';
@@ -54,8 +97,8 @@
     function handleResult(correct) {
       const creatureEl = document.getElementById('creature');
       if (correct) {
-        const x = current.basket === 'left' ? -200 : 200;
-        creatureEl.style.transform = `translate(${x}px, -200px) scale(0.5)`;
+        const y = current.basket === 'top' ? -200 : 200;
+        creatureEl.style.transform = `translate(0, ${y}px) scale(0.5)`;
         setTimeout(() => {
           creatureEl.style.transform = '';
           spawn();
@@ -74,7 +117,7 @@
       if (!current) return;
       const now = performance.now();
       if (e.key === current.key) {
-        if (now - spawnTime <= 1000) {
+        if (now - spawnTime <= 1500) {
           comboString += e.key === 'ArrowUp' ? 'U' : 'D';
           handleResult(true);
         } else {
