@@ -285,10 +285,17 @@ function update() {
   ctx.fillText('Score: ' + score, canvas.width - 10, 10);
 
   if (activePowerUpName) {
-    ctx.fillStyle = 'black';
+    const text = activePowerUpName;
+    const x = canvas.width / 2;
+    const y = canvas.height - 10;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(activePowerUpName, canvas.width / 2, canvas.height - 10);
+    const textWidth = ctx.measureText(text).width;
+    const padding = 4;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillRect(x - textWidth / 2 - padding, y - 16 - padding, textWidth + padding * 2, 16 + padding * 2);
+    ctx.fillStyle = 'black';
+    ctx.fillText(text, x, y);
   }
 
   if (gameOver) {
