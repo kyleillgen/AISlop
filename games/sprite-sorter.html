@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Sprite Sorter</title>
+  <style>
+    body { text-align: center; font-family: sans-serif; background: #f0f8ff; }
+    #playfield { width: 400px; height: 300px; margin: 20px auto; border: 2px dashed #aaa; display: flex; align-items: center; justify-content: center; background: white; }
+    #creature { font-size: 64px; }
+    #stats { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Sprite Sorter</h1>
+  <div id="playfield"><span id="creature"></span></div>
+  <div id="stats">Combo: 0 | High Combo: 0</div>
+  <div>Press ← for Gloom Goblin, → for Sparkle Sprite</div>
+  <script>
+    const creatures = [
+      { emoji: '✨', key: 'ArrowRight' },
+      { emoji: '👾', key: 'ArrowLeft' }
+    ];
+    let current = null;
+    let combo = 0;
+    let highCombo = parseInt(localStorage.getItem('spriteHighCombo'), 10) || 0;
+    let spawnTime = 0;
+
+    function spawn() {
+      current = creatures[Math.floor(Math.random() * creatures.length)];
+      document.getElementById('creature').textContent = current.emoji;
+      spawnTime = performance.now();
+    }
+
+    function updateStats() {
+      document.getElementById('stats').textContent = 'Combo: ' + combo + ' | High Combo: ' + highCombo;
+      document.body.style.backgroundColor = 'hsl(' + (combo * 30 % 360) + ', 80%, 90%)';
+    }
+
+    document.addEventListener('keydown', e => {
+      if (!current) return;
+      const now = performance.now();
+      if (e.key === current.key) {
+        if (now - spawnTime <= 1000) {
+          combo++;
+        } else {
+          combo = 0;
+        }
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        combo = 0;
+      } else {
+        return;
+      }
+      if (combo > highCombo) {
+        highCombo = combo;
+        localStorage.setItem('spriteHighCombo', highCombo);
+      }
+      updateStats();
+      spawn();
+    });
+
+    updateStats();
+    spawn();
+  </script>
+</body>
+</html>

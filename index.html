@@ -2,14 +2,26 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Cat vs Cucumber</title>
+  <title>AISlop Arcade</title>
   <style>
     body { font-family: sans-serif; text-align: center; margin: 0; }
     #gameFrame { width: 100%; height: 80vh; border: none; }
+    button { margin: 5px; }
   </style>
 </head>
 <body>
-  <h1>Cat vs Cucumber</h1>
-  <iframe id="gameFrame" src="games/cat-cucumber.html" title="Cat vs Cucumber game"></iframe>
+  <h1 id="title">Cat vs Cucumber</h1>
+  <div>
+    <button onclick="loadGame('games/cat-cucumber.html','Cat vs Cucumber')">Cat vs Cucumber</button>
+    <button onclick="loadGame('games/sprite-sorter.html','Sprite Sorter')">Sprite Sorter</button>
+  </div>
+  <iframe id="gameFrame" src="games/cat-cucumber.html" title="Game frame"></iframe>
+  <script>
+    function loadGame(src, title) {
+      document.getElementById('gameFrame').src = src;
+      document.getElementById('title').textContent = title;
+    }
+    window.loadGame = loadGame;
+  </script>
 </body>
 </html>
