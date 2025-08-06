@@ -11,6 +11,9 @@ export function startGame({
   const keys = {};
 
   window.addEventListener('keydown', e => {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      e.preventDefault();
+    }
     keys[e.key] = true;
   });
 
