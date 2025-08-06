@@ -34,6 +34,14 @@ let speedBoostTimer = 0;
 let scoreMultiplierTimer = 0;
 let invincibleHue = 0;
 const POWERUP_DURATION = 7 * 60; // 7 seconds at 60fps
+const POWERUP_SPAWN_INTERVAL = 10 * 60; // average 10 seconds at 60fps
+let powerUpSpawnTimer = 0;
+let nextPowerUpSpawn = POWERUP_SPAWN_INTERVAL * (0.5 + Math.random());
+
+function resetPowerUpSpawnTimer() {
+  powerUpSpawnTimer = 0;
+  nextPowerUpSpawn = POWERUP_SPAWN_INTERVAL * (0.5 + Math.random());
+}
 
 function updateSpeedScale() {
   speedScale = canvas.width / 400;
@@ -138,6 +146,7 @@ function resetGame() {
   speedBoostTimer = 0;
   scoreMultiplierTimer = 0;
   powerUp = null;
+  resetPowerUpSpawnTimer();
   updateSpeedScale();
   spawnKibble();
   keys = {};
@@ -208,8 +217,14 @@ function update() {
   if (powerUp) {
     powerUp.timer--;
     if (powerUp.timer === 0) powerUp = null;
-  } else if (score >= 5 && Math.random() < 0.005) {
-    spawnPowerUp();
+  } else if (score >= 5) {
+    powerUpSpawnTimer++;
+    if (powerUpSpawnTimer >= nextPowerUpSpawn) {
+      spawnPowerUp();
+      resetPowerUpSpawnTimer();
+    }
+  } else {
+    powerUpSpawnTimer = 0;
   }
 
   if (sprintTimer > 0) {
