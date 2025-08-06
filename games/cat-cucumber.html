@@ -14,8 +14,18 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const player = {x:200, y:200, size:20, color:'pink', speed:2};
 const enemy = {x:50, y:50, size:20, color:'green', speed:1.5};
+const kibble = {x:0, y:0, size:10, color:'brown'};
+let score = 0;
+let gameOver = false;
 let keys = {};
 let sprintTimer = 0;
+
+function spawnKibble() {
+  kibble.x = Math.random() * (canvas.width - kibble.size);
+  kibble.y = Math.random() * (canvas.height - kibble.size);
+}
+
+spawnKibble();
 
 document.addEventListener('keydown', e => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
@@ -40,8 +50,25 @@ function update() {
   const dx = player.x - enemy.x;
   const dy = player.y - enemy.y;
   const dist = Math.hypot(dx, dy);
-  enemy.x += (dx / dist) * enemy.speed;
-  enemy.y += (dy / dist) * enemy.speed;
+  if (dist !== 0) {
+    enemy.x += (dx / dist) * enemy.speed;
+    enemy.y += (dy / dist) * enemy.speed;
+  }
+
+  if (player.x < kibble.x + kibble.size &&
+      player.x + player.size > kibble.x &&
+      player.y < kibble.y + kibble.size &&
+      player.y + player.size > kibble.y) {
+    score++;
+    spawnKibble();
+  }
+
+  if (player.x < enemy.x + enemy.size &&
+      player.x + player.size > enemy.x &&
+      player.y < enemy.y + enemy.size &&
+      player.y + player.size > enemy.y) {
+    gameOver = true;
+  }
 
   if (sprintTimer > 0) {
     sprintTimer--;
@@ -49,12 +76,26 @@ function update() {
   }
 
   ctx.clearRect(0,0,400,400);
+  ctx.fillStyle = kibble.color;
+  ctx.fillRect(kibble.x, kibble.y, kibble.size, kibble.size);
   ctx.fillStyle = player.color;
   ctx.fillRect(player.x, player.y, player.size, player.size);
   ctx.fillStyle = enemy.color;
   ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
 
-  requestAnimationFrame(update);
+  ctx.fillStyle = 'black';
+  ctx.font = '16px sans-serif';
+  ctx.textAlign = 'right';
+  ctx.fillText('Score: ' + score, canvas.width - 10, 20);
+
+  if (gameOver) {
+    ctx.fillStyle = 'black';
+    ctx.font = '24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Game Over! Score: ' + score, canvas.width / 2, canvas.height / 2);
+  } else {
+    requestAnimationFrame(update);
+  }
 }
 update();
 </script>
