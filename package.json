@@ -1,0 +1,8 @@
+{
+  "name": "aislop",
+  "version": "1.0.0",
+  "description": "Collection of simple HTML games",
+  "scripts": {
+    "test": "echo 'No tests configured'"
+  }
+}

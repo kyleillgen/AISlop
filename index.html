@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>AISlop Games</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; margin: 0; }
+    #gameFrame { width: 100%; height: 80vh; border: none; }
+    #selector { margin: 10px; }
+  </style>
+</head>
+<body>
+  <h1>AISlop Games</h1>
+  <label for="gameSelect">Choose a game:</label>
+  <select id="gameSelect" aria-label="Select a game">
+    <option value="games/cat-cucumber.html">Cat vs Cucumber</option>
+    <option value="games/marshmallow-flame.html">Marshmallow vs Flame</option>
+    <option value="games/pumpkin-bat.html">Pumpkin vs Bat</option>
+    <option value="games/unicorn-goblin.html">Unicorn vs Goblin</option>
+    <option value="games/robot-carrot.html">Robot Rabbit vs Carrot Drone</option>
+  </select>
+  <iframe id="gameFrame" src="games/cat-cucumber.html" title="Game area"></iframe>
+  <script>
+    const select = document.getElementById('gameSelect');
+    const frame = document.getElementById('gameFrame');
+    select.addEventListener('change', () => {
+      frame.src = select.value;
+    });
+  </script>
+</body>
+</html>
