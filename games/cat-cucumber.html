@@ -16,9 +16,12 @@ const player = {x:200, y:200, size:20, color:'pink', speed:2};
 const enemy = {x:50, y:50, size:20, color:'green', speed:1.5};
 const kibble = {x:0, y:0, size:10, color:'brown'};
 let score = 0;
+let highScore = parseInt(localStorage.getItem('highScore'), 10) || 0;
 let gameOver = false;
 let keys = {};
 let sprintTimer = 0;
+let restartTimer = null;
+let playAgainBox = {x:0, y:0, width:0, height:0};
 
 function spawnKibble() {
   kibble.x = Math.random() * (canvas.width - kibble.size);
@@ -34,9 +37,47 @@ document.addEventListener('keydown', e => {
     sprintTimer = 120; // hidden sprint ability
     player.speed = 4;
   }
+  if (gameOver && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !restartTimer) {
+    restartTimer = setTimeout(resetGame, 1000);
+  }
 });
 
-document.addEventListener('keyup', e => { keys[e.key] = false; });
+document.addEventListener('keyup', e => {
+  keys[e.key] = false;
+  if (restartTimer) {
+    clearTimeout(restartTimer);
+    restartTimer = null;
+  }
+});
+
+canvas.addEventListener('click', e => {
+  if (!gameOver) return;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+  if (x >= playAgainBox.x && x <= playAgainBox.x + playAgainBox.width &&
+      y >= playAgainBox.y && y <= playAgainBox.y + playAgainBox.height) {
+    resetGame();
+  }
+});
+
+function resetGame() {
+  if (restartTimer) {
+    clearTimeout(restartTimer);
+    restartTimer = null;
+  }
+  gameOver = false;
+  score = 0;
+  player.x = 200;
+  player.y = 200;
+  enemy.x = 50;
+  enemy.y = 50;
+  sprintTimer = 0;
+  player.speed = 2;
+  spawnKibble();
+  keys = {};
+  requestAnimationFrame(update);
+}
 
 function update() {
   if (keys['ArrowUp']) player.y -= player.speed;
@@ -68,6 +109,11 @@ function update() {
       player.y < enemy.y + enemy.size &&
       player.y + player.size > enemy.y) {
     gameOver = true;
+    keys = {};
+    if (score > highScore) {
+      highScore = score;
+      localStorage.setItem('highScore', highScore);
+    }
   }
 
   if (sprintTimer > 0) {
@@ -83,17 +129,37 @@ function update() {
   ctx.fillStyle = enemy.color;
   ctx.fillRect(enemy.x, enemy.y, enemy.size, enemy.size);
 
-  ctx.fillStyle = 'black';
+  ctx.fillStyle = 'green';
   ctx.font = '16px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('High Score: ' + highScore, 10, 10);
+  ctx.fillStyle = 'black';
   ctx.textAlign = 'right';
-  ctx.fillText('Score: ' + score, canvas.width - 10, 20);
+  ctx.fillText('Score: ' + score, canvas.width - 10, 10);
 
   if (gameOver) {
     ctx.fillStyle = 'black';
     ctx.font = '24px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Game Over! Score: ' + score, canvas.width / 2, canvas.height / 2);
+    ctx.textBaseline = 'alphabetic';
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    ctx.fillText('Game Over! Score: ' + score, centerX, centerY);
+    const playAgainText = 'Play again?';
+    ctx.font = '20px sans-serif';
+    ctx.textBaseline = 'top';
+    const playAgainY = centerY + 30;
+    ctx.fillText(playAgainText, centerX, playAgainY);
+    const textWidth = ctx.measureText(playAgainText).width;
+    playAgainBox = {
+      x: centerX - textWidth / 2,
+      y: playAgainY,
+      width: textWidth,
+      height: 24
+    };
   } else {
+    ctx.textBaseline = 'alphabetic';
     requestAnimationFrame(update);
   }
 }
