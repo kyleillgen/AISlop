@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>robot-carrot</title>
+    <style>
+      canvas { border: 1px solid #000; display:block; margin:0 auto; }
+    </style>
+  </head>
+  <body>
+    <canvas id="game" width="400" height="400" tabindex="0"></canvas>
+    <script>
+      const canvas = document.getElementById('game');
+      canvas.focus();
+      canvas.addEventListener('click', () => canvas.focus());
+      canvas.addEventListener('keydown', (e) => {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          e.preventDefault();
+          // game logic
+        }
+      });
+    </script>
+  </body>
+</html>
