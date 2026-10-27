@@ -13,8 +13,9 @@
 <script src="flow-shell.js"></script>
 <script>
 // Flipper: one button works both flippers. The ball comes down to a flipper on a beat; flip as
-// it gets there and it's sent up the table into a drop target, ricochets off the pop bumpers and
-// comes back down, landing on the beat again. Knock the whole bank of targets down and it pays.
+// it gets there and it flies up the table, ricocheting off whatever it meets (bumpers, drop
+// targets, the slingshots), and still comes back down to a flipper on a beat. Flip early and it
+// goes left, late and it goes right. Knock the whole bank of targets down and it pays.
 //
 // Flow: a ring closes on the flipper the ball is heading for, and the ball lands as it closes.
 // The clean window is about ±0.24 beat and "perfect" is ±0.08 (about ±45 ms). Flip well off the
@@ -45,6 +46,7 @@
   let spinner = 0;
   let spinnerV = 0;
   let kickFlash = [0, 0];
+  let slingFlash = [0, 0];
   let bankResetAt = 0;
   let kick = 0;
   let trail = [];
@@ -95,6 +97,8 @@
     for (let j = 0; j < p.length - 1; j++) {
       if (now < p[j + 1].t) {
         let u = (now - p[j].t) / Math.max(1e-6, p[j + 1].t - p[j].t);
+        if (p[j].straight) return [p[j].x + (p[j + 1].x - p[j].x) * u, p[j].y + (p[j + 1].y - p[j].y) * u];
+        // Long hops (the kickback) slow as they climb and speed as they fall
         const goingUp = p[j + 1].y < p[j].y - 20;
         u = goingUp ? 1 - (1 - u) * (1 - u) : p[j + 1].y > p[j].y + 20 ? u * u : u;
         return p[j].straight ? [p[j].x + (p[j + 1].x - p[j].x) * u, p[j].y + (p[j + 1].y - p[j].y) * u] : arcPoint(p[j], p[j + 1], u);
@@ -104,32 +108,87 @@
     return [e.x, e.y];
   }
 
-  function pickTarget(api) {
-    const standing = targets.filter((t) => t.up);
-    if (!standing.length) return pops[Math.floor(Math.random() * pops.length)];
-    const lit = standing.find((t) => t.lit);
-    if (lit && Math.random() < 0.6) return lit;
-    return standing[Math.floor(Math.random() * standing.length)];
-  }
-
-  // A shot from (x, y) at t0, up into a target, off zero to two pop bumpers, down to a flipper at tEnd
+  // A shot is a real little flight: the ball leaves the flipper, rises against gravity and
+  // ricochets off the walls, pop bumpers, drop targets and slingshots, simulated in advance. Only
+  // the last moment is steered: a smooth curve from wherever the ball has got to onto the nearer
+  // flipper, arriving exactly at tEnd. So every shot goes somewhere different, and still lands on
+  // the beat. aim (-1 left .. 1 right) tilts the launch; Flow sets it from how early or late you
+  // flipped, the way the spot on a real flipper decides where the ball goes.
   function shot(api, x, y, t0, tEnd, opts) {
-    const first = pickTarget(api);
-    const side = Math.random() < 0.5 ? 0 : 1;
-    const span = tEnd - t0;
-    const extra = Math.max(0, Math.min(2, Math.round(span - 2)));
-    const up = Math.min(0.8, span * 0.4);
-    const pts = [{ x, y, t: t0 }, { x: first.x, y: first.y + (first.up !== undefined ? 22 : 0), t: t0 + up, hit: first }];
-    let prev = first;
-    for (let i = 0; i < extra; i++) {
-      const choices = pops.filter((p) => p !== prev);
-      const b = choices[Math.floor(Math.random() * choices.length)];
-      pts.push({ x: b.x, y: b.y, t: t0 + up + ((span - up) * (i + 1)) / (extra + 1.6), hit: b });
-      prev = b;
+    opts = opts || {};
+    const { W } = api;
+    const secs = Math.max(0.25, (tEnd - t0) * api.eng.beatSec);
+    const span = fy - TOP;
+    const g = 2.6 * span; // px/s²
+    const land = Math.min(0.4, secs * 0.35);
+    const simT = secs - land;
+    const aim = opts.aim !== undefined ? opts.aim : (Math.random() * 2 - 1) * 0.6;
+    const a = -Math.PI / 2 + (x < cx ? 0.2 : -0.2) + aim * 0.5 + (Math.random() - 0.5) * 0.16;
+    const v0 = Math.sqrt(2 * g * Math.max(90, y - TOP) * 0.88);
+    let vx = Math.cos(a) * v0, vy = Math.sin(a) * v0;
+    const DT = 1 / 120;
+    const knocked = new Set();
+    const samples = [{ x, y, s: 0 }];
+    let px = x, py = y;
+    const mark = (hit, sling) => {
+      const last = samples[samples.length - 1];
+      if (hit && !last.hit) last.hit = hit;
+      if (sling !== undefined) last.sling = sling;
+    };
+    for (let i = 1, tt = DT; tt <= simT; i++, tt += DT) {
+      vy += g * DT;
+      px += vx * DT;
+      py += vy * DT;
+      // Walls and the arch
+      if (px < 17) (px = 17), (vx = Math.abs(vx) * 0.85);
+      if (px > W - 17) (px = W - 17), (vx = -Math.abs(vx) * 0.85);
+      if (py < TOP + 2) (py = TOP + 2), (vy = Math.abs(vy) * 0.8);
+      // Pop bumpers kick the ball away
+      for (const b of pops) {
+        const dx = px - b.x, dy = py - b.y, d = Math.hypot(dx, dy);
+        if (d < 33 && d > 0) {
+          const nx = dx / d, ny = dy / d;
+          const vn = vx * nx + vy * ny;
+          if (vn < 0) (vx -= 2 * vn * nx), (vy -= 2 * vn * ny);
+          vx += nx * 260;
+          vy += ny * 260;
+          px = b.x + nx * 33;
+          py = b.y + ny * 33;
+          mark(b);
+        }
+      }
+      // Drop targets knock down and bounce it back
+      for (const t of targets) {
+        if (!t.up || knocked.has(t)) continue;
+        if (Math.abs(px - t.x) < 24 && Math.abs(py - t.y) < 28) {
+          knocked.add(t);
+          if (vy < 0) (vy = Math.abs(vy) * 0.75), (py = t.y + 28);
+          else (vy = -Math.abs(vy) * 0.75), (py = t.y - 28);
+          mark(t);
+        }
+      }
+      // Low on the table the slingshots fire it back up
+      if (py > fy - 90 && vy > 0) {
+        vy = -Math.sqrt(2 * g * span * (0.35 + Math.random() * 0.2));
+        vx += (px < cx ? 1 : -1) * (90 + Math.random() * 90);
+        mark(null, px < cx ? 0 : 1);
+      }
+      const sp = Math.hypot(vx, vy);
+      if (sp > 1500) (vx *= 1500 / sp), (vy *= 1500 / sp);
+      if (i % 2 === 0) samples.push({ x: px, y: py, s: tt });
     }
+    // The steer: a smooth (Hermite) curve from where it got to onto the nearer flipper
+    const side = opts.side !== undefined ? opts.side : px < cx ? 0 : 1;
     const [sx, sy] = strike(side);
-    pts.push({ x: sx, y: sy, t: tEnd });
-    path = Object.assign({ pts, next: 1, kind: "shot", side, scored: false, whiffed: false }, opts);
+    const ex = side ? -80 : 80, ey = 420; // arriving down the flipper, toward its tip
+    const s0 = samples[samples.length - 1].s;
+    for (let k = 1; k <= 24; k++) {
+      const u = k / 24, T = land;
+      const h00 = 2 * u ** 3 - 3 * u * u + 1, h10 = u ** 3 - 2 * u * u + u, h01 = -2 * u ** 3 + 3 * u * u, h11 = u ** 3 - u * u;
+      samples.push({ x: h00 * px + h10 * T * vx + h01 * sx + h11 * T * ex, y: h00 * py + h10 * T * vy + h01 * sy + h11 * T * ey, s: s0 + (secs - s0) * u });
+    }
+    const pts = samples.map((q) => ({ x: q.x, y: q.y, t: t0 + (q.s / secs) * (tEnd - t0), straight: true, hit: q.hit, sling: q.sling }));
+    path = Object.assign({ pts, next: 1, kind: "shot", side, whiffed: false }, opts, { side });
     rest = null;
   }
 
@@ -168,7 +227,7 @@
     path = { pts, next: 1, kind: "drain", side, ghost: true, scored: false, whiffed: false };
   }
 
-  function hitThing(api, h, path) {
+  function hitThing(api, h) {
     kick = 1;
     if (h.up !== undefined) {
       // A drop target
@@ -194,13 +253,6 @@
       api.eng.pluck(0.5 + 0.3 * Math.random(), 0.25, 0.05);
       api.burst(h.x, h.y, "#ffc400", 4, -1);
     }
-    if (path && path.quality && !path.scored && !path.ghost) {
-      path.scored = true;
-      if (!api.eng.auto && api.style === "flow") {
-        api.score(1, path.quality, api.eng.beatSec * 0.5);
-        if (path.quality === "PERFECT") api.ring(h.x, h.y, api.color(), 46);
-      }
-    }
   }
 
   // Every flight (a shot, the orbit lane, the kickback) ends on a flipper at a beat, ready to flip
@@ -210,8 +262,8 @@
   // Fidget shots run on seconds, quicker the faster you press
   function fidgetShot(api, now) {
     const [x, y] = ballAt(now);
-    const secs = (0.95 - 0.45 * api.rev) * (0.9 + Math.random() * 0.25);
-    shot(api, x, y, now, now + secs / api.eng.beatSec, { ghost: true, fidget: true });
+    const secs = (1.1 - 0.5 * api.rev) * (0.85 + Math.random() * 0.3);
+    shot(api, x, y, now, now + secs / api.eng.beatSec, { ghost: true, fidget: true, aim: (cx - x) / cx * 0.6 + (Math.random() - 0.5) * 0.8 });
   }
 
   const api = FlowShell.mount({
@@ -265,8 +317,14 @@
       const err = now - T;
       if (Math.abs(err) <= win(api)) {
         const [sx, sy] = strike(path.side);
-        api.eng.tap({ height: 0.3 + 0.4 * Math.random() });
-        return shot(api, sx, sy, now, T + pace(api), { quality: Math.abs(err) < PERFECT ? "PERFECT" : "CLEAN" });
+        const perfect = Math.abs(err) < PERFECT;
+        api.eng.tap({ height: 0.5 - 0.35 * (err / win(api)) });
+        if (!api.eng.auto) {
+          api.score(1, perfect ? "PERFECT" : "CLEAN", api.eng.beatSec * 0.5);
+          if (perfect) api.ring(sx, sy, api.color(), 46);
+        }
+        // Early sends it left, late sends it right; perfect goes straight up the middle
+        return shot(api, sx, sy, now, T + pace(api), { aim: Math.max(-1, Math.min(1, err / win(api))) * (perfect ? 0.3 : 1) });
       }
       api.eng.tap({ note: false });
       if (Math.abs(err) > 0.55) return;
@@ -315,6 +373,7 @@
       for (const p of pops) p.pop = Math.max(0, p.pop - dt * 3);
       for (const t of targets) t.drop = Math.max(0, t.drop - dt * 4);
       kickFlash = kickFlash.map((k) => Math.max(0, k - dt * 2));
+      slingFlash = slingFlash.map((k) => Math.max(0, k - dt * 4));
       spinner += spinnerV * dt;
       spinnerV *= Math.pow(0.3, dt);
       if (bankResetAt && performance.now() > bankResetAt) {
@@ -330,7 +389,11 @@
         // Things the ball passes on its way
         while (path.next < path.pts.length - 1 && now >= path.pts[path.next].t) {
           const pt = path.pts[path.next++];
-          if (pt.hit) hitThing(api, pt.hit, path);
+          if (pt.hit) hitThing(api, pt.hit);
+          if (pt.sling !== undefined) {
+            slingFlash[pt.sling] = 1;
+            api.eng.pluck(0.7, 0.12, 0.05);
+          }
           if (pt.kicker !== undefined) {
             kickFlash[pt.kicker] = 1;
             api.ring(pt.x, pt.y, "#e8231f", 40);
@@ -435,7 +498,7 @@
       for (const s of [0, 1]) {
         const m = s ? -1 : 1;
         const x0 = s ? W - 44 : 44;
-        ctx.fillStyle = "#140f0c";
+        ctx.fillStyle = slingFlash[s] > 0 ? "#e8231f" : "#140f0c";
         ctx.strokeStyle = "#e8231f";
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -573,6 +636,7 @@
     }
   });
 
+  window.__flipperBall = () => ballAt(api.eng.beatPos()); // for automated path tracing
   // Read-only snapshot for automated play tests
   window.flipperState = () => ({
     beatPos: +api.eng.beatPos().toFixed(3),
