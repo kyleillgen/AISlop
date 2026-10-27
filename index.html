@@ -164,7 +164,7 @@
             </div>
 
             <div class="desktop-only w-full bg-slate-950/90 border border-slate-800/90 rounded-2xl p-3.5 text-[11px] font-mono-tech text-slate-300 space-y-1.5">
-                <div><span class="text-emerald-300">SPACE / CLICK</span> flap · <span class="text-cyan-300">M</span> mute · <span class="text-fuchsia-300">V</span> voice · <span class="text-amber-300">L</span> lock cadence</div>
+                <div><span class="text-emerald-300">SPACE / CLICK</span> flap · <span class="text-sky-300">↓ / S</span> dive · <span class="text-cyan-300">M</span> mute · <span class="text-fuchsia-300">V</span> voice · <span class="text-amber-300">L</span> lock cadence</div>
                 <div class="text-slate-500">Find a steady rhythm. The music bends to meet you, then holds.</div>
             </div>
 
@@ -737,7 +737,10 @@
 
             if (IS_DESKTOP) {
                 document.getElementById("touchHintText").textContent =
-                    "Space or click to flap • Ride the glowing ribbon • Let the beat carry you";
+                    "Space or click to flap • Down to dive • Ride the glowing ribbon";
+            } else {
+                document.getElementById("touchHintText").textContent =
+                    "Tap to flap • Swipe down to dive • Ride the glowing ribbon";
             }
 
             let width = window.innerWidth;
@@ -862,6 +865,9 @@
                 radius: 14,
                 gravity: 0.31,
                 jumpImpulse: -6.4,
+                diveSpeed: 7.0,      // Dive: a flat-out drop held for diveTime, then a hard level-off
+                diveTime: 0.13,
+                diveTimer: 0,
                 ghostTimer: 0,
                 shakeTimer: 0,
                 washAlpha: 0,
@@ -1103,6 +1109,7 @@
                 }
 
                 flowCtrl.bulletTimeTimer = 0.45;
+                bird.diveTimer = 0;
                 bird.ghostTimer = 1.15;
                 bird.shakeTimer = 0.12;
                 bird.washAlpha = 0.32;
@@ -1321,6 +1328,7 @@
                 recordTapAndEntrainCadence(nowMs);
 
                 const speedScale = Math.sqrt(flowCtrl.vx / 3.1);
+                bird.diveTimer = 0; // A flap always wins over a dive in progress
                 bird.vy = bird.jumpImpulse * Math.max(0.92, Math.min(1.06, speedScale));
 
                 const heightNorm = Math.max(0, Math.min(1, (bird.y - 108) / (height - 146)));
@@ -1335,6 +1343,19 @@
                 if (touchHint) {
                     touchHint.style.opacity = "0";
                 }
+            }
+
+            // Dive: the sharp counterpart to the soft flap arc. One press drops a fixed notch
+            // straight down and levels off, for quick, angular line corrections.
+            function triggerDive() {
+                if (!gameStarted) return;
+                bird.diveTimer = bird.diveTime;
+                bird.vy = bird.diveSpeed;
+
+                // A lower note than a flap from the same height, still quantized and in key
+                const heightNorm = Math.max(0, Math.min(1, (bird.y - 108) / (height - 146)));
+                synth.queueQuantizedTap(Math.min(1, heightNorm + 0.35), flowCtrl.tier);
+                spawnParticles(bird.x + 6, bird.y - 10, getTierPrimaryColor(), 4);
             }
 
             function startGame(e) {
@@ -1379,10 +1400,26 @@
                         startGame(e);
                     } else {
                         triggerFlap();
+                        swipe = { y: e.clientY, t: performance.now(), used: false };
                     }
                 },
                 { passive: false }
             );
+
+            // Touch dive: a quick downward swipe. The touch already flapped, so the dive
+            // overrides it and the flap is taken back out of the cadence history.
+            let swipe = null;
+            document.addEventListener("pointermove", (e) => {
+                if (!swipe || swipe.used) return;
+                if (e.clientY - swipe.y > 26 && performance.now() - swipe.t < 350) {
+                    swipe.used = true;
+                    flowCtrl.tapTimes.pop();
+                    triggerDive();
+                }
+            });
+            document.addEventListener("pointerup", () => {
+                swipe = null;
+            });
 
             canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 
@@ -1395,6 +1432,9 @@
                     } else {
                         triggerFlap();
                     }
+                } else if (e.code === "ArrowDown" || e.code === "KeyS") {
+                    e.preventDefault();
+                    if (!e.repeat) triggerDive();
                 } else if (!e.repeat && e.code === "KeyM") {
                     toggleMute();
                 } else if (!e.repeat && e.code === "KeyV") {
@@ -1566,6 +1606,11 @@
                 const gravScale = flowCtrl.hyperGlideTimer > 0 ? 0.80 : flowCtrl.tier >= 4 ? 0.90 : 1.0;
                 bird.vy += bird.gravity * gravScale * frameScale;
                 bird.vy = Math.min(bird.vy, 8.2);
+                if (bird.diveTimer > 0) {
+                    bird.diveTimer -= dt;
+                    // Hold the drop flat-out, then snap level: an angular notch, not a swoop
+                    bird.vy = bird.diveTimer > 0 ? bird.diveSpeed : 0.6;
+                }
                 bird.y += bird.vy * frameScale;
 
                 // Subtle Resonant Buoyancy toward the Harmonic Guide Ribbon (effortless cruising)
@@ -1642,6 +1687,7 @@
                     bird.vy = Math.max(0.6, bird.vy * 0.25);
                 } else if (bird.y + bird.radius > floorY) {
                     bird.y = floorY - bird.radius;
+                    bird.diveTimer = 0;
                     bird.vy = bird.jumpImpulse * 0.76;
                     spawnParticles(bird.x, floorY, "#38bdf8", 5);
                 }

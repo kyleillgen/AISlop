@@ -15,6 +15,7 @@ Play at https://kyleillgen.github.io/AISlop/ or open `index.html`.
 | | Mobile | Desktop |
 |---|---|---|
 | Flap | Tap | Space / Up / W / click |
+| Dive | Swipe down | Down / S |
 | Extras | HUD buttons | `M` mute · `V` voice · `L` lock cadence |
 
 Desktop is a simpler mode: a centred stage, lean HUD, gentler difficulty range, no slipstreams. Force either with `?mode=desktop` or `?mode=mobile`; preview later eras with `?warp=995`.
