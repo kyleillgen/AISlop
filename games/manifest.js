@@ -54,5 +54,15 @@ window.AISLOP_GAMES = [
     path: "games/ripple-pond.html",
     status: "fresh",
     hue: 185
+  },
+  {
+    // First game from the live sandbox loop: one random roll plus one player fix
+    id: "fold-and-float",
+    title: "Fold & Float",
+    blurb: "Tap on the beat to lift a paper plane over a dusk town; hold to slow time. Night falls as you climb.",
+    prompt: "Random roll: a paper plane, rhythm taps on a beat, where time slows while you hold; cosy and warm. Fix: “Let the sky slowly turn to starry night as my score climbs”",
+    path: "games/fold-and-float.html",
+    status: "fresh",
+    hue: 28
   }
 ];
