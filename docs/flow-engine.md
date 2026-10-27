@@ -44,7 +44,7 @@ eng.tap({ height: 0.3 });            // a rhythmic action; height 0 (high note) 
 eng.tap({ note: false });            // counts toward rhythm, plays no note (e.g. a typo)
 eng.error();                         // count a typo or wrong input in telemetry
 eng.update(dt);                      // every frame, in seconds
-eng.on("beat", (n) => {});           // also "lock", "auto", "manual", "pause"
+eng.on("beat", (n) => {});           // also "lock", "auto", "manual", "pause", "signal" (a labelled build-done)
 eng.beatPos();                       // e.g. 41.37
 
 const tierUp = eng.score(1, "PERFECT", 1.4); // quality ("CLEAN", "GRAZE"), handling seconds for the pacer

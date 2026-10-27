@@ -110,6 +110,10 @@
     const reduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 
     let W = 0, H = 0, started = false, flash = 0, bulbFlash = 0;
+    // Pocket mode (the desktop pocket app, or ?pocket=1): 30 fps, 20 on autopilot, 1x pixels.
+    // Everywhere else frames cap at 60 so fast monitors don't draw more than they need to.
+    const pocket = /[?&]pocket=1/.test(location.search) || !!window.NL_OS;
+    const fpsCap = () => (pocket ? (eng.auto ? 20 : 30) : 60);
     const particles = [];
     const callouts = [];
     const cache = new Map();
@@ -182,7 +186,7 @@
       const vv = window.visualViewport;
       W = window.innerWidth;
       H = vv ? Math.round(vv.height) : window.innerHeight; // stays above a phone keyboard
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = pocket ? 1 : Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = W * dpr;
       canvas.height = H * dpr;
       canvas.style.height = H + "px";
@@ -209,8 +213,11 @@
     eng.on("lock", () => api.callout("In sync", W / 2, H * 0.3, "#ffc400", 1.05));
     eng.on("auto", hud);
     eng.on("manual", hud);
-    eng.on("pause", (why) => {
-      if (why === "build-done") api.callout("Build done", W / 2, H * 0.3, "#e2e8f0", 1.1);
+    eng.on("pause", hud);
+    // "Claude is done", "Build done": the cue to switch back; the bulbs blink with it
+    eng.on("signal", (label) => {
+      api.callout(label, W / 2, H * 0.3, "#ffc400", 1.1);
+      bulbFlash = 1.6;
       hud();
     });
 
@@ -336,6 +343,7 @@
 
     let last = performance.now();
     function frame(now) {
+      if (now - last < 1000 / fpsCap() - 2) return requestAnimationFrame(frame);
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
       last = now;
       eng.update(dt);

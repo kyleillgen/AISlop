@@ -26,3 +26,7 @@ Start here: [docs/build-on-the-engine.md](docs/build-on-the-engine.md), which in
 
 - **Word Rain** (`games/word-rain.html`): words drift down on the beat, and you type them before they reach the river. The music settles into your typing rhythm, every letter is a note, and typos cost nothing.
 - **Drop Catch** (`games/template.html`): the starter template. Drops land on a pad on the beat; tap as they land.
+
+## Flow Pocket (desktop)
+
+A light desktop window for playing while Claude or a build works, without Chrome. It uses Windows' built-in WebView2 through an 8 MB Neutralino runtime, renders at 30 fps (20 on autopilot), and can follow Claude Code through hooks. When Claude finishes or needs you, a chime plays and the game winds down so you can switch back. Setup and hooks: [pocket/README.md](pocket/README.md).

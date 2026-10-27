@@ -900,7 +900,7 @@
     let paused = false;
     let beatCount = 0;
     const timing = { meanAsync: 0, samples: 0 };
-    const listeners = { beat: [], lock: [], auto: [], manual: [], pause: [] };
+    const listeners = { beat: [], lock: [], auto: [], manual: [], pause: [], signal: [] };
     const emit = (evt, arg) => listeners[evt].forEach((fn) => fn(arg));
 
     try {
@@ -1062,11 +1062,15 @@
         synth.ctx.resume().catch(() => {});
       }
     });
-    // Build-done hook: a wrapper page or extension posts {type: "flow:build-done"}
+    // Build-done hook: a wrapper (the pocket app, an extension) posts
+    // {type: "flow:build-done", label?}. Autopilot takes over and winds down, and a chime plays
+    // even if autopilot was already on, since that's the cue to switch back to your work.
     window.addEventListener("message", (e) => {
       if (e.data && e.data.type === "flow:build-done" && started) {
         ctrl.setAuto(true);
-        emit("pause", "build-done");
+        drainEvents();
+        synth.playGoldenOrbShimmer();
+        emit("signal", typeof e.data.label === "string" ? e.data.label.slice(0, 40) : "Build done");
       }
     });
     window.addEventListener("pagehide", () => saveTelemetry());

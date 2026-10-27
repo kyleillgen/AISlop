@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Flow Pocket</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #140f0c; }
+  body { display: flex; flex-direction: column; }
+  .strip { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #140f0c; border-bottom: 3px solid #000; box-shadow: 0 2px 0 #ffc400; position: relative; z-index: 2; }
+  .strip .pb-btn { padding: 4px 8px !important; font-size: 10px !important; box-shadow: 2px 2px 0 #000; }
+  .strip .pb-btn.on { background: #ffc400 !important; }
+  .grow { flex: 1; }
+  .lamp { display: flex; align-items: center; gap: 6px; font: 600 10px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #f6e6c0; white-space: nowrap; }
+  .lamp i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #000; background: #3a2418; }
+  .lamp.working i { background: #ffc400; }
+  .lamp.done i { background: #1fbf55; animation: blink 0.5s steps(1) 8; }
+  .lamp.needs i { background: #e8231f; animation: blink 0.5s steps(1) 8; }
+  @keyframes blink { 50% { background: #3a2418; } }
+  iframe { flex: 1; width: 100%; border: 0; display: block; background: #140f0c; }
+</style>
+</head>
+<body>
+  <div class="strip">
+    <button class="pb-btn" data-game="flow-resonance.html" title="Flow // Resonance">Flow</button>
+    <button class="pb-btn" data-game="word-rain.html" title="Word Rain">Rain</button>
+    <button class="pb-btn" data-game="template.html" title="Drop Catch">Drop</button>
+    <span class="grow"></span>
+    <span class="lamp" id="lamp" title="What Claude is doing (needs the hook in pocket/README.md)"><i></i><span id="lampText">Claude</span></span>
+    <button class="pb-btn" id="pin" title="Keep this window on top">Pin</button>
+  </div>
+  <iframe id="game" title="Game" allow="autoplay"></iframe>
+
+  <script src="js/neutralino.js"></script>
+  <script src="games/pinball-skin.js"></script>
+  <script>
+    // Flow Pocket launcher: one small window, one game at a time, and a lamp that follows
+    // Claude Code through pocket/signal.mjs. When Claude finishes (or needs you), the game gets
+    // the engine's build-done message: it goes to autopilot, winds the music down and chimes.
+    PinballSkin.install();
+    Neutralino.init();
+    Neutralino.events.on("windowClose", () => Neutralino.app.exit());
+
+    const frame = document.getElementById("game");
+    const store = (k, v) => {
+      try {
+        if (v === undefined) return localStorage.getItem(k);
+        localStorage.setItem(k, v);
+      } catch (e) {}
+    };
+
+    function open(game) {
+      store("pocket.game", game);
+      frame.src = "games/" + game + "?pocket=1";
+      document.querySelectorAll("[data-game]").forEach((b) => b.classList.toggle("on", b.dataset.game === game));
+    }
+    document.querySelectorAll("[data-game]").forEach((b) => b.addEventListener("click", () => open(b.dataset.game)));
+    frame.addEventListener("load", () => frame.contentWindow.focus());
+    open(store("pocket.game") || "flow-resonance.html");
+
+    let pinned = store("pocket.pinned") === "1";
+    const pinBtn = document.getElementById("pin");
+    function setPinned(on) {
+      pinned = on;
+      store("pocket.pinned", on ? "1" : "0");
+      pinBtn.classList.toggle("on", on);
+      Neutralino.window.setAlwaysOnTop(on).catch(() => {});
+    }
+    pinBtn.addEventListener("click", () => {
+      setPinned(!pinned);
+      frame.contentWindow.focus();
+    });
+    Neutralino.events.on("ready", () => setPinned(pinned));
+
+    // ---- Claude signal ------------------------------------------------------------------
+    // pocket/signal.mjs writes "<time> <start|done|needs>" to ~/.flow-pocket/signal. Polled
+    // every 1.5 s (one tiny file read; nothing else runs in the background).
+    const lamp = document.getElementById("lamp");
+    const lampText = document.getElementById("lampText");
+    const LABELS = { start: "Claude working", done: "Claude done", needs: "Claude needs you" };
+    let signalPath = null;
+    let lastSignal = null;
+    async function poll() {
+      try {
+        if (!signalPath) signalPath = (await Neutralino.os.getEnv("USERPROFILE")) + "\\.flow-pocket\\signal";
+        const text = (await Neutralino.filesystem.readFile(signalPath)).trim();
+        if (text === lastSignal) return;
+        const first = lastSignal === null;
+        lastSignal = text;
+        const kind = text.split(" ")[1];
+        if (!LABELS[kind]) return;
+        lamp.className = "lamp " + (kind === "start" ? "working" : kind);
+        lampText.textContent = LABELS[kind];
+        // Only react to news, not to whatever the file said when the app opened
+        if (!first && kind !== "start") {
+          frame.contentWindow.postMessage({ type: "flow:build-done", label: kind === "needs" ? "Claude needs you" : "Claude is done" }, "*");
+        }
+      } catch (e) {
+        // No signal file yet: the hook isn't set up, or Claude hasn't run. Nothing to do.
+      }
+    }
+    setInterval(poll, 1500);
+    poll();
+  </script>
+</body>
+</html>
