@@ -1089,6 +1089,7 @@
       ctrl,
       synth,
       pacer,
+      forceNotes: false, // true: every action plays its note even before the tempo locks (Fidget)
       milestones,
       // Call from the first user gesture (audio needs one)
       start() {
@@ -1114,7 +1115,7 @@
           }
         }
         // The grid-snapped lead note stays silent while calibrating so it can't bias timing
-        synth.queueQuantizedTap(height, ctrl.tier, note && ctrl.locked);
+        synth.queueQuantizedTap(height, ctrl.tier, note && (ctrl.locked || eng.forceNotes));
         drainEvents();
         return a;
       },

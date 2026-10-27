@@ -36,6 +36,7 @@
   .fs-head { position: fixed; top: 0; left: 0; right: 0; z-index: 20; padding: 8px 10px; max-width: 42rem; margin: 0 auto; pointer-events: none; }
   .fs-state { flex: 1; min-width: 0; max-width: 220px; }
   .fs-controls { display: flex; gap: 7px; pointer-events: auto; }
+  .fs .pb-btn.on { background: #ffc400 !important; }
   @media (max-width: 520px) { .fs-voice, .pb-best { display: none; } .pb-cap .pb-badge.pb-mult { display: inline-block; } }
   .fs-over { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(20,15,12,.72); }
   .fs-over.show { display: flex; }
@@ -72,7 +73,8 @@
         <div><span class="pb-cap">Score <span class="pb-badge pb-mult" data-mult>1&times;</span></span><span class="pb-window" data-streak></span><span class="pb-best">high <b data-best>0</b></span></div>
         <div class="fs-state"><span class="pb-label" data-label></span><div class="pb-lights" data-lights></div></div>
         <div class="fs-controls">
-          <button class="pb-btn" data-intensity title="Chill, normal or intense (\`)"></button>
+          <button class="pb-btn" data-style title="Flow or fidget (\\)"></button>
+          <button class="pb-btn fs-voice" data-intensity title="Chill, normal or intense (\`)"></button>
           <button class="pb-btn fs-voice" data-track title="Switch track (Tab)"></button>
           <button class="pb-btn pb-icon" data-pause title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
           <button class="pb-btn pb-icon" data-mute title="Mute (0)" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.6l4.7-4.7c.6-.6 1.7-.2 1.7.7v14c0 .9-1.1 1.3-1.7.7z"/><path data-waves d="M15.5 8.5a5 5 0 010 7M18.4 5.6a9 9 0 010 12.8"/><path data-cross d="M17 10l4 4m0-4l-4 4" style="display:none"/></svg></button>
@@ -96,6 +98,7 @@
           ${actionKeys.concat(extraKeys).map(([k, d]) => `<div><span>${d}</span>${kbd(k)}</div>`).join("")}
           <div><span>Pause</span>${kbd("Esc")}</div>
           <div><span>Autopilot</span>${kbd("Enter")}</div>
+          <div><span>Flow / fidget</span>${kbd("\\")}</div>
           <div><span>Chill / normal / intense</span>${kbd("`")}</div>
           <div><span>Track / voice</span><span>${kbd("Tab")} ${kbd("Shift+Tab")}</span></div>
           <div><span>Volume / mute</span><span>${kbd("-")} ${kbd("=")} ${kbd("0")}</span></div>
@@ -186,6 +189,28 @@
     }
     loadTargets();
 
+    // ---- Play style: Flow (the game, with score and stakes) or Fidget (a toy). In Fidget the game
+    // plays itself the whole time and you join in whenever you like: every input plays its note
+    // and lights, autopilot takes back over a second after you stop, nothing counts against you,
+    // there are no timed modes, and the music never winds down, so it can run beside work for hours.
+    let playStyle = store(g.key + ".style") === "fidget" ? "fidget" : "flow";
+    let lastInputAt = 0;
+    const baseIdle = eng.ctrl.o.idleSec;
+    function applyStyle() {
+      const fidget = playStyle === "fidget";
+      eng.ctrl.o.idleSec = fidget ? Infinity : baseIdle;
+      eng.forceNotes = fidget;
+      if (fidget && eng.auto) eng.setAuto(false);
+      if (fidget && mode) endMode(false);
+    }
+    function toggleStyle() {
+      playStyle = playStyle === "fidget" ? "flow" : "fidget";
+      store(g.key + ".style", playStyle);
+      applyStyle();
+      api.callout(playStyle, W / 2, 130, "#ffc400", 1);
+      hud();
+    }
+
     // ---- Table modes: a 20 s twist every 45-75 s of play, so it never settles into sameness ---
     const MODES = ["Double Score", "Hurry-Up", "Jackpot"].concat(g.modes || []);
     let mode = null;
@@ -209,6 +234,7 @@
       get tier() { return eng.tier; },
       color: () => colors[eng.tier - 1],
       get intensity() { return intensity; },
+      get style() { return playStyle; }, // "flow" or "fidget"
       // Pick a value by intensity: api.pick({ chill: 13, normal: 10, intense: 8 })
       pick: (o) => (o[intensity] !== undefined ? o[intensity] : o.normal),
       get mode() { return mode; }, // the table mode running now ("Double Score", a game's own...)
@@ -225,7 +251,7 @@
       // handleSec feeds the pacer. Ignored during autopilot (the engine enforces it).
       score(n = 1, quality = "CLEAN", handleSec) {
         const prev = eng.tier;
-        if (eng.auto || !started) return false;
+        if (eng.auto || !started || playStyle === "fidget") return false;
         eng.score(n, quality, handleSec);
         // Points: 100 a hit, doubled for perfect, times the combo multiplier
         combo += n;
@@ -260,7 +286,7 @@
       // Something got past the player. Steps the streak down by a quarter; never during
       // autopilot, and the two after taking control back are forgiven.
       miss() {
-        if (!started) return false;
+        if (!started || playStyle === "fidget") return false;
         const counted = eng.clip();
         if (counted) {
           combo = 0;
@@ -277,7 +303,7 @@
       },
       // A tip shown once ever (per id), in context, then never again: discovery over manuals
       hint(id, text) {
-        if (!started) return; // never spend a tip on the attract-mode demo
+        if (!started || playStyle === "fidget") return; // tips are for Flow play, not the demo or a fidget
         const key = g.key + ".hint." + id;
         try {
           if (localStorage.getItem(key)) return;
@@ -394,7 +420,7 @@
       nextModeAt = 45 + Math.random() * 30;
     }
     function tickModes(dt) {
-      if (!started || eng.paused) return;
+      if (!started || eng.paused || playStyle === "fidget") return;
       if (eng.auto) {
         autoSince += dt;
         // Back after a long break: a fresh run (scores reset, high scores and rank stay)
@@ -465,6 +491,8 @@
       q("[data-mult]").innerHTML = mult + "&times;";
       q("[data-mult]").classList.toggle("ready", mult > 1);
       q("[data-intensity]").textContent = q("[data-pintensity]").textContent = intensity;
+      q("[data-style]").textContent = playStyle;
+      q("[data-style]").classList.toggle("on", playStyle === "fidget");
       const nextRank = RANKS[RANKS.indexOf(rank) + 1];
       q("[data-rank]").textContent = rank.name + " \u00b7 " + rank.finish + " ball \u00b7 " + lifetime.toLocaleString() + " lifetime" + (nextRank ? " \u00b7 " + nextRank.name + " at " + nextRank.at.toLocaleString() : "");
       Skin.lights(q("[data-lights]"), eng.flowIndex * 100, api.color());
@@ -474,6 +502,7 @@
         label = mode + " " + Math.ceil(modeLeft) + "s" + (mode === "Hurry-Up" ? " \u00b7 " + Math.round(hurry).toLocaleString() + " \u00b7 " + Math.max(0, 5 - hurryHits) + " to go" : mode === "Jackpot" ? " \u00b7 " + pot.toLocaleString() : "");
         c = "#ffc400";
       }
+      if (playStyle === "fidget" && started) [label, c] = ["Fidget \u00b7 join in any time", "#ffc400"];
       if (eng.paused) [label, c] = ["Paused", "#f6e6c0"];
       else if (eng.auto && started) [label, c] = [g.autoLabel || "Autopilot · " + (typing ? "type" : "tap") + " to take over", "#ffc400"];
       q("[data-label]").textContent = label;
@@ -511,6 +540,7 @@
     const note = (text, color) => api.callout(text, W / 2, 130, color || "#94a3b8", 0.95);
     const cycleIntensity = () => setIntensity(INTENSITIES[(INTENSITIES.indexOf(intensity) + 1) % INTENSITIES.length]);
     press("[data-intensity]", cycleIntensity);
+    press("[data-style]", toggleStyle);
     press("[data-pintensity]", cycleIntensity);
     press("[data-track]", () => note(eng.cycleTrack().toLowerCase(), "#ffc400"));
     press("[data-ptrack]", () => eng.cycleTrack());
@@ -521,11 +551,13 @@
     q("[data-keyscard]").addEventListener("pointerdown", () => q("[data-keyscard]").classList.remove("show"));
 
     function action(e) {
+      lastInputAt = performance.now();
       if (!started) start();
       if (eng.paused) return setPaused(false);
       if (g.onAction) g.onAction(api, e || {});
     }
     function letter(ch) {
+      lastInputAt = performance.now();
       if (!started) start();
       if (eng.paused) return;
       if (g.onLetter) g.onLetter(ch, api);
@@ -569,9 +601,11 @@
         note(`Audio offset ${ms > 0 ? "+" : ""}${ms} ms`);
       } else if (e.key === "?") q("[data-keyscard]").classList.toggle("show");
       else if (e.key === "`") cycleIntensity();
+      else if (e.key === "\\") toggleStyle();
       else if (g.onKey && !eng.paused && g.onKey(e.key, api)) {
         // A game's own keys (arrows in Rollover) start the game too, like Space or a tap
         e.preventDefault();
+        lastInputAt = performance.now();
         if (!started) start();
       }
       else return;
@@ -597,7 +631,8 @@
       last = now;
       eng.update(dt);
       if (!eng.paused) {
-        if ((!started || eng.auto) && g.autopilot) g.autopilot(dt, api); // attract mode or autopilot
+        const fidgetIdle = playStyle === "fidget" && performance.now() - lastInputAt > 1000;
+        if ((!started || eng.auto || fidgetIdle) && g.autopilot) g.autopilot(dt, api); // attract, autopilot, or Fidget filling in
         tickModes(dt);
         if (g.update) g.update(dt, api);
         flash = Math.max(0, flash - dt * 1.4);
@@ -671,6 +706,7 @@
     if (window.visualViewport) visualViewport.addEventListener("resize", resize);
     resize();
     if (g.setup) g.setup(api);
+    applyStyle(); // a saved Fidget choice takes effect from the start
     hud();
     requestAnimationFrame(frame);
     return api;

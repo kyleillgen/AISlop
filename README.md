@@ -25,7 +25,9 @@ Flow's engine is its own module, and any small rhythm game can sit on top of it.
 The games improve through a data loop: Flow Pocket logs each session, and `node pocket/report.mjs` flags the mechanic to tune ([docs/tuning.md](docs/tuning.md)). Start here: [docs/build-on-the-engine.md](docs/build-on-the-engine.md), which includes a copy-paste prompt kit. API: [docs/flow-engine.md](docs/flow-engine.md). Tests: `node --test tests/flow-engine.test.cjs`.
 
 - **Word Rain** (`games/word-rain.html`): words drift down on the beat, and you type them before they reach the river. The music settles into your typing rhythm, every letter is a note, and typos cost nothing.
-Every game on the shell scores like a pinball table:
+Every game has two styles. **Flow** is the game, with score and stakes. **Fidget** is a toy: it plays itself, you join in whenever you like, nothing counts against you, and the music never winds down, so it can sit beside your work all day. Switch with the header chip or `\`.
+
+In Flow, every game scores like a pinball table:
 - a combo multiplier;
 - a replay score that creeps up as you beat it;
 - high scores per intensity (chill, normal, intense: your choice, set with the backtick key);

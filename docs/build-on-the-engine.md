@@ -49,6 +49,7 @@ The shell also runs the reward loop and the variety for every game:
 - **Replay score:** one per game and intensity. Beating it gives "REPLAY!" and the target creeps up 15% for future runs. If it keeps going unbeaten, it eases back down. There's also a high score per intensity.
 - **Lifetime rank,** shared by all games, from Rookie to Legend. Each rank gives a new ball finish via `api.ballStops()`.
 - **Intensity:** `api.intensity` and `api.pick({ chill, normal, intense })` let a game scale its own density and demands. The shell scales the pacer.
+- **Flow or Fidget:** the player's choice (header chip or `\`). Fidget turns a game into a toy. Autopilot plays whenever there's been no input for a second, every input plays its note, nothing scores or misses, there are no table modes or tips, and the music never winds down. Games need nothing extra for it: their `autopilot` and input handlers already cover it, and `api.style` is there if a game wants to do more.
 - **Table modes:** a 20-second twist every 45–75 seconds of play. The built-ins are Double Score, Hurry-Up and Jackpot; list your own in `modes: [...]`, then read `api.mode` when spawning (Leap's Star Lane, Rollover's Spinner, Word Rain's Golden Words). Optional: `setup`, `resize`, `start`, `onKey`, `onPhrase`, `tierNames`, `colors`, `engine` options.
 
 ## Prompt kit
