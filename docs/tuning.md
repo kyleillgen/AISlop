@@ -28,8 +28,8 @@ One knob at a time, a few sessions each: the numbers are noisy, and changing two
 | All | `pacing` (`minBeats`, `startBeats`, `low`, `high`, `maxRoom`) | game's `engine` option → `createPacer` | How often things come, and how much room a rough patch gets |
 | All | `idleSec` | game's `engine` option | How long without input before autopilot |
 | All | assist effect | each game's spawn code (`api.eng.assist`) | How much help after misses (only on things not yet on screen) |
-| Leap | `JUMP`, `PERFECT`, `BUFFER`, hurdle heights | `games/leap.html` top | Hop length, perfect window, tap buffering, how forgiving clears are |
-| Leap | double-hurdle chance (0.28) | `onBeat` | How often tap-tap pairs appear |
+| Orbit | `PERFECT`, `FLY`, the clean window (`api.pick` in `onAction`) | `games/orbit.html` | Perfect window, flight length, how forgiving flings are |
+| Orbit | lane length and spread (`addAfter`), orbit speed range (`retime`) | `games/orbit.html` | How far apart bumpers are and how fast the ball circles |
 | Rollover | `LEAD`, hold chance (0.22), phrase shapes | `games/rollover.html` | How early lights show, how many holds, melodic patterns |
 | Word Rain | `fallBeats` (10 + 5 × assist), word list | `spawnWord` | Fall time and vocabulary |
 | All | intensity scaling | each game's `api.pick({...})` calls, and `applyIntensity` in `flow-shell.js` | What chill, normal and intense change |

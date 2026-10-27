@@ -154,6 +154,8 @@
     onLetter(ch, api) {
       const w = activeWord();
       if (!w) return api.eng.tap({ note: false });
+      // Fidget: any key types the right letter, so mashing the keyboard types the words out
+      if (api.style === "fidget") ch = w.text[w.typed];
       if (ch === w.text[w.typed]) {
         if (w.typed === 0 || w.ghost) w.firstKeyMs = performance.now();
         (w.hitAt || (w.hitAt = []))[w.typed] = performance.now();

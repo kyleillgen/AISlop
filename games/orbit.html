@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Orbit</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<script src="flow-engine.js"></script>
+<script src="pinball-skin.js"></script>
+<script src="flow-shell.js"></script>
+<script>
+// Orbit: a steel ball circles a pop bumper; fling it off and the next bumper up the table
+// catches it. The table climbs forever.
+//
+// Flow: each bumper has a lit arrow on its orbit pointing at the next one, and the ball crosses
+// it on a beat. Fling as it crosses and the ball flies straight down the lane into the next
+// orbit, landing half a beat later. The clean window is about ±0.24 beat and "perfect" is ±0.08
+// (about ±45 ms); a fling inside the window is steered the last few pixels into the lane, so a
+// slightly-off fling still lands. A fling well off the arrow swings the ball out and the bumper
+// reels it back. Nothing is lost: the arrow comes round again.
+//
+// Fidget: the table bends to you. Press to grab the ball, let go to fling it; the next bumper
+// appears wherever the ball is heading. Hold longer and the orbit winds up and the fling goes
+// further. Mash and the ball climbs bumper to bumper as fast as you can press.
+(() => {
+  "use strict";
+
+  const PERFECT = 0.08; // beats
+  const FLY = 0.5; // beats a Flow flight lasts, release on the beat to landing
+  const SKY = [["#0d0930", "#3f1d8a"], ["#04170f", "#134a1d"], ["#1a0520", "#561034"], ["#1f0806", "#6a2508"]];
+  const TAU = Math.PI * 2;
+
+  let bumpers = []; // { x, y, dir, phi, lane: {px, py, qx, qy}, pop, star }
+  let cur = null; // the bumper the ball is orbiting
+  let theta = 0; // ball's angle on the orbit
+  let omega = Math.PI; // radians per beat
+  let relBeat = 0; // the beat the ball crosses the arrow
+  let lastBeat = 0;
+  let missedThis = false;
+  let flight = null; // { ax, ay, bx, by, c1x, c1y, c2x, c2y, t0, t1, ghost, perfect, fidget, power }
+  let swing = null; // a fling off the arrow: { t0, dx, dy }
+  let pendingFling = null; // Fidget: a release that came mid-flight, flung on arrival
+  let grab = 0; // Fidget: squeeze while pressed
+  let camY = 0;
+  let kick = 0;
+  let trail = [];
+  let shards = [];
+
+  const R = (api) => Math.max(30, Math.min(40, api.W * 0.085)); // orbit radius
+  const BR = (api) => R(api) * 0.56; // bumper radius
+  const margin = (api) => R(api) + BR(api) + 14;
+  const dirVec = (a) => [Math.cos(a), Math.sin(a)];
+
+  // Add the next bumper up the table from X. The lane leaves X's orbit along angle phi (pointing
+  // up the table) and meets the new bumper's orbit on its tangent, so a flight is a straight line.
+  function addAfter(X, api, phiWanted, dist) {
+    const r = R(api);
+    let best = null;
+    for (let i = 0; i < 24 && !best; i++) {
+      let phi = phiWanted !== undefined ? phiWanted : -Math.PI / 2 + (Math.random() * 2 - 1) * 1.05;
+      if (phiWanted !== undefined && i === 1) phi = -Math.PI - phiWanted; // off the rail: bank it back
+      const D = dist || api.pick({ chill: 150, normal: 165, intense: 185 }) + Math.random() * 50;
+      const thR = phi - X.dir * (Math.PI / 2);
+      const [cx, cy] = dirVec(thR);
+      const px = X.x + cx * r, py = X.y + cy * r;
+      const [dx, dy] = dirVec(phi);
+      let qx = px + dx * D, qy = py + dy * D;
+      const dir = Math.random() < 0.5 ? 1 : -1;
+      const thIn = phi - dir * (Math.PI / 2);
+      const [ex, ey] = dirVec(thIn);
+      let x = qx - ex * r, y = qy - ey * r;
+      const m = margin(api);
+      if (phiWanted !== undefined && i > 1) {
+        // Fidget, still off the table after banking: shift the bumper (and landing point) in
+        const sx = Math.max(m, Math.min(api.W - m, x)) - x;
+        x += sx;
+        qx += sx;
+      } else if (x < m || x > api.W - m || y > X.y - 90) continue;
+      best = { X, phi, px, py, qx, qy, x, y, dir };
+    }
+    if (!best) return addAfter(X, api, -Math.PI / 2, 170);
+    best.X.phi = best.phi;
+    best.X.lane = { px: best.px, py: best.py, qx: best.qx, qy: best.qy };
+    const Y = { x: best.x, y: best.y, dir: best.dir, phi: null, lane: null, pop: 0, star: api.mode === "Star Lane" && api.started };
+    bumpers.push(Y);
+    return Y;
+  }
+  const nextOf = (X) => bumpers[bumpers.indexOf(X) + 1];
+  function fillAhead(api) {
+    while (bumpers[bumpers.length - 1].y > camY - 160) addAfter(bumpers[bumpers.length - 1], api);
+  }
+
+  // Choose when the ball next crosses the arrow: an exact beat, with an orbit speed near half a
+  // turn a beat, as close to the pacer's spacing as that allows
+  function retime(now, api, target) {
+    const thR = cur.phi - cur.dir * (Math.PI / 2);
+    const d0 = ((((thR - theta) * cur.dir) % TAU) + TAU) % TAU;
+    let best = null;
+    for (let T = Math.ceil(now + 0.5); T <= Math.ceil(now) + 7; T++) {
+      for (let m = 0; m < 4; m++) {
+        const w = (d0 + TAU * m) / (T - now);
+        if (w < Math.PI * 0.55 || w > Math.PI * 1.7) continue;
+        const cost = Math.abs(Math.log(w / Math.PI)) * 3 + Math.abs(T - target) * 0.6;
+        if (!best || cost < best.cost) best = { T, w, cost };
+      }
+    }
+    relBeat = best ? best.T : Math.ceil(now) + 2;
+    omega = best ? best.w : Math.PI;
+    missedThis = false;
+  }
+
+  function orbitPos(api, th) {
+    const [cx, cy] = dirVec(th === undefined ? theta : th);
+    return [cur.x + cx * R(api), cur.y + cy * R(api)];
+  }
+  function tangent(th) {
+    return dirVec((th === undefined ? theta : th) + cur.dir * (Math.PI / 2));
+  }
+  function ballPos(api, now) {
+    if (flight) {
+      const u0 = Math.min(1, Math.max(0, (now - flight.t0) / (flight.t1 - flight.t0)));
+      const u = 1 - (1 - u0) * (1 - u0); // flung fast, caught softly
+      const v = 1 - u;
+      return [
+        v * v * v * flight.ax + 3 * v * v * u * flight.c1x + 3 * v * u * u * flight.c2x + u * u * u * flight.bx,
+        v * v * v * flight.ay + 3 * v * v * u * flight.c1y + 3 * v * u * u * flight.c2y + u * u * u * flight.by
+      ];
+    }
+    let [x, y] = orbitPos(api);
+    if (swing) {
+      const u = Math.min(1, (now - swing.t0) / 1);
+      const s = Math.sin(Math.PI * u) * 70;
+      x += swing.dx * s;
+      y += swing.dy * s;
+    }
+    return [x, y];
+  }
+
+  function launch(api, now, opts) {
+    const Y = nextOf(cur);
+    const L = cur.lane;
+    const [ax, ay] = orbitPos(api);
+    const [tx, ty] = tangent();
+    const [ix, iy] = dirVec(cur.phi); // arrive along the lane
+    const len = Math.hypot(L.qx - ax, L.qy - ay);
+    flight = {
+      ax, ay, bx: L.qx, by: L.qy,
+      // Leave along the ball's own tangent, arrive along the lane: a slightly-off fling bends in
+      c1x: ax + tx * len * 0.35, c1y: ay + ty * len * 0.35,
+      c2x: L.qx - ix * len * 0.35, c2y: L.qy - iy * len * 0.35,
+      t0: now, t1: opts.t1, ghost: opts.ghost, perfect: opts.perfect, fidget: opts.fidget, power: opts.power || 0
+    };
+    swing = null;
+    if (!opts.ghost) api.eng.tap({ height: 0.85 - 0.7 * (Y.x / api.W) });
+  }
+
+  function land(api, now) {
+    const f = flight;
+    flight = null;
+    const Y = nextOf(cur);
+    cur = Y;
+    theta = Math.atan2(f.by - Y.y, f.bx - Y.x);
+    if (!Y.lane) addAfter(Y, api);
+    Y.pop = 1;
+    kick = 1;
+    const col = api.color();
+    api.burst(Y.x, Y.y - camY, f.fidget && f.power > 0.5 ? "#ffc400" : col, 5 + Math.round(f.power * 10), -1);
+    if (f.fidget) {
+      api.ring(Y.x, Y.y - camY, f.power > 0.5 ? "#ffc400" : col, 40 + 60 * f.power);
+      api.eng.pluck(0.75 - 0.55 * (Y.x / api.W), 0.3 + 0.6 * f.power, 0.07);
+    } else if (!f.ghost && !api.eng.auto) {
+      api.score(1, f.perfect ? "PERFECT" : "CLEAN", api.eng.beatSec * FLY);
+      if (f.perfect) api.ring(Y.x, Y.y - camY, col, 46);
+      if (Y.star) {
+        api.bonus(500);
+        api.ring(Y.x, Y.y - camY, "#ffc400", 60);
+      }
+    }
+    Y.star = false;
+    // Forget the table well below, keep the chain ahead
+    bumpers = bumpers.slice(Math.max(0, bumpers.indexOf(cur) - 2));
+    retime(now, api, now + Math.max(1, api.eng.paceBeats() - FLY));
+    if (pendingFling !== null) {
+      const p = pendingFling;
+      pendingFling = null;
+      fidgetFling(api, now, p);
+    }
+  }
+
+  // Fidget: fling now, toward wherever the ball is heading (kept pointing up the table)
+  function fidgetFling(api, now, held) {
+    if (flight) return (pendingFling = held);
+    const power = Math.min(1, Math.max(0, (held - 0.15) / 0.85));
+    let [tx, ty] = tangent();
+    if (ty > 0) ty = -ty; // heading down the table: bank it back up
+    let a = Math.atan2(ty, tx);
+    a = Math.max(-Math.PI + 0.75, Math.min(-0.75, a)); // at least 43° up the table
+    bumpers = bumpers.slice(0, bumpers.indexOf(cur) + 1);
+    addAfter(cur, api, a, Math.max(140, (150 + 200 * power) * (1 - 0.2 * api.rev)));
+    // The lane starts where the ball is now
+    const [ax, ay] = orbitPos(api);
+    cur.lane = { px: ax, py: ay, qx: cur.lane.qx, qy: cur.lane.qy };
+    const secs = (0.3 + 0.35 * power) * (1 - 0.55 * api.rev);
+    launch(api, now, { t1: now + secs / api.eng.beatSec, fidget: true, power });
+  }
+
+  function reset(api) {
+    bumpers = [{ x: api.W / 2, y: 0, dir: 1, phi: null, lane: null, pop: 0, star: false }];
+    cur = bumpers[0];
+    camY = -api.H * 0.68;
+    theta = -Math.PI / 2;
+    addAfter(cur, api);
+    fillAhead(api);
+    const now = api.eng.beatPos();
+    lastBeat = now;
+    retime(now, api, now + 3);
+  }
+
+  const api = FlowShell.mount({
+    key: "orbit",
+    title: "Orbit",
+    hint: "Tap or Space to fling the ball &middot; the next bumper catches it",
+    input: "tap",
+    tierNames: ["Finding your rhythm", "In orbit", "Slingshot", "Pinball wizard"],
+    modes: ["Star Lane"],
+    fidgetPoint: (api) => {
+      const [x, y] = ballPos(api, api.eng.beatPos());
+      return { x, y: y - camY };
+    },
+    // Flings come every 2-4 beats
+    engine: { perBeat: [0.25, 1 / 3, 0.5, 1], stableTol: 3, pacing: { minBeats: 2, startBeats: 3 } },
+
+    setup(api) {
+      reset(api);
+    },
+    resize(api) {
+      if (!bumpers.length) return;
+      const m = margin(api);
+      for (const b of bumpers) if (b !== cur) b.x = Math.max(m, Math.min(api.W - m, b.x));
+    },
+
+    onBeat() {
+      kick = 1;
+    },
+
+    onAction(api) {
+      const now = api.eng.beatPos();
+      if (api.style === "fidget") {
+        grab = 1;
+        return api.eng.tap({ note: false });
+      }
+      if (flight || swing) return api.eng.tap({ note: false });
+      const err = now - relBeat;
+      const win = api.pick({ chill: 0.3, normal: 0.24, intense: 0.17 }) + 0.06 * api.eng.assist;
+      if (Math.abs(err) <= win) {
+        missedThis = true; // this crossing is taken
+        return launch(api, now, { t1: relBeat + FLY, perfect: Math.abs(err) < PERFECT });
+      }
+      // Off the arrow: well away from it is just a tap along with the music; near it, the ball
+      // swings out and the bumper reels it back in
+      if (Math.abs(err) > 0.55) return api.eng.tap({ note: false });
+      api.eng.tap({ note: false });
+      const [tx, ty] = tangent();
+      swing = { t0: now, dx: tx, dy: ty };
+      missedThis = true;
+      api.miss();
+      api.hint("timing", "Fling as the ball crosses the lit arrow");
+    },
+
+    onRelease(api, held) {
+      if (api.style !== "fidget") return;
+      grab = 0;
+      fidgetFling(api, api.eng.beatPos(), held);
+    },
+
+    // Autopilot flings exactly as the ball crosses the arrow; nothing scores
+    autopilot(dt, api) {
+      const now = api.eng.beatPos();
+      if (!flight && !swing && now >= relBeat && !missedThis) {
+        missedThis = true;
+        launch(api, relBeat, { t1: relBeat + FLY, ghost: true });
+      }
+    },
+
+    update(dt, api) {
+      const now = api.eng.beatPos();
+      const db = Math.max(0, Math.min(0.5, now - lastBeat));
+      lastBeat = now;
+      kick = Math.max(0, kick - dt * 4.2);
+      grab = api.style === "fidget" && api.held > 0 ? Math.min(1, api.held / 0.8) : Math.max(0, grab - dt * 6);
+      for (const b of bumpers) b.pop = Math.max(0, b.pop - dt * 3);
+
+      if (flight) {
+        if (now >= flight.t1) land(api, now);
+      } else {
+        // Holding in Fidget winds the orbit up
+        theta += cur.dir * omega * db * (1 + 2.5 * grab);
+        if (swing && now - swing.t0 >= 1) swing = null;
+        // A crossing passed with no fling: Flow counts it, then the arrow comes round again
+        const win = api.pick({ chill: 0.3, normal: 0.24, intense: 0.17 }) + 0.06 * api.eng.assist;
+        if (!swing && now > relBeat + win) {
+          if (!missedThis && api.started && !api.eng.auto && api.style === "flow") {
+            api.miss();
+            api.hint("timing", "Fling as the ball crosses the lit arrow");
+          }
+          retime(now, api, now + 2);
+        }
+      }
+
+      // The camera keeps the ball low on the screen, climbing smoothly
+      const [, by] = ballPos(api, now);
+      const target = Math.min(by, cur.y) - api.H * 0.66;
+      camY += (target - camY) * Math.min(1, dt * 3.2);
+      fillAhead(api);
+
+      const [x, y] = ballPos(api, now);
+      trail.unshift([x, y]);
+      if (trail.length > 10) trail.pop();
+      for (const s of shards) s.a -= dt;
+      shards = shards.filter((s) => s.a > 0);
+    },
+
+    draw(ctx, api) {
+      const { W, H, tier } = api;
+      const now = api.eng.beatPos();
+      const col = api.color();
+      const r = R(api);
+      const br = BR(api);
+
+      ctx.fillStyle = api.cached("sky" + tier + H, () => {
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, SKY[tier - 1][0]);
+        g.addColorStop(1, SKY[tier - 1][1]);
+        return g;
+      });
+      ctx.fillRect(0, 0, W, H);
+
+      // The playfield scrolling past: up-arrow inserts down the middle, rails at the edges
+      const step = 120;
+      const first = Math.floor(camY / step) - 1;
+      for (let k = first; k < first + H / step + 3; k++) {
+        const y = k * step - camY;
+        ctx.globalAlpha = 0.16 + (k % 4 === 0 ? kick * 0.12 : 0);
+        ctx.fillStyle = k % 4 === 0 ? col : "#3a2418";
+        ctx.beginPath();
+        ctx.moveTo(W / 2, y - 14);
+        ctx.lineTo(W / 2 + 12, y + 6);
+        ctx.lineTo(W / 2 - 12, y + 6);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#f6e6c0";
+      ctx.fillRect(4, 0, 4, H);
+      ctx.fillRect(W - 8, 0, 4, H);
+      ctx.fillStyle = "#140f0c";
+      const off = ((-camY % 24) + 24) % 24;
+      for (let y = off - 24; y < H; y += 24) {
+        ctx.fillRect(4, y, 4, 12);
+        ctx.fillRect(W - 8, y, 4, 12);
+      }
+
+      ctx.save();
+      ctx.translate(0, -camY);
+
+      // Lanes: a faint line from each bumper to the next; the one in play lights as the beat nears
+      for (const b of bumpers) {
+        if (!b.lane) continue;
+        const live = b === cur && !flight && api.style === "flow";
+        const near = live ? Math.max(0, 1 - Math.abs(now - relBeat) / 1.2) : 0;
+        ctx.strokeStyle = live ? col : "#f6e6c0";
+        ctx.globalAlpha = live ? 0.25 + 0.6 * near : 0.08;
+        ctx.lineWidth = live ? 3 : 2;
+        ctx.setLineDash([6, 10]);
+        ctx.beginPath();
+        ctx.moveTo(b.lane.px, b.lane.py);
+        ctx.lineTo(b.lane.qx, b.lane.qy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (live) {
+          // The arrow on the orbit: fling as the ball crosses it
+          const [dx, dy] = dirVec(b.phi);
+          ctx.globalAlpha = 0.35 + 0.65 * near;
+          ctx.fillStyle = near > 0.85 ? "#ffc400" : col;
+          ctx.save();
+          ctx.translate(b.lane.px, b.lane.py);
+          ctx.rotate(Math.atan2(dy, dx));
+          const s = 9 + 4 * near;
+          ctx.beginPath();
+          ctx.moveTo(s, 0);
+          ctx.lineTo(-s * 0.7, s * 0.8);
+          ctx.lineTo(-s * 0.7, -s * 0.8);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = "#140f0c";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      ctx.globalAlpha = 1;
+
+      // Pop bumpers: black skirt, cream body, red cap, a light that pops when the ball lands
+      for (const b of bumpers) {
+        const sy = b.y - camY;
+        if (sy < -80 || sy > H + 80) continue;
+        if (b === cur) {
+          ctx.strokeStyle = col;
+          ctx.globalAlpha = 0.18;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, r, 0, TAU);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        const s = 1 + b.pop * 0.18;
+        ctx.fillStyle = "#140f0c";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y + 3, br * 1.12 * s, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "#f6e6c0";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, br * s, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "#e8231f";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, br * 0.72 * s, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = b.pop > 0 || b === nextOf(cur) ? (b.pop > 0.3 ? "#fff8e6" : col) : "#3a2418";
+        ctx.globalAlpha = b === nextOf(cur) ? 0.6 + 0.4 * kick : 1;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, br * 0.38 * s, 0, TAU);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        if (b.star) drawStar(ctx, b.x, b.y - br - 16, 9 + kick * 2);
+      }
+
+      // The ball: a short trail, then steel (finish from your lifetime rank)
+      const ball = api.cached("ball" + r + api.rankKey, () => {
+        const [a, b2, c] = api.ballStops();
+        const g = ctx.createRadialGradient(-4, -4, 1, 0, 0, 11);
+        g.addColorStop(0, a);
+        g.addColorStop(0.45, b2);
+        g.addColorStop(1, c);
+        return g;
+      });
+      for (let i = 2; i < trail.length; i++) {
+        ctx.globalAlpha = 0.22 * (1 - i / trail.length);
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(trail[i][0], trail[i][1], 9 * (1 - i / trail.length) + 2, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      const [x, y] = ballPos(api, now);
+      if (grab > 0) {
+        ctx.strokeStyle = grab > 0.95 ? "#ffc400" : col;
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(x, y, 14 + 10 * grab, -Math.PI / 2, -Math.PI / 2 + TAU * grab);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      ctx.save();
+      ctx.translate(x, y);
+      const sq = 1 - grab * 0.15;
+      ctx.scale(1 + grab * 0.1, sq);
+      ctx.fillStyle = ball;
+      ctx.beginPath();
+      ctx.arc(0, 0, 11, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+      ctx.restore();
+    }
+  });
+
+  function drawStar(ctx, x, y, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rr = i % 2 ? r * 0.45 : r;
+      ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "#ffc400";
+    ctx.strokeStyle = "#140f0c";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fill();
+  }
+
+  // Closest two bumpers on the table, for automated tests
+  window.orbitMinGap = () => {
+    let m = Infinity;
+    for (let i = 0; i < bumpers.length; i++) for (let j = i + 1; j < bumpers.length; j++) m = Math.min(m, Math.hypot(bumpers[i].x - bumpers[j].x, bumpers[i].y - bumpers[j].y));
+    return m;
+  };
+  // Read-only snapshot for automated play tests
+  window.orbitState = () => ({
+    beatPos: +api.eng.beatPos().toFixed(3),
+    relBeat,
+    omega: +(omega / Math.PI).toFixed(2),
+    flying: !!flight,
+    bumpers: bumpers.length,
+    climbed: Math.round(-cur.y),
+    streak: api.eng.streak,
+    bpm: +api.eng.bpm.toFixed(1),
+    auto: api.eng.auto
+  });
+})();
+</script>
+</body>
+</html>

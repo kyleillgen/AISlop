@@ -21,7 +21,7 @@
       "center": false,
       "resizable": true,
       "borderless": true,
-      "alwaysOnTop": false,
+      "alwaysOnTop": true,
       "icon": "/resources/icon.png",
       "enableInspector": false,
       "exitProcessOnClose": true

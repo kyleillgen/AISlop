@@ -27,7 +27,7 @@ const GAMES = join(HERE, "..", "games");
 function syncGames() {
   const out = join(RES, "games");
   mkdirSync(out, { recursive: true });
-  for (const f of ["flow-engine.js", "pinball-skin.js", "flow-shell.js", "flow-resonance.html", "leap.html", "rollover.html", "word-rain.html", "template.html"]) {
+  for (const f of ["flow-engine.js", "pinball-skin.js", "flow-shell.js", "flow-resonance.html", "orbit.html", "rollover.html", "word-rain.html", "template.html"]) {
     copyFileSync(join(GAMES, f), join(out, f));
   }
   console.log("games copied into pocket/resources/games");

@@ -11,10 +11,10 @@ window.AISLOP_GAMES = [
     hue: 168
   },
   {
-    id: "leap",
-    title: "Leap",
-    blurb: "A steel ball rolls down a lit lane. Find your rhythm and it sails over every hurdle.",
-    path: "games/leap.html",
+    id: "orbit",
+    title: "Orbit",
+    blurb: "Fling a steel ball from bumper to bumper up an endless table. Let go as it crosses the arrow and the next bumper catches it.",
+    path: "games/orbit.html",
     status: "house",
     hue: 30
   },

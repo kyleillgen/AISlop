@@ -139,6 +139,8 @@
     onAction(api, e) {
       if (e.x !== undefined) return move(Math.floor((e.x - left) / laneW), api);
       const next = targets.find((t) => t.state === "live");
+      // Fidget: every press lands you straight under the next light, so every press catches one
+      if (api.style === "fidget") return next ? move(next.lane, api) : (pop[lane] = 1);
       if (next) move(lane + Math.sign(next.lane - lane), api);
     },
 

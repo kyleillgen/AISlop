@@ -42,7 +42,7 @@ const fmt = (v, d = 2) => (v === null || v === undefined ? "  -" : typeof v === 
 // when a light needs it, and typing is naturally raggeder
 const CV_LIMIT = { rollover: Infinity, wordRain: 0.6 };
 const CHECKS = [
-  { test: (g) => g.clipsPerMin > 4, say: (g) => `${fmt(g.clipsPerMin, 1)} misses a minute: too hard right now. Widen the forgiving window or lower density (Leap: hurdle heights / JUMP; Rollover: LEAD, hold chance; Word Rain: fallBeats; all: pacer low/maxRoom).` },
+  { test: (g) => g.clipsPerMin > 4, say: (g) => `${fmt(g.clipsPerMin, 1)} misses a minute: too hard right now. Widen the forgiving window or lower density (Orbit: the clean window; Rollover: LEAD, hold chance; Word Rain: fallBeats; all: pacer low/maxRoom).` },
   { test: (g) => g.cleanRate !== null && g.cleanRate > 0.97 && g.sessions >= 3, say: () => "Almost never misses: add variety, not difficulty (more doubles, holds, phrase shapes). The brief says slightly too easy is the safe side, so only if it feels flat." },
   { test: (g) => g.slowing !== null && g.slowing > 1.15, say: (g) => `Play slows ${Math.round((g.slowing - 1) * 100)}% after a miss: misses rattle the rhythm. Make miss feedback gentler (flash, cushion chord) or forgive more.` },
   { test: (g) => g.cv !== null && g.cv > (CV_LIMIT[g.name] ?? 0.35), say: (g) => `Tap rhythm stays ragged (interval CV ${fmt(g.cv)}): the game isn't settling people into a groove. Check spawn spacing is regular (pacer settle) and that obstacles land on the grid.` },

@@ -7,35 +7,46 @@
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #140f0c; }
   body { display: flex; flex-direction: column; }
-  .strip { display: flex; align-items: center; gap: 6px; padding: 6px 8px; background: #140f0c; border-bottom: 3px solid #000; box-shadow: 0 2px 0 #ffc400; position: relative; z-index: 2; }
+  .strip { display: flex; flex-direction: column; gap: 5px; padding: 5px 6px 6px; background: #140f0c; border-bottom: 3px solid #000; box-shadow: 0 2px 0 #ffc400; position: relative; z-index: 2; }
   .strip .pb-btn { padding: 4px 8px !important; font-size: 10px !important; box-shadow: 2px 2px 0 #000; }
   .strip .pb-btn.on { background: #ffc400 !important; }
   .grow { flex: 1; }
+  .row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .strip .pb-btn { flex: none; }
+  .grow { min-width: 0; }
   .fps { font: 600 9px Oswald, Impact, sans-serif; letter-spacing: .08em; color: #8a6a4a; min-width: 30px; text-align: right; }
   .strip { cursor: grab; user-select: none; }
   .strip .pb-btn.win { padding: 4px 7px !important; min-width: 22px; }
-  .lamp { display: flex; align-items: center; gap: 6px; font: 600 10px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #f6e6c0; white-space: nowrap; }
+  .lamp { display: flex; align-items: center; gap: 5px; flex: 0 1 auto; font: 600 10px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #f6e6c0; white-space: nowrap; min-width: 0; }
   .lamp i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #000; background: #3a2418; }
   .lamp.working i { background: #ffc400; }
   .lamp.done i { background: #1fbf55; animation: blink 0.5s steps(1) 8; }
   .lamp.needs i { background: #e8231f; animation: blink 0.5s steps(1) 8; }
   @keyframes blink { 50% { background: #3a2418; } }
+  .lamp span { overflow: hidden; text-overflow: ellipsis; }
   iframe { flex: 1; width: 100%; border: 0; display: block; background: #140f0c; }
 </style>
 </head>
 <body>
   <div class="strip" id="strip" title="Drag to move">
+    <!-- Two rows so a narrow dock never pushes the window buttons out of sight: the title-bar
+         row (Claude's lamp, dock, pin, minimise, close), then the game picker -->
+    <div class="row">
+      <span class="lamp" id="lamp" title="What Claude is doing (needs the hook in pocket/README.md)"><i></i><span id="lampText">idle</span></span>
+      <span class="grow"></span>
+      <button class="pb-btn" id="dock" title="Dock: right edge, corner or mini">Side</button>
+      <button class="pb-btn" id="pin" title="Keep this window on top">Pin</button>
+      <button class="pb-btn win" id="minBtn" title="Minimise">&ndash;</button>
+      <button class="pb-btn win" id="closeBtn" title="Close">&times;</button>
+    </div>
+    <div class="row">
     <button class="pb-btn" data-game="flow-resonance.html" title="Flow // Resonance">Flow</button>
-    <button class="pb-btn" data-game="leap.html" title="Leap: hop the hurdles">Leap</button>
+    <button class="pb-btn" data-game="orbit.html" title="Orbit: fling the ball from bumper to bumper">Orbit</button>
     <button class="pb-btn" data-game="rollover.html" title="Rollover: slide under the lights">Roll</button>
     <button class="pb-btn" data-game="word-rain.html" title="Word Rain">Rain</button>
     <span class="grow"></span>
     <span class="fps" id="fps" title="Frames per second the game is actually drawing"></span>
-    <span class="lamp" id="lamp" title="What Claude is doing (needs the hook in pocket/README.md)"><i></i><span id="lampText">Claude</span></span>
-    <button class="pb-btn" id="dock" title="Dock: right edge, corner or mini">Side</button>
-    <button class="pb-btn" id="pin" title="Keep this window on top">Pin</button>
-    <button class="pb-btn win" id="minBtn" title="Minimise">&ndash;</button>
-    <button class="pb-btn win" id="closeBtn" title="Close">&times;</button>
+    </div>
   </div>
   <iframe id="game" title="Game" allow="autoplay"></iframe>
 
@@ -66,7 +77,10 @@
     frame.addEventListener("load", () => frame.contentWindow.focus());
     open(store("pocket.game") || "flow-resonance.html");
 
-    let pinned = store("pocket.pinned") === "1";
+    // Pinned (always on top) by default: the pocket is meant to sit over whatever you're working
+    // in. Windows can drop a window's topmost flag (after minimising, or when another app raises
+    // itself), so while pinned it's re-asserted every few seconds; the call is cheap.
+    let pinned = store("pocket.pinned") !== "0";
     const pinBtn = document.getElementById("pin");
     function setPinned(on) {
       pinned = on;
@@ -79,6 +93,7 @@
       frame.contentWindow.focus();
     });
     Neutralino.events.on("ready", () => setPinned(pinned));
+    setInterval(() => pinned && Neutralino.window.setAlwaysOnTop(true).catch(() => {}), 4000);
 
     // Borderless window: the strip is the title bar. Dragging starts on press, so the
     // buttons and the lamp are carved out of the drag area or their clicks would be eaten.
@@ -152,6 +167,7 @@
     async function surface() {
       try {
         if (await Neutralino.window.isMinimized()) await Neutralino.window.unminimize();
+        if (pinned) await Neutralino.window.setAlwaysOnTop(true);
       } catch (e) {}
     }
 
@@ -189,7 +205,9 @@
     // every 1.5 s (one tiny file read; nothing else runs in the background).
     const lamp = document.getElementById("lamp");
     const lampText = document.getElementById("lampText");
-    const LABELS = { start: "Claude working", done: "Claude done", needs: "Claude needs you" };
+    // Short labels so the strip fits a narrow dock; the tooltip has the full wording
+    const LABELS = { start: "working", done: "done", needs: "needs you" };
+    const TIPS = { start: "Claude is working", done: "Claude is done", needs: "Claude needs you" };
     let signalPath = null;
     let workingSince = 0;
     const clock = (ms) => {
@@ -197,7 +215,7 @@
       return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
     };
     setInterval(() => {
-      if (workingSince) lampText.textContent = "Claude working · " + clock(Date.now() - workingSince);
+      if (workingSince) lampText.textContent = clock(Date.now() - workingSince);
     }, 1000);
     let lastSignal = null;
     async function poll() {
@@ -211,12 +229,13 @@
         if (!LABELS[kind]) return;
         lamp.className = "lamp " + (kind === "start" ? "working" : kind);
         lampText.textContent = LABELS[kind];
+        lamp.title = TIPS[kind];
         // While Claude works, the lamp counts the wait; when it's done, it says how long it took.
         // Knowing roughly how long you've been away makes switching back less jarring.
         const at = +text.split(" ")[0];
         if (kind === "start") workingSince = at;
         else if (workingSince && at >= workingSince) {
-          lampText.textContent = LABELS[kind] + " · " + clock(at - workingSince);
+          lampText.textContent = LABELS[kind] + " " + clock(at - workingSince);
           workingSince = 0;
         }
         // Only react to news, not to whatever the file said when the app opened

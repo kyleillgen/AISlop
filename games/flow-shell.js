@@ -13,6 +13,7 @@
 //     tierNames: [...4], colors: [...4],     // optional
 //     onBeat(n, api)    spawn on the beat (api.eng.paceBeats() says how often)
 //     onAction(api, e)  a tap (input "tap"): e = { x, y } or {} from a key
+//     onRelease(api, heldSec, e)  optional: the tap's release (Space/↑ up, pointer up)
 //     onLetter(ch, api) a letter (input "type")
 //     onKey(key, api)   any other key; return true if used
 //     update(dt, api)   move things (api.eng.beatPos() for beat-locked motion)
@@ -189,12 +190,15 @@
     }
     loadTargets();
 
-    // ---- Play style: Flow (the game, with score and stakes) or Fidget (a toy). In Fidget the game
-    // plays itself the whole time and you join in whenever you like: every input plays its note
-    // and lights, autopilot takes back over a second after you stop, nothing counts against you,
-    // there are no timed modes, and the music never winds down, so it can run beside work for hours.
+    // ---- Play style: Flow (the game, with score and stakes) or Fidget (a toy). Fidget turns the
+    // table around: the world bends to your hands instead of your hands fitting the world. Every
+    // press succeeds and moves the ball right away (games check api.style in onAction), so there's
+    // no "wrong time" and nothing to watch for. Press, mash and hold-then-let-go are all different
+    // gestures with their own sound. Nothing scores or counts against you, there are no timed
+    // modes, and the game plays itself only after you've left it alone for a few seconds.
     let playStyle = store(g.key + ".style") === "fidget" ? "fidget" : "flow";
     let lastInputAt = 0;
+    const FIDGET_IDLE_MS = 4000; // slow pressing (one every 2-3 s) stays yours; autopilot waits
     const baseIdle = eng.ctrl.o.idleSec;
     function applyStyle() {
       const fidget = playStyle === "fidget";
@@ -218,7 +222,8 @@
       const gap = lastPress ? now - lastPress : 1000;
       lastPress = now;
       pressRate += (1000 / Math.max(60, gap) - pressRate) * 0.35;
-      rev = Math.max(rev, Math.min(1, (pressRate - 1) / 8));
+      // Log scale, so the whole range shows: 1 a second lights a few inserts, 10 a second all of them
+      rev = Math.max(rev, Math.min(1, Math.log2(1 + pressRate) / Math.log2(11)));
       climb = gap < 380 ? climb + 1 : Math.floor(Math.random() * 3); // quick runs climb the scale
       const height = 0.9 - ((climb % 9) / 9) * 0.8;
       eng.pluck(height, 1.4 - 1.25 * rev, 0.15 - 0.06 * rev);
@@ -226,6 +231,12 @@
       if (rev < 0.35) api.ring(at.x, at.y, api.color(), 70 - 40 * rev);
       api.burst(at.x, at.y, rev > 0.5 ? "#ffc400" : api.color(), 2 + Math.round(rev * 6), -1);
       if (g.onFidget) g.onFidget(api, rev, at);
+    }
+
+    // The release is the second half of the click, like a pen: a soft low clack
+    function fidgetRelease(held) {
+      if (playStyle !== "fidget" || eng.paused) return;
+      eng.pluck(0.95, held > 0.35 ? 0.5 : 0.12, held > 0.35 ? 0.11 : 0.045);
     }
 
     function toggleStyle() {
@@ -260,6 +271,8 @@
       color: () => colors[eng.tier - 1],
       get intensity() { return intensity; },
       get style() { return playStyle; }, // "flow" or "fidget"
+      get held() { return downAt ? (performance.now() - downAt) / 1000 : 0; }, // seconds the tap is held down
+      get rev() { return rev; }, // Fidget: 0 calm .. 1 mashing flat out
       // Pick a value by intensity: api.pick({ chill: 13, normal: 10, intense: 8 })
       pick: (o) => (o[intensity] !== undefined ? o[intensity] : o.normal),
       get mode() { return mode; }, // the table mode running now ("Double Score", a game's own...)
@@ -527,7 +540,7 @@
         label = mode + " " + Math.ceil(modeLeft) + "s" + (mode === "Hurry-Up" ? " \u00b7 " + Math.round(hurry).toLocaleString() + " \u00b7 " + Math.max(0, 5 - hurryHits) + " to go" : mode === "Jackpot" ? " \u00b7 " + pot.toLocaleString() : "");
         c = "#ffc400";
       }
-      if (playStyle === "fidget" && started) [label, c] = ["Fidget \u00b7 join in any time", "#ffc400"];
+      if (playStyle === "fidget" && started) [label, c] = ["Press \u00b7 mash \u00b7 hold", "#ffc400"];
       if (eng.paused) [label, c] = ["Paused", "#f6e6c0"];
       else if (eng.auto && started) [label, c] = [g.autoLabel || "Autopilot · " + (typing ? "type" : "tap") + " to take over", "#ffc400"];
       q("[data-label]").textContent = label;
@@ -576,8 +589,18 @@
     q("[data-pausecard]").addEventListener("pointerdown", () => setPaused(false));
     q("[data-keyscard]").addEventListener("pointerdown", () => q("[data-keyscard]").classList.remove("show"));
 
-    function action(e) {
+    let downAt = 0;
+    function release(e) {
+      if (!downAt) return;
+      const held = (performance.now() - downAt) / 1000;
+      downAt = 0;
       lastInputAt = performance.now();
+      if (!started || eng.paused) return;
+      fidgetRelease(held);
+      if (g.onRelease) g.onRelease(api, held, e || {});
+    }
+    function action(e) {
+      lastInputAt = downAt = performance.now();
       if (!started) start();
       if (eng.paused) return setPaused(false);
       fidgetPress(e);
@@ -598,6 +621,12 @@
         if (!started) start();
       } else action({ x: e.clientX, y: e.clientY });
     });
+    if (!typing) {
+      window.addEventListener("pointerup", (e) => release({ x: e.clientX, y: e.clientY }));
+      window.addEventListener("pointercancel", () => release({}));
+      window.addEventListener("keyup", (e) => (e.code === "Space" || e.code === "ArrowUp") && release({}));
+      window.addEventListener("blur", () => release({}));
+    }
 
     window.addEventListener("keydown", (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -660,13 +689,13 @@
       last = now;
       eng.update(dt);
       if (!eng.paused) {
-        const fidgetIdle = playStyle === "fidget" && performance.now() - lastInputAt > 1000;
+        const fidgetIdle = playStyle === "fidget" && !downAt && performance.now() - lastInputAt > FIDGET_IDLE_MS;
         if ((!started || eng.auto || fidgetIdle) && g.autopilot) g.autopilot(dt, api); // attract, autopilot, or Fidget filling in
         tickModes(dt);
         if (g.update) g.update(dt, api);
         flash = Math.max(0, flash - dt * 1.4);
         bulbFlash = Math.max(0, bulbFlash - dt);
-        rev = Math.max(0, rev - dt * 0.6); // the rev meter falls back when you ease off
+        rev *= Math.pow(0.45, dt); // the meter eases back, slowly enough that slow pressing still shows
         pressRate *= Math.pow(0.5, dt);
         chase += (dt / eng.beatSec) * 2 * (1 + (playStyle === "fidget" ? rev * 3 : 0)); // bulbs chase faster as you rev
         const drag = Math.pow(0.12, dt); // particles slow as they spread, then hang and fade
