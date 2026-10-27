@@ -27,7 +27,7 @@ These hold in every game because the engine and shell enforce them, not because 
 1. **You can't lose.** `api.miss()` steps the streak down by a quarter. Nothing ends the game.
 2. **Autopilot never scores and never costs.** `score()` and `miss()` are ignored while it's on, and the two misses after taking control back are forgiven.
 3. **The tempo never jumps.** It moves no more than 3% a bar while matching and 1.5% a bar when re-matching, and it holds still once locked and during autopilot.
-4. **Nothing gets harder with time.** The pacer only follows the player: their own handling speed, plus room when their clean rate drops.
+4. **Nothing gets harder on its own.** The pacer only follows the player: their own handling speed, plus room when their clean rate drops. Difficulty changes only when the player picks an intensity (chill, normal, intense); within a session it never ramps.
 5. **Help is invisible.** `api.eng.assist` should only widen margins on things not yet on screen. The template shows how.
 6. **Every action is a note** in key, snapped to the 16th grid. During calibration the snapped note is held back so it can't bias timing.
 7. **Stopping is free.** Settings, tempo and best score persist, and autopilot gives a soft landing.
@@ -42,7 +42,14 @@ These hold in every game because the engine and shell enforce them, not because 
 | What counts? | `api.score(1, "PERFECT" \| "CLEAN", handleSec)` / `api.miss()` | `handleSec` (how long the player took) feeds the pacer |
 | How does it look? | `draw(ctx, api, t)` | The shell draws particles and callouts on top. Use `api.cached()` for gradients |
 
-Plus `autopilot(dt, api)`: what the game does by itself when the player stops. The same function runs **attract mode**: until the first input, the game plays itself under a marquee of its `title` and `hint`, like a pinball table on show. There's no start card or rules screen. The first tap or key starts the sound and is also a move. Teach the rest in context with `api.hint(id, text)`, a tip shown once ever (after attract mode), when it becomes relevant (for example, after the first miss). Use `api.ring(x, y, color, size)` for perfect moments. Optional: `setup`, `resize`, `start`, `onKey`, `onPhrase`, `tierNames`, `colors`, `engine` options.
+Plus `autopilot(dt, api)`: what the game does by itself when the player stops. The same function runs **attract mode**: until the first input, the game plays itself under a marquee of its `title` and `hint`, like a pinball table on show. There's no start card or rules screen. The first tap or key starts the sound and is also a move. Teach the rest in context with `api.hint(id, text)`, a tip shown once ever (after attract mode), when it becomes relevant (for example, after the first miss). Use `api.ring(x, y, color, size)` for perfect moments.
+
+The shell also runs the reward loop and the variety for every game:
+- **Score:** 100 a hit, doubled for perfect, times a combo multiplier (×1 to ×5, back to ×1 on a miss), scaled by intensity. `api.bonus(points)` awards extra, for example a star.
+- **Replay score:** one per game and intensity. Beating it gives "REPLAY!" and the target creeps up 15% for future runs. If it keeps going unbeaten, it eases back down. There's also a high score per intensity.
+- **Lifetime rank,** shared by all games, from Rookie to Legend. Each rank gives a new ball finish via `api.ballStops()`.
+- **Intensity:** `api.intensity` and `api.pick({ chill, normal, intense })` let a game scale its own density and demands. The shell scales the pacer.
+- **Table modes:** a 20-second twist every 45–75 seconds of play. The built-ins are Double Score, Hurry-Up and Jackpot; list your own in `modes: [...]`, then read `api.mode` when spawning (Leap's Star Lane, Rollover's Spinner, Word Rain's Golden Words). Optional: `setup`, `resize`, `start`, `onKey`, `onPhrase`, `tierNames`, `colors`, `engine` options.
 
 ## Prompt kit
 

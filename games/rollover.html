@@ -38,6 +38,7 @@
   let beatsSinceSpawn = 99;
   let nextLane = 1;
   let phrase = [];
+  let spin = -1;
   let kick = 0;
   let hitY = 0;
   let topY = 0;
@@ -49,8 +50,14 @@
   const yAt = (beat, now) => hitY - (beat - now) * speed();
 
   // Melodic phrases across the lanes, chained from where the last one ended
-  function nextPhrase(from) {
-    const shapes = [[1, 1, 1], [-1, -1, -1], [2, -1, 2], [-2, 1, -2], [0, 1, 0], [1, -1, 1, -1], [0, 0, 1], [-1, 0, -1], [3, -3]];
+  // Intensity picks the shapes: chill is small steps and holds, intense adds wide jumps
+  const SHAPES = {
+    chill: [[1, 1], [-1, -1], [0, 1, 0], [0, 0, -1], [1, 0, -1]],
+    normal: [[1, 1, 1], [-1, -1, -1], [2, -1, 2], [-2, 1, -2], [0, 1, 0], [1, -1, 1, -1], [0, 0, 1], [-1, 0, -1], [3, -3]],
+    intense: [[3, -3, 3], [2, -2, 2, -2], [1, 2, -3], [-1, -2, 3], [3, -1, -1, -1], [2, -1, 2], [1, -1, 1, -1]]
+  };
+  function nextPhrase(from, api) {
+    const shapes = SHAPES[api.intensity] || SHAPES.normal;
     const s = shapes[Math.floor(Math.random() * shapes.length)];
     return s.map((d) => (from = Math.max(0, Math.min(N - 1, from + d))));
   }
@@ -82,6 +89,7 @@
     keys: [["← →", "roll"], ["1–4", "jump to a lane"]],
     tierNames: ["Finding your rhythm", "Lit up", "Multiball", "Jackpot"],
     // Moves follow the lights (every 1-4 beats); waiting in the right lane counts as playing
+    modes: ["Spinner"],
     engine: { perBeat: [0.25, 1 / 3, 0.5, 1, 2], stableTol: 3, pacing: { minBeats: 1, startBeats: 2 } },
 
     resize(api) {
@@ -97,10 +105,19 @@
       kick = 1;
       if (++beatsSinceSpawn < api.eng.paceBeats()) return;
       beatsSinceSpawn = 0;
-      if (!phrase.length) phrase = nextPhrase(nextLane);
+      // Spinner mode: a light every beat sweeping across the lanes and back, each a bonus
+      if (api.mode === "Spinner") {
+        spin = (spin + 1) % 6;
+        nextLane = [0, 1, 2, 3, 2, 1][spin];
+        targets.push({ beat: n + LEAD, lane: nextLane, len: 0, state: "live", fade: 1, spin: true });
+        beatsSinceSpawn = api.eng.paceBeats() - 1; // keep coming every beat while it lasts
+        return;
+      }
+      if (!phrase.length) phrase = nextPhrase(nextLane, api);
       nextLane = phrase.shift();
       // Now and then a hold: a light with a tail one to three beats long
-      const len = api.tier >= 1 && Math.random() < 0.22 ? 1 + Math.floor(Math.random() * 3) : 0;
+      const holdChance = api.pick({ chill: 0.3, normal: 0.22, intense: 0.15 });
+      const len = Math.random() < holdChance ? 1 + Math.floor(Math.random() * 3) : 0;
       targets.push({ beat: n + LEAD, lane: nextLane, len, state: "live", fade: 1 });
       if (len) beatsSinceSpawn = -len; // leave room for the tail
     },
@@ -153,6 +170,7 @@
             api.ring(laneX(t.lane), hitY, api.color(), 30);
             const perfect = now - laneSince >= 0.25; // settled in before it landed
             api.score(1, perfect ? "PERFECT" : "CLEAN", api.eng.beatSec * 1.1);
+            if (t.spin) api.bonus(200);
             if (!api.eng.auto && api.started) lightLetter(t.lane, api);
             t.state = t.len ? "holding" : "got";
           } else {
@@ -275,7 +293,7 @@
         ctx.lineTo(x, head + s * 0.7 + 4);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = t.state === "missed" ? "#5a3a2a" : col;
+        ctx.fillStyle = t.state === "missed" ? "#5a3a2a" : t.spin ? "#ffc400" : col;
         ctx.beginPath();
         ctx.moveTo(x - s, head - s * 0.7);
         ctx.lineTo(x + s, head - s * 0.7);
@@ -291,11 +309,13 @@
 
       // The ball: leans and stretches into a roll
       const r = Math.min(15, laneW * 0.2);
-      const ball = api.cached("ball" + r, () => {
+      // The ball's finish comes from your lifetime rank
+      const ball = api.cached("ball" + r + api.rankKey, () => {
+        const [a, b2, c] = api.ballStops();
         const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
-        g.addColorStop(0, "#ffffff");
-        g.addColorStop(0.45, "#c9c4bd");
-        g.addColorStop(1, "#4a443e");
+        g.addColorStop(0, a);
+        g.addColorStop(0.45, b2);
+        g.addColorStop(1, c);
         return g;
       });
       const slide = Math.max(-1, Math.min(1, ballV / 900));

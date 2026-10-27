@@ -73,7 +73,7 @@
   .pb-sub { margin-top: 10px; font: 500 13px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: ${C.cream}; }
   .pb-rows div { display: flex; justify-content: space-between; gap: 12px; margin: 7px 0; font: 500 12px Oswald, Impact, sans-serif; letter-spacing: .06em; text-transform: uppercase; color: #3a2a1c; }
   .pb-note { margin-top: 10px; font: 400 12px/1.45 Inter, system-ui, sans-serif; color: #6b4c30; }
-  @media (max-width: 520px) { .pb-bar { gap: 6px; padding: 6px 7px; } .pb-window svg { width: 50px; height: 19px; } .pb-lights { gap: 2px; } .pb-btn { padding: 5px 7px !important; } .pb-cap .pb-badge { display: none; } }
+  @media (max-width: 520px) { .pb-bar { gap: 6px; padding: 6px 7px; } .pb-window svg { width: auto; height: 18px; } .pb-lights { gap: 2px; } .pb-btn { padding: 5px 7px !important; } .pb-cap .pb-badge { display: none; } }
   .pb-hint { display: inline-block; padding: 6px 12px; background: ${C.cream}; color: ${C.black}; border: 2px solid #000; border-radius: 6px; box-shadow: 3px 3px 0 #000; font: 600 11px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; }`;
 
   function install(options) {

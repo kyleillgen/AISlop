@@ -69,14 +69,18 @@
     recentLanes = recentLanes.concat(lane).slice(-2);
     const margin = Math.min(110, api.W * 0.18);
     let text;
+    // Intensity picks word length: chill keeps them short, intense goes long
+    const [minLen, maxLen] = api.pick({ chill: [3, 5], normal: [3, 7], intense: [5, 7] });
+    let tries = 0;
     do text = WORDS[Math.floor(Math.random() * WORDS.length)];
-    while (words.some((w) => w.text === text));
+    while (((text.length < minLen || text.length > maxLen) || words.some((w) => w.text === text)) && ++tries < 60);
     // Assist slows the fall; fixed when the word appears, never changed once visible
     words.push({
       text,
       x: margin + ((lane + 0.5) / 5) * (api.W - margin * 2),
       spawnBeat: beat,
-      fallBeats: Math.round(10 + 5 * api.eng.assist),
+      fallBeats: Math.round(api.pick({ chill: 13, normal: 10, intense: 8 }) + 5 * api.eng.assist),
+      golden: api.mode === "Golden Words", // worth a bonus for every letter
       typed: 0,
       errors: 0,
       state: "falling",
@@ -97,6 +101,10 @@
     // Handling time (first key to last, plus a moment to read) paces the next words
     const handleSec = w.firstKeyMs ? (performance.now() - w.firstKeyMs) / 1000 + 0.6 : undefined;
     api.score(1, perfect ? "PERFECT" : "CLEAN", handleSec);
+    if (w.golden) {
+      api.bonus(300 * w.text.length);
+      api.burst(w.x, y, "#ffc400", 12, -1);
+    }
     if (perfect) api.ring(w.x, y, api.color(), 60);
   }
 
@@ -106,6 +114,7 @@
     hint: "Type the lowest word &middot; no need to fix typos",
     input: "type",
     tierNames: ["Finding your rhythm", "Steady rain", "Downpour", "Monsoon"],
+    modes: ["Golden Words"],
     engine: {
       // Keystrokes per beat: the typing stride. The in-between counts leave no gaps, so
       // any pace from ~120 to ~620 ms a key fits the 96-124 band.
@@ -292,7 +301,7 @@
           ctx.translate(tx + (cw - 2) / 2, y);
           ctx.scale(1 - punch, 1 - punch);
           ctx.translate(-(tx + (cw - 2) / 2), -y);
-          ctx.fillStyle = typed ? (w.ghost ? "#8a7f6a" : col) : "#f6e6c0";
+          ctx.fillStyle = typed ? (w.ghost ? "#8a7f6a" : col) : w.golden ? "#ffc400" : "#f6e6c0";
           ctx.fillRect(tx, y - th / 2, cw - 2, th);
           ctx.strokeRect(tx, y - th / 2, cw - 2, th);
           ctx.fillStyle = typed ? "#fff8e6" : "#140f0c";

@@ -36,7 +36,7 @@
   .fs-head { position: fixed; top: 0; left: 0; right: 0; z-index: 20; padding: 8px 10px; max-width: 42rem; margin: 0 auto; pointer-events: none; }
   .fs-state { flex: 1; min-width: 0; max-width: 220px; }
   .fs-controls { display: flex; gap: 7px; pointer-events: auto; }
-  @media (max-width: 520px) { .fs-voice, .pb-best { display: none; } }
+  @media (max-width: 520px) { .fs-voice, .pb-best { display: none; } .pb-cap .pb-badge.pb-mult { display: inline-block; } }
   .fs-over { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(20,15,12,.72); }
   .fs-over.show { display: flex; }
   .fs-hint { position: fixed; bottom: 26px; left: 0; right: 0; z-index: 10; text-align: center; pointer-events: none; transition: opacity .7s; }
@@ -69,11 +69,11 @@
     root.innerHTML = `
       <canvas id="fs-canvas"></canvas>
       <header class="fs-head"><div class="pb-bar">
-        <div><span class="pb-cap">Streak</span><span class="pb-window" data-streak></span><span class="pb-best">best <b data-best>0</b></span></div>
+        <div><span class="pb-cap">Score <span class="pb-badge pb-mult" data-mult>1&times;</span></span><span class="pb-window" data-streak></span><span class="pb-best">high <b data-best>0</b></span></div>
         <div class="fs-state"><span class="pb-label" data-label></span><div class="pb-lights" data-lights></div></div>
         <div class="fs-controls">
-          <button class="pb-btn" data-track title="Switch track (Tab)"></button>
-          <button class="pb-btn fs-voice" data-voice title="Switch voice (Shift+Tab)"></button>
+          <button class="pb-btn" data-intensity title="Chill, normal or intense (\`)"></button>
+          <button class="pb-btn fs-voice" data-track title="Switch track (Tab)"></button>
           <button class="pb-btn pb-icon" data-pause title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
           <button class="pb-btn pb-icon" data-mute title="Mute (0)" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.6l4.7-4.7c.6-.6 1.7-.2 1.7.7v14c0 .9-1.1 1.3-1.7.7z"/><path data-waves d="M15.5 8.5a5 5 0 010 7M18.4 5.6a9 9 0 010 12.8"/><path data-cross d="M17 10l4 4m0-4l-4 4" style="display:none"/></svg></button>
         </div></div></header>
@@ -86,15 +86,17 @@
       <div class="fs-over" data-pausecard><div style="text-align:center">
         <div class="pb-paused">Paused</div>
         <div class="pb-sub">Tap or ${kbd("Esc")} to resume</div>
-        <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
-          <button class="pb-btn" data-ptrack></button><button class="pb-btn" data-pvoice></button>
-        </div></div></div>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:16px;flex-wrap:wrap">
+          <button class="pb-btn" data-pintensity></button><button class="pb-btn" data-ptrack></button><button class="pb-btn" data-pvoice></button>
+        </div>
+        <div class="pb-sub" data-rank style="margin-top:14px"></div></div></div>
       <div class="fs-over" data-keyscard><div class="pb-card" style="max-width:20rem;transform:none">
         <div class="pb-kicker">Keys</div>
         <div class="pb-rows">
           ${actionKeys.concat(extraKeys).map(([k, d]) => `<div><span>${d}</span>${kbd(k)}</div>`).join("")}
           <div><span>Pause</span>${kbd("Esc")}</div>
           <div><span>Autopilot</span>${kbd("Enter")}</div>
+          <div><span>Chill / normal / intense</span>${kbd("`")}</div>
           <div><span>Track / voice</span><span>${kbd("Tab")} ${kbd("Shift+Tab")}</span></div>
           <div><span>Volume / mute</span><span>${kbd("-")} ${kbd("=")} ${kbd("0")}</span></div>
           <div><span>Audio offset</span><span>${kbd("[")} ${kbd("]")}</span></div>
@@ -130,9 +132,72 @@
     const cache = new Map();
     let phrase = 0, phraseClean = true;
     let hintTimer = 0;
-    const BEST_KEY = g.key + ".best";
-    let best = 0;
-    try { best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0; } catch (e) {}
+    const store = (k, v) => {
+      try {
+        if (v === undefined) return localStorage.getItem(k);
+        localStorage.setItem(k, String(v));
+      } catch (e) {}
+      return null;
+    };
+
+    // ---- Intensity: chosen, never imposed. Within a session nothing ramps on its own ----------
+    const INTENSITIES = ["chill", "normal", "intense"];
+    const POINT_SCALE = { chill: 0.75, normal: 1, intense: 1.5 };
+    let intensity = INTENSITIES.includes(store(g.key + ".intensity")) ? store(g.key + ".intensity") : "normal";
+    const basePace = Object.assign({}, eng.pacer.o);
+    function applyIntensity() {
+      // Chill gives every item more room; intense brings them closer together
+      eng.pacer.o.slack = basePace.slack * { chill: 1.35, normal: 1, intense: 0.85 }[intensity];
+      eng.pacer.o.minBeats = Math.max(1, basePace.minBeats + { chill: 1, normal: 0, intense: -1 }[intensity]);
+      eng.pacer.o.startBeats = Math.max(eng.pacer.o.minBeats, basePace.startBeats + { chill: 1, normal: 0, intense: -1 }[intensity]);
+    }
+    applyIntensity();
+
+    // ---- Score, multiplier, replay, high score, rank -------------------------------------------
+    // The pinball loop on top of the flow: points with a combo multiplier, a replay score per
+    // intensity that creeps up when you beat it (and eases down when it keeps beating you, like
+    // a real table's auto-percentaging), a high score per intensity, and a lifetime rank shared
+    // by every game that upgrades the ball's finish.
+    const REPLAY_START = { chill: 8000, normal: 15000, intense: 25000 };
+    const RANKS = [
+      { at: 0, name: "Rookie", ball: ["#ffffff", "#c9c4bd", "#4a443e"], finish: "steel" },
+      { at: 50000, name: "Flipper", ball: ["#fff6d8", "#d8b45a", "#5a4012"], finish: "brass" },
+      { at: 200000, name: "Bumper", ball: ["#ffffff", "#a9c4e0", "#2b3a4e"], finish: "chrome" },
+      { at: 600000, name: "Tilt Master", ball: ["#ffe6d4", "#d0784a", "#4a1e0c"], finish: "copper" },
+      { at: 1500000, name: "Wizard", ball: ["#fffbe0", "#ffcc33", "#7a4a00"], finish: "gold" },
+      { at: 4000000, name: "Legend", ball: ["#ffffff", "#9fe8ff", "#1a4a7a"], finish: "glass" }
+    ];
+    let points = 0;
+    let combo = 0;
+    let mult = 1;
+    let lifetime = parseInt(store("flowEngine.lifetime") || "0", 10) || 0;
+    const rankOf = (lp) => RANKS.filter((r) => lp >= r.at).pop();
+    let rank = rankOf(lifetime);
+    let hi = 0;
+    let replay = 0;
+    let runReplayAt = 0;
+    let newHigh = false;
+    let autoSince = 0;
+    function loadTargets() {
+      hi = parseInt(store(g.key + ".hi." + intensity) || "0", 10) || 0;
+      replay = parseInt(store(g.key + ".replay." + intensity) || "0", 10) || REPLAY_START[intensity];
+      runReplayAt = replay;
+      newHigh = false;
+    }
+    loadTargets();
+
+    // ---- Table modes: a 20 s twist every 45-75 s of play, so it never settles into sameness ---
+    const MODES = ["Double Score", "Hurry-Up", "Jackpot"].concat(g.modes || []);
+    let mode = null;
+    let modeLeft = 0;
+    let modeClock = 0;
+    let nextModeAt = 45 + Math.random() * 30;
+    let lastMode = null;
+    let hurry = 0;
+    let hurryHits = 0;
+    let pot = 0;
+    let potLost = false;
+
 
     const api = {
       eng,
@@ -143,12 +208,37 @@
       get started() { return started; },
       get tier() { return eng.tier; },
       color: () => colors[eng.tier - 1],
+      get intensity() { return intensity; },
+      // Pick a value by intensity: api.pick({ chill: 13, normal: 10, intense: 8 })
+      pick: (o) => (o[intensity] !== undefined ? o[intensity] : o.normal),
+      get mode() { return mode; }, // the table mode running now ("Double Score", a game's own...)
+      get points() { return points; },
+      ballStops: () => rank.ball, // the ball's finish, upgraded by lifetime rank
+      get rankKey() { return rank.finish; },
+      // Award points directly (a star collected, a bonus); they ride the multiplier too
+      bonus(n, label, x, y) {
+        if (eng.auto || !started) return;
+        addPoints(n);
+        if (label) api.callout(label, x === undefined ? W / 2 : x, y === undefined ? H * 0.38 : y, "#ffc400", 0.9);
+      },
       // Things the player did well. quality "PERFECT" | "CLEAN" | "GRAZE" plays a harmony;
       // handleSec feeds the pacer. Ignored during autopilot (the engine enforces it).
       score(n = 1, quality = "CLEAN", handleSec) {
         const prev = eng.tier;
         if (eng.auto || !started) return false;
         eng.score(n, quality, handleSec);
+        // Points: 100 a hit, doubled for perfect, times the combo multiplier
+        combo += n;
+        const m = Math.min(5, 1 + Math.floor(combo / 10));
+        if (m > mult) api.callout(m + "\u00d7", W / 2, H * 0.42, "#ffc400", 1.1);
+        mult = m;
+        addPoints(n * 100 * (quality === "PERFECT" ? 2 : quality === "GRAZE" ? 0.5 : 1));
+        if (mode === "Hurry-Up" && ++hurryHits >= 5) {
+          addPoints(hurry, true);
+          api.callout("Hurry-Up " + Math.round(hurry).toLocaleString(), W / 2, H * 0.3, "#ffc400", 1.15);
+          endMode(true);
+        }
+        if (mode === "Jackpot" && quality === "PERFECT") pot += 1500;
         if (eng.tier > prev && eng.milestones) {
           api.callout(tierNames[eng.tier - 1], W / 2, H * 0.3, api.color(), 1.2);
           bulbFlash = 1.2;
@@ -173,6 +263,12 @@
         if (!started) return false;
         const counted = eng.clip();
         if (counted) {
+          combo = 0;
+          mult = 1; // like losing the bonus multiplier on a drain
+          if (mode === "Jackpot" && pot > 0 && !potLost) {
+            potLost = true;
+            api.callout("Jackpot lost", W / 2, H * 0.3, "#8a6a4a", 0.9);
+          }
           phraseClean = false;
           if (!reduced) flash = 0.25;
         }
@@ -214,6 +310,112 @@
         return cache.get(key);
       }
     };
+
+    function addPoints(n, raw) {
+      const add = Math.round(raw ? n : n * mult * POINT_SCALE[intensity] * (mode === "Double Score" ? 2 : 1));
+      points += add;
+      lifetime += add;
+      if (points > hi) {
+        if (!newHigh && hi > 0) {
+          newHigh = true;
+          api.callout("New high score!", W / 2, H * 0.34, "#ffc400", 1.1);
+          eng.chime();
+        }
+        hi = points;
+        store(g.key + ".hi." + intensity, hi);
+      }
+      // REPLAY: like the knocker on a real table. The saved target creeps up 15% for future runs;
+      // within this run the next replay needs ~60% more, so they stay rare enough to mean something
+      if (points >= runReplayAt) {
+        api.callout("REPLAY!", W / 2, H * 0.3, "#e8231f", 1.5);
+        api.ring(W / 2, H * 0.45, "#e8231f", Math.min(W, H) * 0.45);
+        bulbFlash = 2;
+        eng.chime();
+        if (points >= replay) {
+          replay = Math.round((replay * 1.15) / 500) * 500;
+          store(g.key + ".replay." + intensity, replay);
+        }
+        runReplayAt = Math.round((points * 1.6) / 500) * 500;
+      }
+      const r = rankOf(lifetime);
+      if (r !== rank) {
+        rank = r;
+        cache.clear(); // ball gradients are cached; the new finish needs a redraw
+        api.callout(rank.name + " \u00b7 " + rank.finish + " ball", W / 2, H * 0.26, "#ffc400", 1.1);
+        eng.chime();
+      }
+      saveLifetime();
+    }
+    let lifetimeSaved = 0;
+    function saveLifetime(force) {
+      if (!force && performance.now() - lifetimeSaved < 4000) return;
+      lifetimeSaved = performance.now();
+      store("flowEngine.lifetime", lifetime);
+    }
+    window.addEventListener("pagehide", () => saveLifetime(true));
+
+    function setIntensity(next) {
+      intensity = next;
+      store(g.key + ".intensity", intensity);
+      applyIntensity();
+      points = 0;
+      loadTargets();
+      combo = 0;
+      mult = 1;
+      api.callout(intensity, W / 2, 130, "#ffc400", 1);
+      hud();
+    }
+
+    function startMode() {
+      const choices = MODES.filter((m) => m !== lastMode);
+      mode = choices[Math.floor(Math.random() * choices.length)];
+      lastMode = mode;
+      modeLeft = 20;
+      hurry = 10000 * POINT_SCALE[intensity];
+      hurryHits = 0;
+      pot = 0;
+      potLost = false;
+      api.callout(mode + "!", W / 2, H * 0.3, "#ffc400", 1.3);
+      api.ring(W / 2, H * 0.45, api.color(), Math.min(W, H) * 0.4);
+      bulbFlash = 1.4;
+      eng.chime();
+      if (g.onMode) g.onMode(mode, api);
+    }
+    function endMode(collected) {
+      if (mode === "Jackpot" && pot > 0 && !potLost) {
+        addPoints(pot, true);
+        api.callout("Jackpot " + pot.toLocaleString(), W / 2, H * 0.3, "#ffc400", 1.3);
+        bulbFlash = 1.6;
+        eng.chime();
+      }
+      if (g.onMode) g.onMode(null, api);
+      mode = null;
+      modeClock = 0;
+      nextModeAt = 45 + Math.random() * 30;
+    }
+    function tickModes(dt) {
+      if (!started || eng.paused) return;
+      if (eng.auto) {
+        autoSince += dt;
+        // Back after a long break: a fresh run (scores reset, high scores and rank stay)
+        if (autoSince > 300 && points > 0) {
+          if (points < replay * 0.5) replay = Math.max(Math.round(REPLAY_START[intensity] * 0.6), Math.round((replay * 0.97) / 500) * 500);
+          store(g.key + ".replay." + intensity, replay);
+          points = 0;
+          combo = 0;
+          mult = 1;
+          newHigh = false;
+          runReplayAt = replay;
+        }
+        return;
+      }
+      autoSince = 0;
+      if (mode) {
+        modeLeft -= dt;
+        if (mode === "Hurry-Up") hurry = Math.max(2000 * POINT_SCALE[intensity], hurry - (8000 * POINT_SCALE[intensity] * dt) / 20);
+        if (modeLeft <= 0) endMode(false);
+      } else if ((modeClock += dt) >= nextModeAt) startMode();
+    }
 
     function resize() {
       const vv = window.visualViewport;
@@ -258,21 +460,26 @@
     });
 
     function hud() {
-      Skin.score(q("[data-streak]"), eng.streak);
-      if (eng.ctrl.best > best) {
-        best = eng.ctrl.best;
-        try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {}
-      }
-      q("[data-best]").textContent = best;
+      Skin.score(q("[data-streak]"), points, 6);
+      q("[data-best]").textContent = hi.toLocaleString();
+      q("[data-mult]").innerHTML = mult + "&times;";
+      q("[data-mult]").classList.toggle("ready", mult > 1);
+      q("[data-intensity]").textContent = q("[data-pintensity]").textContent = intensity;
+      const nextRank = RANKS[RANKS.indexOf(rank) + 1];
+      q("[data-rank]").textContent = rank.name + " \u00b7 " + rank.finish + " ball \u00b7 " + lifetime.toLocaleString() + " lifetime" + (nextRank ? " \u00b7 " + nextRank.name + " at " + nextRank.at.toLocaleString() : "");
       Skin.lights(q("[data-lights]"), eng.flowIndex * 100, api.color());
       let label = eng.tier === 1 ? (eng.locked ? "In sync" : tierNames[0]) : tierNames[eng.tier - 1];
       let c = api.color();
+      if (mode && started && !eng.auto) {
+        label = mode + " " + Math.ceil(modeLeft) + "s" + (mode === "Hurry-Up" ? " \u00b7 " + Math.round(hurry).toLocaleString() + " \u00b7 " + Math.max(0, 5 - hurryHits) + " to go" : mode === "Jackpot" ? " \u00b7 " + pot.toLocaleString() : "");
+        c = "#ffc400";
+      }
       if (eng.paused) [label, c] = ["Paused", "#f6e6c0"];
       else if (eng.auto && started) [label, c] = [g.autoLabel || "Autopilot · " + (typing ? "type" : "tap") + " to take over", "#ffc400"];
       q("[data-label]").textContent = label;
       q("[data-label]").style.color = c;
       q("[data-track]").textContent = q("[data-ptrack]").textContent = eng.trackName;
-      q("[data-voice]").textContent = q("[data-pvoice]").textContent = eng.voiceName;
+      q("[data-pvoice]").textContent = eng.voiceName;
       q("[data-waves]").style.display = eng.muted ? "none" : "";
       q("[data-cross]").style.display = eng.muted ? "" : "none";
     }
@@ -282,7 +489,7 @@
     // of play and whenever autopilot takes over
     function reportSession() {
       if (!started || window.parent === window) return;
-      window.parent.postMessage({ type: "flow:session", session: eng.telemetry() }, "*");
+      window.parent.postMessage({ type: "flow:session", session: Object.assign(eng.telemetry(), { points, high: hi, intensity, rank: rank.name }) }, "*");
     }
     setInterval(() => started && !eng.auto && !eng.paused && reportSession(), 20000);
     window.addEventListener("pagehide", reportSession);
@@ -302,8 +509,10 @@
         hud();
       });
     const note = (text, color) => api.callout(text, W / 2, 130, color || "#94a3b8", 0.95);
+    const cycleIntensity = () => setIntensity(INTENSITIES[(INTENSITIES.indexOf(intensity) + 1) % INTENSITIES.length]);
+    press("[data-intensity]", cycleIntensity);
+    press("[data-pintensity]", cycleIntensity);
     press("[data-track]", () => note(eng.cycleTrack().toLowerCase(), "#ffc400"));
-    press("[data-voice]", () => note(eng.cycleVoice().toLowerCase(), "#ff1f8a"));
     press("[data-ptrack]", () => eng.cycleTrack());
     press("[data-pvoice]", () => eng.cycleVoice());
     press("[data-pause]", () => setPaused(!eng.paused));
@@ -359,6 +568,7 @@
         const ms = eng.adjustOffset(e.key === "[" ? -10 : 10);
         note(`Audio offset ${ms > 0 ? "+" : ""}${ms} ms`);
       } else if (e.key === "?") q("[data-keyscard]").classList.toggle("show");
+      else if (e.key === "`") cycleIntensity();
       else if (g.onKey && !eng.paused && g.onKey(e.key, api)) {
         // A game's own keys (arrows in Rollover) start the game too, like Space or a tap
         e.preventDefault();
@@ -388,6 +598,7 @@
       eng.update(dt);
       if (!eng.paused) {
         if ((!started || eng.auto) && g.autopilot) g.autopilot(dt, api); // attract mode or autopilot
+        tickModes(dt);
         if (g.update) g.update(dt, api);
         flash = Math.max(0, flash - dt * 1.4);
         bulbFlash = Math.max(0, bulbFlash - dt);

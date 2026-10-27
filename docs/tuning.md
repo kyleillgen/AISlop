@@ -32,6 +32,10 @@ One knob at a time, a few sessions each: the numbers are noisy, and changing two
 | Leap | double-hurdle chance (0.28) | `onBeat` | How often tap-tap pairs appear |
 | Rollover | `LEAD`, hold chance (0.22), phrase shapes | `games/rollover.html` | How early lights show, how many holds, melodic patterns |
 | Word Rain | `fallBeats` (10 + 5 × assist), word list | `spawnWord` | Fall time and vocabulary |
+| All | intensity scaling | each game's `api.pick({...})` calls, and `applyIntensity` in `flow-shell.js` | What chill, normal and intense change |
+| All | table modes: interval (45–75 s), length (20 s), Hurry-Up and Jackpot values | `flow-shell.js` (`startMode`, `tickModes`) | How often variety arrives and how big the bonuses are |
+| All | replay start (8k / 15k / 25k), +15%, in-run spacing (×1.6) | `flow-shell.js` (`REPLAY_START`, `addPoints`) | How often replays feel earned |
+| All | rank thresholds and ball finishes | `flow-shell.js` (`RANKS`) | The long-term progression |
 | Flow | gap height, buoyancy, pipe spacing | `flow-resonance.html` | Gemini's original physics; change carefully |
 
-Don't change: the perfect windows' meaning (assist never widens them), the never-lose rule, or anything that would make a game harder over time. These are the engine's built-in rules (see [build-on-the-engine.md](build-on-the-engine.md)).
+Don't change: the perfect windows' meaning (assist never widens them), the never-lose rule, or anything that makes a game harder over time on its own. Harder is only ever the player's choice of intensity. These are the engine's built-in rules (see [build-on-the-engine.md](build-on-the-engine.md)).

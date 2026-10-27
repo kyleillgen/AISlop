@@ -51,6 +51,21 @@
     return t >= 1 || t < 0 ? 0 : 4 * HOP(api) * t * (1 - t);
   }
 
+  function drawStar(ctx, x, y, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + (i * Math.PI) / 5;
+      const rr = i % 2 ? r * 0.45 : r;
+      ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.fillStyle = "#ffc400";
+    ctx.strokeStyle = "#140f0c";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.fill();
+  }
+
   function takeoff(at, api, ghost) {
     jumpStart = at;
     ghostJump = ghost;
@@ -67,8 +82,11 @@
     const lead = Math.ceil((api.W - playerX) / B(api)) + 1;
     const beat = n + lead + 0.5 + (extraBeats || 0);
     // Assist lowers hurdles that haven't appeared yet; the timing windows never change
-    const h = Math.round([44, 54, 62][Math.floor(Math.random() * 3)] * (1 - 0.3 * api.eng.assist));
-    hurdles.push({ beat, h, state: "live", offset: null, flash: 0, tilt: 0 });
+    // Intensity sets hurdle height: taller hurdles narrow the clear window (perfect stays fixed)
+    const tall = api.pick({ chill: 0.85, normal: 1, intense: 1.18 });
+    const h = Math.round([44, 54, 62][Math.floor(Math.random() * 3)] * tall * (1 - 0.3 * api.eng.assist));
+    // Star Lane: a star hangs at the top of the hop's arc over the hurdle
+    hurdles.push({ beat, h, state: "live", offset: null, flash: 0, tilt: 0, star: api.mode === "Star Lane", starTaken: false });
   }
 
   const api = FlowShell.mount({
@@ -78,6 +96,7 @@
     input: "tap",
     tierNames: ["Finding your rhythm", "Rolling", "Flying", "Pinball wizard"],
     // Taps follow the hurdles, so they come every 1-4 beats rather than on every beat
+    modes: ["Star Lane"],
     engine: { perBeat: [0.25, 1 / 3, 0.5, 1], stableTol: 3, pacing: { minBeats: 2, startBeats: 3 } },
 
     resize(api) {
@@ -91,7 +110,7 @@
       beatsSinceSpawn = 0;
       spawn(n, api);
       // Now and then a double: two hurdles a beat apart, a tap-tap
-      if (api.tier >= 2 && Math.random() < 0.28) {
+      if (api.tier >= 2 && Math.random() < api.pick({ chill: 0.1, normal: 0.28, intense: 0.45 })) {
         spawn(n, api, 1);
         beatsSinceSpawn = -1;
       }
@@ -133,6 +152,13 @@
         if (h.state === "hit") h.tilt = Math.min(1, h.tilt + dt * 6);
         if (h.state !== "live" || now < h.beat) continue;
         const y = heightAt(now, api);
+        // A star is caught when the ball is near the top of its hop as it passes
+        if (h.star && !h.starTaken && y >= HOP(api) * 0.82) {
+          h.starTaken = true;
+          api.bonus(500);
+          api.ring(playerX, groundY - y - R(api), "#ffc400", 40);
+          api.burst(playerX, groundY - y - R(api), "#ffc400", 10, -1);
+        }
         if (y >= h.h - 4) {
           h.state = "cleared";
           h.flash = 1;
@@ -252,6 +278,7 @@
         ctx.fillStyle = "#e8231f";
         ctx.fillRect(-hw / 2, -h.h, hw, 8);
         ctx.restore();
+        if (h.star && !h.starTaken && h.state === "live") drawStar(ctx, x, groundY - HOP(api) * 0.95 - r, 11 + kick * 2);
       }
       ctx.fillStyle = "#f6e6c0";
       for (const s of shards) {
@@ -267,11 +294,13 @@
       ctx.beginPath();
       ctx.ellipse(playerX, groundY + 2, r * 1.1 * shadow, r * 0.3 * shadow, 0, 0, Math.PI * 2);
       ctx.fill();
-      const ball = api.cached("ball" + r, () => {
+      // The ball's finish comes from your lifetime rank (steel, brass, chrome, copper, gold, glass)
+      const ball = api.cached("ball" + r + api.rankKey, () => {
+        const [a, b2, c] = api.ballStops();
         const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
-        g.addColorStop(0, "#ffffff");
-        g.addColorStop(0.45, "#c9c4bd");
-        g.addColorStop(1, "#4a443e");
+        g.addColorStop(0, a);
+        g.addColorStop(0.45, b2);
+        g.addColorStop(1, c);
         return g;
       });
       for (let i = 2; i < trail.length; i += 2) {
