@@ -110,10 +110,12 @@
     const reduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 
     let W = 0, H = 0, started = false, flash = 0, bulbFlash = 0;
-    // Pocket mode (the desktop pocket app, or ?pocket=1): 30 fps, 20 on autopilot, 1x pixels.
-    // Everywhere else frames cap at 60 so fast monitors don't draw more than they need to.
+    // Frames cap at 60 everywhere (so 120/144 Hz monitors don't draw more than needed). Pocket
+    // mode (the desktop pocket app, or ?pocket=1) renders at up to 1.5x pixels instead of 2x.
     const pocket = /[?&]pocket=1/.test(location.search) || !!window.NL_OS;
-    const fpsCap = () => (pocket ? (eng.auto ? 20 : 30) : 60);
+    const fpsCap = () => 60;
+    let fpsFrames = 0;
+    let fpsSince = performance.now();
     const particles = [];
     const callouts = [];
     const cache = new Map();
@@ -186,7 +188,7 @@
       const vv = window.visualViewport;
       W = window.innerWidth;
       H = vv ? Math.round(vv.height) : window.innerHeight; // stays above a phone keyboard
-      const dpr = pocket ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, pocket ? 1.5 : 2);
       canvas.width = W * dpr;
       canvas.height = H * dpr;
       canvas.style.height = H + "px";
@@ -325,7 +327,12 @@
         const ms = eng.adjustOffset(e.key === "[" ? -10 : 10);
         note(`Audio offset ${ms > 0 ? "+" : ""}${ms} ms`);
       } else if (e.key === "?") q("[data-keyscard]").classList.toggle("show");
-      else if (g.onKey && started && !eng.paused && g.onKey(e.key, api)) e.preventDefault();
+      else if (g.onKey && !eng.paused && g.onKey(e.key, api)) {
+        // A game's own keys (arrows in Rollover) start the game too, like Space or a tap
+        e.preventDefault();
+        if (!started) start();
+        hideHint();
+      }
       else return;
       hud();
     });
@@ -368,12 +375,23 @@
           if (c.a <= 0) callouts.splice(i, 1);
         }
         const t = now / 1000;
+        // Every frame starts fully opaque: a leftover alpha here would paint the background
+        // translucently and leave smeared ghosts of earlier frames
+        ctx.globalAlpha = 1;
         if (g.draw) g.draw(ctx, api, t);
+        // Report the real frame rate to a host page (the pocket app shows it in its strip)
+        fpsFrames++;
+        if (now - fpsSince > 2000) {
+          if (window.parent !== window) window.parent.postMessage({ type: "flow:fps", fps: Math.round((fpsFrames * 1000) / (now - fpsSince)) }, "*");
+          fpsFrames = 0;
+          fpsSince = now;
+        }
         for (const p of particles) {
           ctx.globalAlpha = Math.max(0, p.a);
           ctx.fillStyle = p.color;
           ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
         }
+        ctx.globalAlpha = 1;
         for (const c of callouts) Skin.callout(ctx, c.text, c.x, c.y, c.color, 20 * c.scale, Math.max(0, Math.min(1, (1 - c.a) * 8, c.a)));
         // Chaser bulbs along the bottom edge run on the eighth notes and blink on big moments
         if (g.bulbs !== false) Skin.bulbs(ctx, W, H - 9, eng.beatPos(), bulbFlash > 0 && Math.floor(bulbFlash * 10) % 2 === 0 ? 1 : 0);

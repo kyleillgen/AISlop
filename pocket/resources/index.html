@@ -11,6 +11,7 @@
   .strip .pb-btn { padding: 4px 8px !important; font-size: 10px !important; box-shadow: 2px 2px 0 #000; }
   .strip .pb-btn.on { background: #ffc400 !important; }
   .grow { flex: 1; }
+  .fps { font: 600 9px Oswald, Impact, sans-serif; letter-spacing: .08em; color: #8a6a4a; min-width: 30px; text-align: right; }
   .strip { cursor: grab; user-select: none; }
   .strip .pb-btn.win { padding: 4px 7px !important; min-width: 22px; }
   .lamp { display: flex; align-items: center; gap: 6px; font: 600 10px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #f6e6c0; white-space: nowrap; }
@@ -25,9 +26,11 @@
 <body>
   <div class="strip" id="strip" title="Drag to move">
     <button class="pb-btn" data-game="flow-resonance.html" title="Flow // Resonance">Flow</button>
+    <button class="pb-btn" data-game="leap.html" title="Leap: hop on the beat">Leap</button>
+    <button class="pb-btn" data-game="rollover.html" title="Rollover: slide under the lights">Roll</button>
     <button class="pb-btn" data-game="word-rain.html" title="Word Rain">Rain</button>
-    <button class="pb-btn" data-game="template.html" title="Drop Catch">Drop</button>
     <span class="grow"></span>
+    <span class="fps" id="fps" title="Frames per second the game is actually drawing"></span>
     <span class="lamp" id="lamp" title="What Claude is doing (needs the hook in pocket/README.md)"><i></i><span id="lampText">Claude</span></span>
     <button class="pb-btn" id="dock" title="Dock: right edge, corner or mini">Side</button>
     <button class="pb-btn" id="pin" title="Keep this window on top">Pin</button>
@@ -151,6 +154,11 @@
         if (await Neutralino.window.isMinimized()) await Neutralino.window.unminimize();
       } catch (e) {}
     }
+
+    // The game reports its real frame rate every 2 s
+    window.addEventListener("message", (e) => {
+      if (e.data && e.data.type === "flow:fps") document.getElementById("fps").textContent = e.data.fps + " FPS";
+    });
 
     // ---- Claude signal ------------------------------------------------------------------
     // pocket/signal.mjs writes "<time> <start|done|needs>" to ~/.flow-pocket/signal. Polled

@@ -25,6 +25,8 @@ Flow's engine is its own module, and any small rhythm game can sit on top of it.
 Start here: [docs/build-on-the-engine.md](docs/build-on-the-engine.md), which includes a copy-paste prompt kit. API: [docs/flow-engine.md](docs/flow-engine.md). Tests: `node --test tests/flow-engine.test.cjs`.
 
 - **Word Rain** (`games/word-rain.html`): words drift down on the beat, and you type them before they reach the river. The music settles into your typing rhythm, every letter is a note, and typos cost nothing.
+- **Leap** (`games/leap.html`): a steel ball rolls down a lit lane. Tap on the beat and it hops each hurdle at the top of its arc. Perfect is ±45 ms, taps just before landing are buffered, and a clipped hurdle just gets knocked flat.
+- **Rollover** (`games/rollover.html`): lit inserts come down four lanes on the beat. Slide under them; every lane is a note, so following the lights plays the tune.
 - **Drop Catch** (`games/template.html`): the starter template. Drops land on a pad on the beat; tap as they land.
 
 ## Flow Pocket (desktop)

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Leap</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<script src="flow-engine.js"></script>
+<script src="pinball-skin.js"></script>
+<script src="flow-shell.js"></script>
+<script>
+// Leap: a steel ball rolls down a lit lane; tap on the beat to hop the hurdles.
+//
+// Timing is the whole game, and it's built so the beat is the answer: each hurdle sits half a
+// beat after a beat, and a hop lasts exactly one beat with its peak in the middle, so a tap ON
+// the beat sails over at the top of the arc. The clear window is about ±0.27 beat (forgiving);
+// "perfect" is ±0.08 beat (about ±45 ms), the band the research brief recommends, and the assist
+// never widens it. A tap just before landing is buffered and fires the instant you land, so
+// tap-tap doubles feel right. Clip a hurdle and it's knocked flat; the ball never stops.
+(() => {
+  "use strict";
+
+  const JUMP = 1; // beats a hop lasts
+  const PERFECT = 0.08; // beats
+  const BUFFER = 0.14; // beats before landing a tap is remembered
+  const SKY = [["#0d0930", "#3f1d8a"], ["#04170f", "#134a1d"], ["#1a0520", "#561034"], ["#1f0806", "#6a2508"]];
+
+  let hurdles = [];
+  let shards = [];
+  let lit = []; // floor inserts lit by clean hops: { beat, a }
+  let trail = [];
+  let jumpStart = null; // beatPos at takeoff
+  let buffered = null; // beatPos of a tap waiting for landing
+  let ghostJump = false;
+  let squash = 0;
+  let beatsSinceSpawn = 99;
+  let kick = 0;
+  let groundY = 0;
+  let playerX = 0;
+
+  const B = (api) => Math.max(110, Math.min(190, api.W * 0.26)); // pixels per beat
+  const R = (api) => Math.max(11, Math.min(16, api.W * 0.035)); // ball radius
+  const HOP = (api) => Math.max(90, Math.min(150, api.H * 0.2)); // hop height
+  const xOf = (beat, now, api) => playerX + (beat - now) * B(api);
+  function heightAt(now, api) {
+    if (jumpStart === null) return 0;
+    const t = (now - jumpStart) / JUMP;
+    return t >= 1 || t < 0 ? 0 : 4 * HOP(api) * t * (1 - t);
+  }
+
+  function takeoff(at, api, ghost) {
+    jumpStart = at;
+    ghostJump = ghost;
+    buffered = null;
+    if (ghost) return;
+    // The hurdle this hop is for: the next live one in reach
+    const h = hurdles.find((x) => x.state === "live" && x.beat - at > 0.15 && x.beat - at < 0.9);
+    if (h) h.offset = at - (h.beat - 0.5);
+    api.eng.tap({ height: 0.35 });
+  }
+
+  function spawn(n, api, extraBeats) {
+    // Far enough ahead to appear off the right edge
+    const lead = Math.ceil((api.W - playerX) / B(api)) + 1;
+    const beat = n + lead + 0.5 + (extraBeats || 0);
+    // Assist lowers hurdles that haven't appeared yet; the timing windows never change
+    const h = Math.round([44, 54, 62][Math.floor(Math.random() * 3)] * (1 - 0.3 * api.eng.assist));
+    hurdles.push({ beat, h, state: "live", offset: null, flash: 0, tilt: 0 });
+  }
+
+  const api = FlowShell.mount({
+    key: "leap",
+    title: "Leap",
+    tagline: "Hop on<br>the beat.",
+    about:
+      "A steel ball rolls down a lit lane. Tap on the beat and it hops the hurdles right at the top of its arc. The music settles into your rhythm, the floor lights up behind clean hops, and a clipped hurdle just gets knocked flat. You can't lose, and it never speeds up.",
+    hint: "Tap or Space on the beat",
+    input: "tap",
+    tierNames: ["Finding your rhythm", "Rolling", "Flying", "Pinball wizard"],
+    // Taps follow the hurdles, so they come every 1-4 beats rather than on every beat
+    engine: { perBeat: [0.25, 1 / 3, 0.5, 1], stableTol: 3, pacing: { minBeats: 2, startBeats: 3 } },
+
+    resize(api) {
+      groundY = Math.round(api.H * 0.8);
+      playerX = Math.round(Math.max(70, api.W * 0.24));
+    },
+
+    onBeat(n, api) {
+      kick = 1;
+      if (++beatsSinceSpawn < api.eng.paceBeats()) return;
+      beatsSinceSpawn = 0;
+      spawn(n, api);
+      // Now and then a double: two hurdles a beat apart, a tap-tap
+      if (api.tier >= 2 && Math.random() < 0.28) {
+        spawn(n, api, 1);
+        beatsSinceSpawn = -1;
+      }
+    },
+
+    onAction(api) {
+      const now = api.eng.beatPos();
+      const airborne = jumpStart !== null && now - jumpStart < JUMP;
+      if (!airborne) return takeoff(now, api, false);
+      if (jumpStart + JUMP - now < BUFFER) buffered = now; // jump the instant we land
+      else api.eng.tap({ note: false }); // still part of your rhythm, just no hop
+    },
+
+    // Autopilot hops every hurdle exactly on the beat; nothing scores
+    autopilot(dt, api) {
+      const now = api.eng.beatPos();
+      const grounded = jumpStart === null || now - jumpStart >= JUMP;
+      const h = hurdles.find((x) => x.state === "live" && x.beat - 0.5 <= now + 0.005 && x.beat > now);
+      if (grounded && h) takeoff(h.beat - 0.5, api, true);
+    },
+
+    update(dt, api) {
+      const now = api.eng.beatPos();
+      kick = Math.max(0, kick - dt * 4.2);
+      squash = Math.max(0, squash - dt * 6);
+
+      // Landing: squash, dust, and any buffered tap hops again straight away
+      if (jumpStart !== null && now - jumpStart >= JUMP) {
+        const landedAt = jumpStart + JUMP;
+        jumpStart = null;
+        squash = 1;
+        api.burst(playerX, groundY, "#f6e6c0", 4, -1);
+        if (buffered !== null) takeoff(landedAt, api, false);
+      }
+
+      // Each hurdle is judged as the ball passes over its centre
+      for (const h of hurdles) {
+        h.flash = Math.max(0, h.flash - dt * 3);
+        if (h.state === "hit") h.tilt = Math.min(1, h.tilt + dt * 6);
+        if (h.state !== "live" || now < h.beat) continue;
+        const y = heightAt(now, api);
+        if (y >= h.h - 4) {
+          h.state = "cleared";
+          h.flash = 1;
+          if (ghostJump || api.eng.auto) continue;
+          const perfect = h.offset !== null && Math.abs(h.offset) < PERFECT;
+          api.score(1, perfect ? "PERFECT" : "CLEAN", api.eng.beatSec * 0.5);
+          lit.push({ beat: Math.round(h.beat + 0.5), a: 1, perfect });
+          if (perfect) api.burst(playerX, groundY - y - R(api), api.color(), 8, -1);
+        } else {
+          h.state = "hit";
+          for (let i = 0; i < 5; i++) shards.push({ x: xOf(h.beat, now, api), y: groundY - h.h * Math.random(), vx: 60 + Math.random() * 120, vy: -120 - Math.random() * 120, a: 1 });
+          api.miss(); // steps the streak down a little; ignored on autopilot
+        }
+      }
+      hurdles = hurdles.filter((h) => xOf(h.beat, now, api) > -60);
+      for (const l of lit) l.a -= dt * 0.25;
+      lit = lit.filter((l) => l.a > 0);
+      for (const s of shards) {
+        s.x += s.vx * dt;
+        s.y += s.vy * dt;
+        s.vy += 600 * dt;
+        s.a -= dt * 1.5;
+      }
+      shards = shards.filter((s) => s.a > 0);
+
+      // A short ghost trail while airborne
+      const y = heightAt(now, api);
+      trail.unshift(y);
+      if (trail.length > 7) trail.pop();
+    },
+
+    draw(ctx, api, t) {
+      const { W, H, tier } = api;
+      const now = api.eng.beatPos();
+      const col = api.color();
+      const b = B(api);
+      const r = R(api);
+
+      ctx.fillStyle = api.cached("sky" + tier, () => {
+        const g = ctx.createLinearGradient(0, 0, 0, groundY);
+        g.addColorStop(0, SKY[tier - 1][0]);
+        g.addColorStop(1, SKY[tier - 1][1]);
+        return g;
+      });
+      ctx.fillRect(0, 0, W, H);
+
+      // Backglass sunburst rising behind the lane, turning slowly with the music
+      const cx = W * 0.62;
+      const rays = 14;
+      const rot = now * 0.035;
+      ctx.globalAlpha = 0.1 + kick * 0.05;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      for (let i = 0; i < rays; i += 2) {
+        const a0 = rot + (i / rays) * Math.PI * 2;
+        const a1 = rot + ((i + 1) / rays) * Math.PI * 2;
+        ctx.moveTo(cx, groundY);
+        ctx.lineTo(cx + Math.cos(a0) * W * 1.4, groundY + Math.sin(a0) * W * 1.4);
+        ctx.lineTo(cx + Math.cos(a1) * W * 1.4, groundY + Math.sin(a1) * W * 1.4);
+      }
+      ctx.fill();
+      ctx.globalAlpha = 1;
+
+      // Distant pop bumpers drifting by (slow parallax)
+      for (let i = -1; i < 6; i++) {
+        const bx = ((i * 230 - now * b * 0.25) % (W + 460) + W + 460) % (W + 460) - 120;
+        const by = groundY - 70 - (i % 3) * 38;
+        ctx.fillStyle = "rgba(20,15,12,0.55)";
+        ctx.beginPath();
+        ctx.arc(bx, by, 26, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,196,0,0.22)";
+        ctx.beginPath();
+        ctx.arc(bx, by - 4, 12, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // The lane: black floor, a cream rail with scrolling stripes, and a floor insert per beat
+      ctx.fillStyle = "#140f0c";
+      ctx.fillRect(0, groundY, W, H - groundY);
+      ctx.fillStyle = "#f6e6c0";
+      ctx.fillRect(0, groundY, W, 5);
+      ctx.fillStyle = "#140f0c";
+      const stripe = b / 4;
+      const off = ((now * b) % (stripe * 2) + stripe * 2) % (stripe * 2);
+      for (let x = -off; x < W; x += stripe * 2) ctx.fillRect(x, groundY, stripe, 5);
+      const first = Math.floor(now - playerX / b) - 1;
+      for (let k = first; k < first + W / b + 3; k++) {
+        const x = xOf(k, now, api);
+        const l = lit.find((v) => v.beat === k);
+        ctx.fillStyle = l ? col : "#3a2418";
+        ctx.globalAlpha = l ? 0.4 + 0.6 * l.a : 1;
+        ctx.beginPath();
+        ctx.arc(x, groundY + 22, l && l.perfect ? 7 : 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // Hurdles are drop targets: cream face, black outline, a red cap; clipped ones fall flat
+      const hw = Math.max(12, b * 0.1);
+      for (const h of hurdles) {
+        const x = xOf(h.beat, now, api);
+        if (x < -40 || x > W + 40) continue;
+        ctx.save();
+        ctx.translate(x, groundY);
+        ctx.rotate(h.tilt * 1.35);
+        ctx.globalAlpha = h.state === "hit" ? 1 - h.tilt * 0.5 : 1;
+        ctx.fillStyle = h.flash > 0 ? col : "#f6e6c0";
+        ctx.strokeStyle = "#140f0c";
+        ctx.lineWidth = 3;
+        ctx.fillRect(-hw / 2, -h.h, hw, h.h);
+        ctx.strokeRect(-hw / 2, -h.h, hw, h.h);
+        ctx.fillStyle = "#e8231f";
+        ctx.fillRect(-hw / 2, -h.h, hw, 8);
+        ctx.restore();
+      }
+      ctx.fillStyle = "#f6e6c0";
+      for (const s of shards) {
+        ctx.globalAlpha = s.a;
+        ctx.fillRect(s.x - 3, s.y - 3, 6, 6);
+      }
+      ctx.globalAlpha = 1;
+
+      // The ball: shadow, ghost trail, squash on landing, a spinning highlight
+      const y = heightAt(now, api);
+      const shadow = Math.max(0.25, 1 - y / HOP(api));
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.beginPath();
+      ctx.ellipse(playerX, groundY + 2, r * 1.1 * shadow, r * 0.3 * shadow, 0, 0, Math.PI * 2);
+      ctx.fill();
+      const ball = api.cached("ball" + r, () => {
+        const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
+        g.addColorStop(0, "#ffffff");
+        g.addColorStop(0.45, "#c9c4bd");
+        g.addColorStop(1, "#4a443e");
+        return g;
+      });
+      for (let i = 2; i < trail.length; i += 2) {
+        if (trail[i] < 2) continue;
+        ctx.globalAlpha = 0.18 * (1 - i / trail.length);
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(playerX - i * b * 0.035, groundY - trail[i] - r, r * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      const sq = 1 - squash * 0.22;
+      ctx.save();
+      ctx.translate(playerX, groundY - y - r * sq);
+      ctx.scale(1 + squash * 0.18, sq);
+      ctx.fillStyle = ball;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.rotate(now * b / r * 0.6);
+      ctx.strokeStyle = "rgba(20,15,12,0.35)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.62, 0.3, 1.5);
+      ctx.stroke();
+      ctx.restore();
+    }
+  });
+
+  // Read-only snapshot for automated play tests
+  window.leapState = () => {
+    const now = api.eng.beatPos();
+    const next = hurdles.find((h) => h.state === "live" && h.beat > now);
+    return {
+      beatPos: +now.toFixed(3),
+      beatSec: api.eng.beatSec,
+      nextHurdleBeat: next ? next.beat : null,
+      streak: api.eng.streak,
+      bpm: +api.eng.bpm.toFixed(1),
+      locked: api.eng.locked,
+      auto: api.eng.auto,
+      cleared: hurdles.filter((h) => h.state === "cleared").length,
+      hit: hurdles.filter((h) => h.state === "hit").length
+    };
+  };
+})();
+</script>
+</body>
+</html>

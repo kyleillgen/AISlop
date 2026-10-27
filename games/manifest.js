@@ -11,6 +11,22 @@ window.AISLOP_GAMES = [
     hue: 168
   },
   {
+    id: "leap",
+    title: "Leap",
+    blurb: "A steel ball rolls down a lit lane. Tap on the beat and it hops the hurdles at the top of its arc.",
+    path: "games/leap.html",
+    status: "house",
+    hue: 30
+  },
+  {
+    id: "rollover",
+    title: "Rollover",
+    blurb: "Lit inserts come down four lanes on the beat. Slide under them; every lane is a note, so you play the tune.",
+    path: "games/rollover.html",
+    status: "house",
+    hue: 330
+  },
+  {
     // First game on the shared flow engine (games/flow-engine.js)
     id: "word-rain",
     title: "Word Rain",
