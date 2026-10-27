@@ -8,7 +8,7 @@
 //   neutralino.js (18 KB, the client library)
 // Nothing else is fetched, and nothing is installed system-wide: the app uses the WebView2
 // runtime that ships with Windows 11.
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -16,7 +16,10 @@ import { createHash } from "node:crypto";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const VERSION = "6.10.0";
+// The runtime treats the folder its exe sits in as the app folder (v6 has no --path flag),
+// so the exe lives here beside neutralino.config.json; the zip is kept in bin/
 const BIN = join(HERE, "bin");
+const EXE = join(HERE, "flow-pocket.exe");
 const RES = join(HERE, "resources");
 const GAMES = join(HERE, "..", "games");
 
@@ -41,13 +44,18 @@ async function download(url, to) {
 async function main() {
   if (!process.argv.includes("--sync")) {
     mkdirSync(BIN, { recursive: true });
-    const exe = join(BIN, "neutralino-win_x64.exe");
-    if (!existsSync(exe)) {
+    if (!existsSync(EXE)) {
       const zip = join(BIN, `neutralinojs-v${VERSION}.zip`);
-      await download(`https://github.com/neutralinojs/neutralinojs/releases/download/v${VERSION}/neutralinojs-v${VERSION}.zip`, zip);
-      execFileSync("tar", ["-xf", zip, "-C", BIN, "neutralino-win_x64.exe"]); // tar ships with Windows 10+
+      if (!existsSync(zip)) {
+        await download(`https://github.com/neutralinojs/neutralinojs/releases/download/v${VERSION}/neutralinojs-v${VERSION}.zip`, zip);
+      }
+      // Windows' own tar (bsdtar, Windows 10+) reads zips; a Git Bash tar on PATH would
+      // mistake "D:" for a remote host, so call the system one by full path
+      const winTar = join(process.env.SystemRoot || "C:\\Windows", "System32", "tar.exe");
+      execFileSync(existsSync(winTar) ? winTar : "tar", ["-xf", zip, "-C", BIN, "neutralino-win_x64.exe"]);
+      renameSync(join(BIN, "neutralino-win_x64.exe"), EXE);
       rmSync(zip);
-      console.log("extracted neutralino-win_x64.exe");
+      console.log("extracted flow-pocket.exe");
     }
     mkdirSync(join(RES, "js"), { recursive: true });
     const client = join(RES, "js", "neutralino.js");

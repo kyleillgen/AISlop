@@ -27,6 +27,7 @@
     <button class="pb-btn" data-game="template.html" title="Drop Catch">Drop</button>
     <span class="grow"></span>
     <span class="lamp" id="lamp" title="What Claude is doing (needs the hook in pocket/README.md)"><i></i><span id="lampText">Claude</span></span>
+    <button class="pb-btn" id="dock" title="Dock: right edge, corner or mini">Side</button>
     <button class="pb-btn" id="pin" title="Keep this window on top">Pin</button>
   </div>
   <iframe id="game" title="Game" allow="autoplay"></iframe>
@@ -72,6 +73,71 @@
     });
     Neutralino.events.on("ready", () => setPinned(pinned));
 
+    // ---- Docking -------------------------------------------------------------------------
+    // Claude Code games live right above the prompt, where your eyes already are. A separate
+    // window can't go there without covering it, so it docks into the margin beside Claude's
+    // centred chat column instead: a full-height column on the right edge (side), the bottom-
+    // right corner, or a small mini. Wherever you drag or resize it afterwards is remembered.
+    const DOCKS = ["side", "corner", "mini"];
+    const dockBtn = document.getElementById("dock");
+    let dock = store("pocket.dock") || "side";
+    let lastBox = null;
+
+    // The screen's work area (excluding the taskbar), in physical pixels
+    function workArea() {
+      const dpr = window.devicePixelRatio || 1;
+      return {
+        x: Math.round((screen.availLeft || 0) * dpr),
+        y: Math.round((screen.availTop || 0) * dpr),
+        w: Math.round(screen.availWidth * dpr),
+        h: Math.round(screen.availHeight * dpr),
+        dpr
+      };
+    }
+    function dockBox(name) {
+      const a = workArea();
+      const px = (n) => Math.round(n * a.dpr);
+      if (name === "side") return { x: a.x + a.w - px(380), y: a.y, w: px(380), h: a.h };
+      if (name === "mini") return { x: a.x + a.w - px(320) - px(12), y: a.y + a.h - px(380) - px(12), w: px(320), h: px(380) };
+      return { x: a.x + a.w - px(420) - px(12), y: a.y + a.h - px(600) - px(12), w: px(420), h: px(600) };
+    }
+    async function applyBox(b) {
+      await Neutralino.window.setSize({ width: b.w, height: b.h });
+      await Neutralino.window.move(b.x, b.y);
+      lastBox = b;
+    }
+    async function setDock(name, keepSaved) {
+      dock = name;
+      store("pocket.dock", name);
+      dockBtn.textContent = name;
+      const saved = keepSaved && JSON.parse(store("pocket.box." + name) || "null");
+      await applyBox(saved || dockBox(name)).catch(() => {});
+    }
+    dockBtn.addEventListener("click", () => {
+      setDock(DOCKS[(DOCKS.indexOf(dock) + 1) % DOCKS.length], false);
+      frame.contentWindow.focus();
+    });
+    // Remember where you've dragged or resized it (per dock), checked every few seconds
+    setInterval(async () => {
+      try {
+        const [pos, size] = await Promise.all([Neutralino.window.getPosition(), Neutralino.window.getSize()]);
+        const b = { x: pos.x, y: pos.y, w: size.width, h: size.height };
+        if (lastBox && (b.x !== lastBox.x || b.y !== lastBox.y || b.w !== lastBox.w || b.h !== lastBox.h)) {
+          lastBox = b;
+          store("pocket.box." + dock, JSON.stringify(b));
+        }
+      } catch (e) {}
+    }, 3000);
+    Neutralino.events.on("ready", () => setDock(dock, true));
+
+    // When Claude starts a task, bring the pocket back if it was minimised, without taking
+    // the keyboard (like the Claude Code games that open themselves when Claude starts working)
+    async function surface() {
+      try {
+        if (await Neutralino.window.isMinimized()) await Neutralino.window.unminimize();
+      } catch (e) {}
+    }
+
     // ---- Claude signal ------------------------------------------------------------------
     // pocket/signal.mjs writes "<time> <start|done|needs>" to ~/.flow-pocket/signal. Polled
     // every 1.5 s (one tiny file read; nothing else runs in the background).
@@ -92,6 +158,7 @@
         lamp.className = "lamp " + (kind === "start" ? "working" : kind);
         lampText.textContent = LABELS[kind];
         // Only react to news, not to whatever the file said when the app opened
+        if (!first && kind === "start") surface();
         if (!first && kind !== "start") {
           frame.contentWindow.postMessage({ type: "flow:build-done", label: kind === "needs" ? "Claude needs you" : "Claude is done" }, "*");
         }

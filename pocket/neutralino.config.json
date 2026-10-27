@@ -3,14 +3,14 @@
   "applicationId": "aislop.flowpocket",
   "version": "1.0.0",
   "defaultMode": "window",
-  "port": 53817,
+  "port": 41823,
   "documentRoot": "/resources/",
   "url": "/",
   "enableServer": true,
   "enableNativeAPI": true,
   "tokenSecurity": "one-time",
   "logging": { "enabled": false, "writeToLogFile": false },
-  "nativeAllowList": ["app.exit", "window.setAlwaysOnTop", "window.setSize", "filesystem.readFile", "filesystem.getStats", "os.getEnv"],
+  "nativeAllowList": ["app.exit", "window.setAlwaysOnTop", "window.setSize", "window.getSize", "window.move", "window.getPosition", "window.show", "window.unminimize", "window.isMinimized", "filesystem.readFile", "filesystem.getStats", "os.getEnv"],
   "modes": {
     "window": {
       "title": "Flow Pocket",

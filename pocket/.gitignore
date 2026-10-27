@@ -1,3 +1,7 @@
 bin/
+flow-pocket.exe
 resources/games/
 resources/js/
+*.log
+.storage/
+.tmp/
