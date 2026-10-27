@@ -1112,8 +1112,9 @@
 
                 // "Nailing it" assist. It sinks slowly back to Gemini's baseline while you cruise,
                 // and the applied level moves at most 8% of its range per second so changes are
-                // felt, not noticed. It only ever helps: gaps widen from 175px (never narrower),
-                // buoyancy toward the ribbon strengthens, and the "perfect" window grows a little.
+                // felt, not noticed. It only ever helps: gaps widen from 175px (never narrower;
+                // applied to pipes as they spawn off-screen) and buoyancy toward the ribbon
+                // strengthens. Help rises fast (each clip) and falls slowly.
                 flowCtrl.assist = Math.max(0, flowCtrl.assist - dt * 0.012);
                 const assistStep = 0.08 * dt;
                 flowCtrl.assistApplied += Math.max(-assistStep, Math.min(assistStep, flowCtrl.assist - flowCtrl.assistApplied));
@@ -1227,8 +1228,9 @@
                 const normDist = deltaY / Math.max(halfGap, 45);
 
                 // Each pass tells the assist how it's going: centred passes let it back off,
-                // edge grazes ask for a little more help
-                if (normDist < 0.28 + 0.12 * flowCtrl.assistApplied) {
+                // edge grazes ask for a little more help. The "perfect" window itself stays fixed
+                // so perfects keep feeling earned.
+                if (normDist < 0.28) {
                     flowCtrl.assist = Math.max(0, flowCtrl.assist - 0.04);
                 } else if (normDist > 0.72 || pipe.wasGrazed) {
                     flowCtrl.assist = Math.min(1, flowCtrl.assist + 0.06);
@@ -1236,7 +1238,7 @@
                     flowCtrl.assist = Math.max(0, flowCtrl.assist - 0.01);
                 }
 
-                if (normDist < 0.28 + 0.12 * flowCtrl.assistApplied) {
+                if (normDist < 0.28) {
                     incrementStreak(2);
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.055);
                     synth.playPipeHarmony(streak, "PERFECT");
