@@ -11,7 +11,7 @@ The game runs inside a sandboxed iframe with a strict content security policy, s
 
 Shape of every game:
 - One full-viewport <canvas>, sized for devicePixelRatio (capped at 2) and resized on window resize. Works in portrait phones and landscape desktops.
-- Controls that work both by touch/mouse (pointer events, preventDefault, touch-action: none) and by keyboard (Space/arrows/WASD). Ignore key auto-repeat where it would spam an action.
+- Controls that work both by touch/mouse (pointer events, preventDefault, touch-action: none) and fully by keyboard (Space/arrows/WASD): everything a pointer can do, a keyboard player can do too. If the pointer aims or places things, give keyboard players a visible cursor moved by arrows, with Space acting where it points. Ignore key auto-repeat where it would spam an action.
 - A start screen with the title and one or two short lines explaining the controls; a game-over screen with the score and "tap to try again" (ignore taps for ~600 ms after game over).
 - A score and a best score. A requestAnimationFrame loop with delta time clamped to ~33 ms.
 - One clear core mechanic that is fun in the first ten seconds, with difficulty that ramps gently.
@@ -40,7 +40,7 @@ What makes it a toy, not a game:
 - Satisfying with tiny effort: tap, drag, hold, or just moving the mouse over it. Every touch gets a soft visual and sound response.
 - Fine to ignore: left alone it keeps gently moving (drifting, breathing, a breeze), never stalls, never nags.
 - Looks right from a 300 × 500 pop-out window up to full screen, portrait or landscape.
-- One full-viewport <canvas>, sized for devicePixelRatio (capped at 2), resized on window resize. Pointer events with preventDefault and touch-action: none; Space does something pleasant too.
+- One full-viewport <canvas>, sized for devicePixelRatio (capped at 2), resized on window resize. Pointer events with preventDefault and touch-action: none. It must be fully playable by keyboard as well: if the pointer draws, aims, or places things, show a soft cursor moved by the arrow keys, with Space acting where it points and Enter doing something pleasant.
 - Compact, readable code (aim for under 30 KB). Draw everything with canvas shapes and gradients.
 
 The Flow layer:

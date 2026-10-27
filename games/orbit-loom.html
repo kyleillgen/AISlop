@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="flow-layer.js" data-mode="toy" data-bpm="80" data-step="8"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Orbit Loom</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #08081a; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  "use strict";
+  // Orbit Loom: a circular loom of notes. Six rings (low in the middle, bright at the edge)
+  // by sixteen steps; a hand sweeps round once a bar and plays whatever you've woven.
+  // Every note comes from the current chord, so any pattern sounds right, and the chords
+  // move on underneath you. Left alone, the loom keeps playing and slowly re-weaves itself.
+  //   Touch / mouse: tap or drag across cells to weave.
+  //   Keyboard: arrows move the cursor, Space toggles, Enter sprinkles, Backspace clears.
+  const cv = document.getElementById("c");
+  const g = cv.getContext("2d");
+  let W = 0, H = 0, CX = 0, CY = 0, R = 0;
+  function resize() {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W * d; cv.height = H * d;
+    g.setTransform(d, 0, 0, d, 0, 0);
+    CX = W / 2; CY = H / 2 + 8;
+    R = Math.min(W, H) * 0.43;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const RINGS = 6, STEPS = 16;
+  const BAR = 4 * (60 / 80);                    // one revolution per bar at 80 BPM
+  const RING_DEGREES = [0, 2, 4, 7, 9, 11];     // inner = low and warm, outer = bright
+  const HUES = [[265, 200], [200, 160], [320, 260], [30, 340], [150, 190], [215, 290]];
+
+  const grid = [...Array(RINGS)].map(() => Array(STEPS).fill(0));
+  const glow = [...Array(RINGS)].map(() => Array(STEPS).fill(0));
+  let phase = 0, lastStep = -1, bars = 0, palette = 0;
+  let cursor = { ring: 2, step: 0, shown: false };
+  let lastInput = -99, t = 0;
+  let painting = null;                          // 1 = adding, 0 = erasing while dragging
+  let ripples = [];
+
+  // A soft starting pattern so it's alive straight away
+  [[0, 0], [0, 8], [1, 4], [1, 12], [2, 2], [3, 6], [3, 14], [4, 10], [5, 7]].forEach(([r, s]) => { grid[r][s] = 1; });
+
+  function ringRadius(r) { return R * (0.28 + (r + 0.5) * (0.72 / RINGS)); }
+  function cellAngle(s) { return -Math.PI / 2 + (s / STEPS) * Math.PI * 2; }
+
+  function cellAt(x, y) {
+    const dx = x - CX, dy = y - CY, d = Math.hypot(dx, dy);
+    const ring = Math.floor((d / R - 0.28) / (0.72 / RINGS));
+    if (ring < 0 || ring >= RINGS) return null;
+    let a = Math.atan2(dy, dx) + Math.PI / 2;
+    if (a < 0) a += Math.PI * 2;
+    const step = Math.round((a / (Math.PI * 2)) * STEPS) % STEPS;
+    return { ring, step };
+  }
+
+  function play(ring, step, vol) {
+    glow[ring][step] = 1;
+    if (window.Flow) Flow.note(RING_DEGREES[ring], { vol: vol || 0.05, dur: ring < 2 ? 1.4 : 0.7, type: ring < 2 ? "triangle" : "sine" });
+    const a = cellAngle(step), rr = ringRadius(ring);
+    ripples.push({ x: CX + Math.cos(a) * rr, y: CY + Math.sin(a) * rr, r: 4, a: 0.7, hue: HUES[ring][0] });
+  }
+
+  function setCell(c, v) {
+    if (grid[c.ring][c.step] === v) return;
+    grid[c.ring][c.step] = v;
+    if (v) play(c.ring, c.step, 0.04);
+  }
+
+  window.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    lastInput = t; cursor.shown = false;
+    const c = cellAt(e.clientX, e.clientY);
+    if (!c) return;
+    painting = grid[c.ring][c.step] ? 0 : 1;
+    setCell(c, painting);
+  }, { passive: false });
+  window.addEventListener("pointermove", (e) => {
+    if (painting === null) return;
+    const c = cellAt(e.clientX, e.clientY);
+    if (c) setCell(c, painting);
+  });
+  window.addEventListener("pointerup", () => { painting = null; });
+
+  window.addEventListener("keydown", (e) => {
+    const k = e.code;
+    const move = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [1, 0], ArrowDown: [-1, 0] }[k];
+    if (move) {
+      e.preventDefault();
+      cursor.shown = true;
+      cursor.ring = Math.max(0, Math.min(RINGS - 1, cursor.ring + move[0]));
+      cursor.step = (cursor.step + move[1] + STEPS) % STEPS;
+    } else if (k === "Space" && !e.repeat) {
+      e.preventDefault();
+      cursor.shown = true;
+      setCell(cursor, grid[cursor.ring][cursor.step] ? 0 : 1);
+    } else if (k === "Enter" && !e.repeat) {
+      sprinkle(3);
+    } else if ((k === "Backspace" || k === "Delete") && !e.repeat) {
+      for (const row of grid) row.fill(0);
+    } else return;
+    lastInput = t;
+  });
+
+  function sprinkle(n) {
+    for (let i = 0; i < n; i++) grid[Math.floor(Math.random() * RINGS)][Math.floor(Math.random() * STEPS)] = 1;
+  }
+
+  // When left alone, the loom re-weaves itself one thread per bar, keeping a gentle density
+  function drift() {
+    const on = [];
+    grid.forEach((row, r) => row.forEach((v, s) => { if (v) on.push([r, s]); }));
+    if (on.length < 4) { sprinkle(2); return; }
+    const [r, s] = on[Math.floor(Math.random() * on.length)];
+    grid[r][s] = 0;
+    const nr = Math.max(0, Math.min(RINGS - 1, r + (Math.random() < 0.5 ? -1 : 1) * (Math.random() < 0.6 ? 0 : 1)));
+    const ns = (s + (Math.random() < 0.5 ? -1 : 1) * (1 + Math.floor(Math.random() * 2)) + STEPS) % STEPS;
+    grid[nr][ns] = 1;
+    if (on.length > 14) grid[on[0][0]][on[0][1]] = 0;
+  }
+
+  function update(dt) {
+    t += dt;
+    phase = (phase + dt / BAR) % 1;
+    const step = Math.floor(phase * STEPS);
+    if (step !== lastStep) {
+      if (step === 0 && lastStep !== -1) {
+        bars++;
+        if (window.Flow) Flow.score(bars);
+        if (t - lastInput > 12) drift();
+      }
+      lastStep = step;
+      for (let r = 0; r < RINGS; r++) if (grid[r][step]) play(r, step);
+    }
+    for (const row of glow) for (let s = 0; s < STEPS; s++) row[s] = Math.max(0, row[s] - dt * 1.6);
+    palette += ((bars / 8) - palette) * Math.min(1, dt * 0.5);
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const p = ripples[i];
+      p.r += 70 * dt; p.a -= dt * 1.2;
+      if (p.a <= 0) ripples.splice(i, 1);
+    }
+  }
+
+  function draw() {
+    const shift = palette * 40;
+    const bg = g.createRadialGradient(CX, CY, 10, CX, CY, Math.max(W, H) * 0.8);
+    bg.addColorStop(0, `hsl(${(250 + shift) % 360}, 45%, 14%)`);
+    bg.addColorStop(1, `hsl(${(235 + shift) % 360}, 50%, 5%)`);
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+
+    // Ring guides
+    for (let r = 0; r < RINGS; r++) {
+      g.strokeStyle = `hsla(${(HUES[r][0] + shift) % 360}, 60%, 70%, 0.1)`;
+      g.lineWidth = 1;
+      g.beginPath(); g.arc(CX, CY, ringRadius(r), 0, Math.PI * 2); g.stroke();
+    }
+    // Beat spokes, stronger on the quarter notes
+    for (let s = 0; s < STEPS; s++) {
+      const a = cellAngle(s);
+      g.strokeStyle = `rgba(255,255,255,${s % 4 === 0 ? 0.08 : 0.03})`;
+      g.beginPath();
+      g.moveTo(CX + Math.cos(a) * R * 0.28, CY + Math.sin(a) * R * 0.28);
+      g.lineTo(CX + Math.cos(a) * R, CY + Math.sin(a) * R);
+      g.stroke();
+    }
+
+    // The sweeping hand with a fading wake
+    const ha = -Math.PI / 2 + phase * Math.PI * 2;
+    for (let i = 0; i < 14; i++) {
+      const a = ha - i * 0.035;
+      g.strokeStyle = `rgba(255, 240, 220, ${0.22 * (1 - i / 14)})`;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(CX + Math.cos(a) * R * 0.26, CY + Math.sin(a) * R * 0.26);
+      g.lineTo(CX + Math.cos(a) * R * 1.02, CY + Math.sin(a) * R * 1.02);
+      g.stroke();
+    }
+
+    // Woven notes
+    const cell = (0.72 / RINGS) * R;
+    for (let r = 0; r < RINGS; r++) {
+      const hue = (HUES[r][0] + shift) % 360, hue2 = (HUES[r][1] + shift) % 360;
+      const rr = ringRadius(r);
+      for (let s = 0; s < STEPS; s++) {
+        const a = cellAngle(s);
+        const x = CX + Math.cos(a) * rr, y = CY + Math.sin(a) * rr;
+        const lit = glow[r][s];
+        if (grid[r][s]) {
+          const size = cell * (0.26 + lit * 0.14);
+          const gl = g.createRadialGradient(x, y, 0, x, y, size * 2.6);
+          gl.addColorStop(0, `hsla(${hue}, 90%, 75%, ${0.35 + lit * 0.5})`);
+          gl.addColorStop(1, `hsla(${hue2}, 90%, 60%, 0)`);
+          g.fillStyle = gl;
+          g.beginPath(); g.arc(x, y, size * 2.6, 0, Math.PI * 2); g.fill();
+          g.fillStyle = `hsl(${hue}, 85%, ${70 + lit * 22}%)`;
+          g.beginPath(); g.arc(x, y, size, 0, Math.PI * 2); g.fill();
+        } else {
+          g.fillStyle = "rgba(255,255,255,0.07)";
+          g.beginPath(); g.arc(x, y, 2, 0, Math.PI * 2); g.fill();
+        }
+      }
+    }
+
+    for (const p of ripples) {
+      g.strokeStyle = `hsla(${(p.hue + shift) % 360}, 90%, 80%, ${p.a})`;
+      g.lineWidth = 1.5;
+      g.beginPath(); g.arc(p.x, p.y, p.r, 0, Math.PI * 2); g.stroke();
+    }
+
+    // Centre: a slow-breathing core
+    const core = R * 0.18 * (1 + 0.04 * Math.sin(t * 2));
+    const cg = g.createRadialGradient(CX, CY, 0, CX, CY, core);
+    cg.addColorStop(0, `hsla(${(40 + shift) % 360}, 90%, 85%, 0.55)`);
+    cg.addColorStop(1, `hsla(${(300 + shift) % 360}, 80%, 60%, 0)`);
+    g.fillStyle = cg; g.beginPath(); g.arc(CX, CY, core, 0, Math.PI * 2); g.fill();
+
+    if (cursor.shown) {
+      const a = cellAngle(cursor.step), rr = ringRadius(cursor.ring);
+      g.strokeStyle = "rgba(255,255,255,0.8)"; g.lineWidth = 1.5;
+      g.beginPath(); g.arc(CX + Math.cos(a) * rr, CY + Math.sin(a) * rr, cell * 0.45, 0, Math.PI * 2); g.stroke();
+    }
+
+    if (lastInput < 0 && t < 15) {
+      g.font = "600 12px system-ui, sans-serif"; g.textAlign = "center"; g.fillStyle = "rgba(255,255,255,0.45)";
+      g.fillText("tap or drag to weave notes · ♪ for sound", CX, Math.max(18, CY - R - 12));
+      g.fillText("keys: arrows · space · enter · backspace", CX, Math.min(H - 10, CY + R + 22));
+    }
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    if (window.Flow && Flow.away && now - last < 100) { requestAnimationFrame(frame); return; }
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+    update(dt); draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

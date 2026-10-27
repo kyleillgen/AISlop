@@ -12,6 +12,30 @@ window.AISLOP_GAMES = [
   },
   // Flow Toys: hand-made fidgets with no score and no losing, for keeping beside your editor
   {
+    id: "flow-zen",
+    title: "Flow // Resonance · Zen",
+    blurb: "The full Flow engine with nothing at stake: clip a pipe and you glide through. Tempo lock, eras and Platinum all still evolve.",
+    path: "games/flow-resonance.html?zen=1",
+    status: "toy",
+    hue: 160
+  },
+  {
+    id: "resonance-glide",
+    title: "Resonance Glide",
+    blurb: "Flow's flight with nothing to crash into. Ride a harmonic ribbon through aurora skies; leave it and it glides itself.",
+    path: "games/resonance-glide.html",
+    status: "toy",
+    hue: 175
+  },
+  {
+    id: "orbit-loom",
+    title: "Orbit Loom",
+    blurb: "Weave notes onto six rings while a hand sweeps round and plays them. Always in key; left alone, it re-weaves itself.",
+    path: "games/orbit-loom.html",
+    status: "toy",
+    hue: 275
+  },
+  {
     id: "string-doodle",
     title: "String Doodle",
     blurb: "Drag to stretch glowing strings, then brush across them to pluck. Short ones chime, long ones hum, all in key.",

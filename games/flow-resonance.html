@@ -708,6 +708,16 @@
                 : window.matchMedia("(hover: hover) and (pointer: fine)").matches;
             if (IS_DESKTOP) document.body.classList.add("desktop-mode");
 
+            // Zen (?zen=1): Flow as a toy. Clips pass through with no streak loss, difficulty
+            // never climbs, and the music, eras and Platinum still evolve as you play.
+            const ZEN = new URLSearchParams(window.location.search).has("zen");
+            const BEST_KEY = ZEN ? "flowBirdResonanceBestZen" : "flowBirdResonanceBest";
+            if (ZEN) {
+                document.querySelector("#startOverlay h1").textContent = "ZEN // JUST FLOW";
+                document.querySelector("#startOverlay h1").nextElementSibling.textContent =
+                    "Nothing to lose here. Clip a pipe and you simply glide through. Find a rhythm, ride the ribbon, and let the world evolve around you.";
+            }
+
             // Adaptive challenge (0..1): keeps play in the flow channel, just past comfortable.
             // Speed never changes; only gap size and contour depth move.
             const CHALLENGE = IS_DESKTOP
@@ -775,7 +785,7 @@
                 return runPeak >= PLATINUM_AT;
             }
             try {
-                bestStreak = parseInt(localStorage.getItem("flowBirdResonanceBest") || "0", 10) || 0;
+                bestStreak = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
                 bestStreakDisplay.textContent = bestStreak;
             } catch (e) {
                 bestStreak = 0;
@@ -1006,6 +1016,7 @@
             }
 
             function adjustChallenge(delta) {
+                if (ZEN) return;
                 flowCtrl.challenge = Math.max(0, Math.min(CHALLENGE.max, flowCtrl.challenge + delta));
             }
 
@@ -1024,7 +1035,7 @@
                     bestStreak = streak;
                     bestStreakDisplay.textContent = bestStreak;
                     try {
-                        localStorage.setItem("flowBirdResonanceBest", String(bestStreak));
+                        localStorage.setItem(BEST_KEY, String(bestStreak));
                     } catch (e) {}
                 }
                 streakDisplay.textContent = streak;
@@ -1090,6 +1101,16 @@
                 // Nudge bird smoothly toward the harmonic guide line
                 const targetY = getHarmonicGuideYAtX(bird.x);
                 bird.vy = (targetY - bird.y) * 0.08 - 2.2;
+
+                if (ZEN) {
+                    // Glide straight through: a soft shimmer, no penalty, no HUD flare-up
+                    bird.ghostTimer = 0.9;
+                    bird.washAlpha = 0.18;
+                    bird.washColor = "#a78bfa";
+                    synth.playGentleCushionChord();
+                    spawnParticles(bird.x, impactY || bird.y, "#a78bfa", 10);
+                    return;
+                }
 
                 flowCtrl.lastDisruptionMs = performance.now();
 
