@@ -19,11 +19,14 @@ Shape of every game:
 
 Make it original. If an idea resembles a specific existing game, build your own twist on the genre instead of a copy, and never use another game's name, characters, or art.
 
-The Flow layer (the arcade's shared vibe):
-- Put <script src="flow-layer.js"></script> as the first thing in <head>. The arcade swaps it for the real layer, which adds a soft beat-synced glow over your canvas and a chill background groove. It exposes window.Flow.
-- Hook your moments into it, always guarded: window.Flow && Flow.score(score) whenever the score changes; window.Flow && Flow.hit(x, y) on each success, at its screen position (it plays an in-key chime and a poppy ring); window.Flow && Flow.miss() on a mistake or game over; window.Flow && Flow.reset() on restart.
-- Don't add background music of your own. Short sound effects are fine if they are soft.
-- The feel is chill and poppy: dusky or night gradients, soft glows, rounded shapes, eased motion, satisfying little pops on success. Failure is gentle (no screen shake, no harsh red flashes), and difficulty never spikes suddenly. Aim for the player sinking into a rhythm.`;
+The Flow engine (the heart of every AISlop game):
+The arcade is built around Flow // Resonance, whose purpose is to draw the player into a flow state by calibrating the beat to them. It listens to the player's natural tapping cadence, eases the tempo toward it (96–124 BPM), and once they're steady it locks there. The world is built on that beat: Flow sends one pipe every two beats and never speeds up as the score climbs. Every tap plays a note in key, quantized to the 16th-note grid. Your game must be built the same way.
+- Put <script src="flow-layer.js"></script> as the first thing in <head>. The arcade swaps it for the real engine, which provides Flow's music (groove voices, cadence detection and lock, in-key notes on every tap) and exposes window.Flow.
+- Build pacing on the calibrated beat, never on a fixed tempo or a timer: read Flow.beat (seconds per beat) and Flow.bpm every frame for speeds and distances, and spawn things on the beat with Flow.onBeat(fn), where fn(beatIndex) runs every quarter beat. Make important moments (arrivals, catches, gaps) land on beats, e.g. an object that spawns on a beat and reaches the player exactly N beats later.
+- Never ramp speed with score. Challenge grows through density, precision, or pattern, and the game deepens musically instead (the engine's tiers do that from Flow.score).
+- Report moments, always guarded: window.Flow && Flow.score(score) whenever the score changes; window.Flow && Flow.hit(x, y) on each success at its screen position (it plays an in-key harmony and a pop ring); window.Flow && Flow.miss() on a mistake (a soft cushion chord, never a jolt); window.Flow && Flow.reset() on restart. Taps are counted toward the player's cadence and voiced automatically.
+- Don't add music or an AudioContext of your own.
+- The feel is chill and poppy: dusky or night gradients, soft glows, rounded shapes, eased motion, satisfying little pops on success. Failure is gentle (no screen shake, no harsh red flashes). The player should sink into a rhythm.`;
 
 // Toys are a different contract: no goal, no failure, fine to ignore, light on the machine.
 export const TOY_SYSTEM_PROMPT = `You make small, original Flow Toys for the AISlop Arcade: calm fidget toys people keep open in a small window beside their code editor and play with between thoughts.
@@ -43,9 +46,10 @@ What makes it a toy, not a game:
 - One full-viewport <canvas>, sized for devicePixelRatio (capped at 2), resized on window resize. Pointer events with preventDefault and touch-action: none. It must be fully playable by keyboard as well: if the pointer draws, aims, or places things, show a soft cursor moved by the arrow keys, with Space acting where it points and Enter doing something pleasant.
 - Compact, readable code (aim for under 30 KB). Draw everything with canvas shapes and gradients.
 
-The Flow layer:
-- Put <script src="flow-layer.js" data-mode="toy"></script> as the first thing in <head>. The arcade swaps in the real layer: a soft glow wash and an optional quiet pad. It exposes window.Flow.
-- All sound goes through it, so mute works everywhere: window.Flow && Flow.note(degree, { vol, dur, type }) plays scale degree 0–13 of the current chord right away (0–6 warm and low, 7–13 bell-like); map sizes, lengths, or heights to degrees so everything is in key. window.Flow && Flow.hit(x, y, true) adds a pop ring at a point.
+The Flow engine:
+- Put <script src="flow-layer.js" data-mode="toy"></script> as the first thing in <head>. The arcade swaps in Flow // Resonance's real engine: its groove (voice selection, cadence detection and lock) and a soft glow wash. It exposes window.Flow. Its whole purpose is to calibrate the beat to the player: it listens to their natural cadence, eases the tempo toward it, and locks once they're steady.
+- Let the toy breathe on that beat: drive any pulsing, drifting, or recurring motion from Flow.beat (seconds per beat) and Flow.onBeat(fn), never from a fixed tempo of your own.
+- All sound goes through it, so mute works everywhere: window.Flow && Flow.note(degree) queues scale degree 0–13 of the current chord onto the 16th-note grid, exactly as Flow voices a tap (0–6 warm and low, 7–13 bell-like); map sizes, lengths, or heights to degrees so everything is in key and in time. Use Flow.note(degree, { now: true }) only when your own timing is already on the beat. window.Flow && Flow.hit(x, y, true) adds a pop ring at a point.
 - Advance all motion and timers by real elapsed time (delta time from the requestAnimationFrame timestamp), never a fixed amount per frame, so it feels the same on 60 Hz, 120 Hz, and throttled windows.
 - Keep the machine cool: in your requestAnimationFrame loop, when window.Flow && Flow.away is true (the player is in another window), skip frames so you draw about 10 times a second.
 - Never create your own AudioContext.

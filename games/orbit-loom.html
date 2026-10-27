@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<script src="flow-layer.js" data-mode="toy" data-bpm="80" data-step="8"></script>
+<script src="flow-layer.js" data-mode="toy" data-step="8"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Orbit Loom</title>
@@ -36,7 +36,9 @@
   resize();
 
   const RINGS = 6, STEPS = 16;
-  const BAR = 4 * (60 / 80);                    // one revolution per bar at 80 BPM
+  // One revolution per bar of Flow's calibrated tempo; the hand re-aligns to every beat
+  const bar = () => 4 * (window.Flow ? Flow.beat : 60 / 108);
+  if (window.Flow) Flow.onBeat((i) => { phase = (i % 4) / 4; });
   const RING_DEGREES = [0, 2, 4, 7, 9, 11];     // inner = low and warm, outer = bright
   const HUES = [[265, 200], [200, 160], [320, 260], [30, 340], [150, 190], [215, 290]];
 
@@ -66,7 +68,8 @@
 
   function play(ring, step, vol) {
     glow[ring][step] = 1;
-    if (window.Flow) Flow.note(RING_DEGREES[ring], { vol: vol || 0.05, dur: ring < 2 ? 1.4 : 0.7, type: ring < 2 ? "triangle" : "sine" });
+    // The hand is already on Flow's beat, so notes play immediately (and can form chords)
+    if (window.Flow) Flow.note(RING_DEGREES[ring], { now: true });
     const a = cellAngle(step), rr = ringRadius(ring);
     ripples.push({ x: CX + Math.cos(a) * rr, y: CY + Math.sin(a) * rr, r: 4, a: 0.7, hue: HUES[ring][0] });
   }
@@ -131,7 +134,7 @@
 
   function update(dt) {
     t += dt;
-    phase = (phase + dt / BAR) % 1;
+    phase = (phase + dt / bar()) % 1;
     const step = Math.floor(phase * STEPS);
     if (step !== lastStep) {
       if (step === 0 && lastStep !== -1) {

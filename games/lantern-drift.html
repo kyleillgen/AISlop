@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<script src="flow-layer.js" data-bpm="84" data-step="100"></script>
+<script src="flow-layer.js" data-step="100"></script>
 <title>Lantern Drift</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0d1c; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -43,7 +43,9 @@
   let lx, lvx, fuel, dist, rows, embers, t, pointerX = null;
   const keys = { left: false, right: false };
 
-  function rise() { return Math.min(320, 130 + t * 4); }
+  // Rows are 220 px apart and pass one every two beats of the calibrated tempo, the way
+  // Flow spaces its pipes; the challenge comes from narrower gaps, never from speed
+  function rise() { return 220 / (2 * (window.Flow ? Flow.beat : 60 / 108)); }
 
   function addRow(y) {
     const gapW = Math.max(105, 175 - t * 1.2);

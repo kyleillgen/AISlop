@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<script src="flow-layer.js" data-bpm="104" data-step="25"></script>
+<script src="flow-layer.js" data-step="25"></script>
 <title>Two Tone</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0b14; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -55,6 +55,22 @@
 
   function flip() { tone = 1 - tone; }
 
+  // Rain falls on Flow's calibrated beat: each drop spawns on a beat and takes exactly one
+  // bar to reach the catcher, so catches land on the beat. Colour streaks change every two
+  // bars so flips feel deliberate; denser rain (every beat instead of every other) comes as
+  // you score, never faster rain.
+  let beatN = 0;
+  if (window.Flow) Flow.onBeat(() => {
+    if (state !== "play") return;
+    beatN++;
+    const dense = score >= 25;
+    if (!dense && beatN % 2) return;
+    const streakTone = Math.floor(beatN / 8) % 2;
+    const c = Math.random() < 0.75 ? streakTone : 1 - streakTone;
+    const fall = (H - 80 + 10) / (4 * Flow.beat);
+    drops.push({ x: 16 + Math.random() * (W - 32), y: -10, c, v: fall });
+  });
+
   function press() {
     if (state === "ready") { state = "play"; return true; }
     if (state === "over" && performance.now() - overAt > 600) { reset(); state = "ready"; return true; }
@@ -100,15 +116,6 @@
     if (keys.left) px -= 460 * dt;
     if (keys.right) px += 460 * dt;
     px = Math.max(R, Math.min(W - R, px));
-
-    // Rain comes in colour streaks so flips feel deliberate rather than random
-    spawnT -= dt;
-    if (spawnT <= 0) {
-      const streakTone = Math.floor(t / 4) % 2 === 0 ? 0 : 1;
-      const c = Math.random() < 0.7 ? streakTone : 1 - streakTone;
-      drops.push({ x: 16 + Math.random() * (W - 32), y: -10, c, v: Math.min(430, 170 + score * 2.2) });
-      spawnT = Math.max(0.26, 0.7 - score * 0.006);
-    }
 
     const py = H - 80;
     for (let i = drops.length - 1; i >= 0; i--) {

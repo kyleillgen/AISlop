@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
 <head>
-<script src="flow-layer.js" data-mode="toy" data-bpm="84" data-step="400"></script>
+<script src="flow-layer.js" data-mode="toy" data-step="400"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Resonance Glide</title>
@@ -31,8 +31,9 @@
   window.addEventListener("resize", resize);
   resize();
 
-  const BEAT = 60 / 84;
-  const SPEED = 150;               // px per second of world scroll; one bead per beat
+  // One bead per beat of Flow's calibrated tempo, so riding the ribbon is riding the groove
+  const beatSec = () => (window.Flow ? Flow.beat : 60 / 108);
+  const SPEED = 150;               // px per second of world scroll
   const GRAVITY = 520, LIFT = -260, DIVE = 330, DIVE_TIME = 0.14;
 
   // Skies the world drifts through as distance on the ribbon builds
@@ -144,7 +145,7 @@
     // Beat beads sit on the ribbon one beat apart; flying through one plays it
     while (nextBead < wx + W + 60) {
       beads.push({ x: nextBead, taken: false });
-      nextBead += SPEED * BEAT;
+      nextBead += SPEED * beatSec();
     }
     for (const b of beads) {
       const bx = b.x - wx, by = ribbonY(b.x);
