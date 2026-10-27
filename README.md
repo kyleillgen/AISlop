@@ -4,17 +4,8 @@ Sloppy AI games, reborn.
 
 ## Flow // Resonance
 
-A flappy-style rhythm game built to put you in a flow state. The engine learns your tapping tempo *and* phase, slides the groove to meet you, then locks so you ride it. Every tap plays a note in key.
+Built with Gemini to draw you into a flow state. You never die; a clip just steps your streak down (or uses your Flow Shield). The engine listens to your natural tapping cadence, eases the tempo and physics toward it, and locks your sweet spot once you are steady. Pipes arrive on the beat and every tap plays in key, quantized to the 16th grid. It never gets harder over time; it gets deeper: four synesthetic tiers, golden orbs, slipstreams, groove voices (LO-FI RHODES, SYNTHWAVE PULSE, AMBIENT DRIFT), and an auto-sync / lock control.
 
-- **Flow channel:** the gap and wave depth tighten while you play cleanly and ease off after a clip. Speed never ramps.
-- **Quiet feedback:** sound, light and rings instead of text pop-ups; the HUD fades once you're locked in.
-- **Eras:** every 500 points the world slowly blends to a new palette, modulates to a new key and unlocks new wave shapes. At 1000 the run turns **Platinum**.
+Every 500 points the backdrop slowly evolves into a new epoch (Obsidian & Emerald Neon, Platinum, Solar Gold & Amber Flare, Deep Cosmos Prism), and at 1000 the run turns **Platinum**: chrome ribbon, brushed-platinum pipes and diamond-dust trail.
 
-Play at https://kyleillgen.github.io/AISlop/ or open `index.html`.
-
-| | Mobile | Desktop |
-|---|---|---|
-| Flap | Tap | Space / Up / W / click |
-| Extras | HUD buttons | `M` mute · `V` voice · `L` lock cadence |
-
-Desktop is a simpler mode: a centred stage, lean HUD, gentler difficulty range, no slipstreams. Force either with `?mode=desktop` or `?mode=mobile`; preview later eras with `?warp=995`.
+Play at https://kyleillgen.github.io/AISlop/ or open `games/flow-resonance.html`.
