@@ -97,6 +97,7 @@
     // Handling time (first key to last, plus a moment to read) paces the next words
     const handleSec = w.firstKeyMs ? (performance.now() - w.firstKeyMs) / 1000 + 0.6 : undefined;
     api.score(1, perfect ? "PERFECT" : "CLEAN", handleSec);
+    if (perfect) api.ring(w.x, y, api.color(), 60);
   }
 
   const api = FlowShell.mount({
@@ -144,6 +145,7 @@
       if (!w) return api.eng.tap({ note: false });
       if (ch === w.text[w.typed]) {
         if (w.typed === 0 || w.ghost) w.firstKeyMs = performance.now();
+        (w.hitAt || (w.hitAt = []))[w.typed] = performance.now();
         w.typed++;
         w.ghost = false;
         // Each word climbs the scale as you type it
@@ -285,11 +287,19 @@
         for (let i = 0; i < w.text.length; i++) {
           const typed = i < w.typed;
           const tx = x0 + cw * i + 1;
+          // A struck target punches in and springs back over ~150 ms
+          const since = w.hitAt && w.hitAt[i] ? (performance.now() - w.hitAt[i]) / 150 : 1;
+          const punch = since < 1 ? Math.sin(since * Math.PI) * 0.18 : 0;
+          ctx.save();
+          ctx.translate(tx + (cw - 2) / 2, y);
+          ctx.scale(1 - punch, 1 - punch);
+          ctx.translate(-(tx + (cw - 2) / 2), -y);
           ctx.fillStyle = typed ? (w.ghost ? "#8a7f6a" : col) : "#f6e6c0";
           ctx.fillRect(tx, y - th / 2, cw - 2, th);
           ctx.strokeRect(tx, y - th / 2, cw - 2, th);
           ctx.fillStyle = typed ? "#fff8e6" : "#140f0c";
           ctx.fillText(w.text[i].toUpperCase(), tx + (cw - 2) / 2, y + 1);
+          ctx.restore();
         }
       }
       ctx.globalAlpha = 1;

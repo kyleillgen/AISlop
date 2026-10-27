@@ -45,7 +45,7 @@
     // Flow Pocket launcher: one small window, one game at a time, and a lamp that follows
     // Claude Code through pocket/signal.mjs. When Claude finishes (or needs you), the game gets
     // the engine's build-done message: it goes to autopilot, winds the music down and chimes.
-    PinballSkin.install();
+    PinballSkin.install({ vignette: false });
     Neutralino.init();
     Neutralino.events.on("windowClose", () => Neutralino.app.exit());
 
@@ -156,8 +156,22 @@
     }
 
     // The game reports its real frame rate every 2 s
-    window.addEventListener("message", (e) => {
-      if (e.data && e.data.type === "flow:fps") document.getElementById("fps").textContent = e.data.fps + " FPS";
+    // Each report is also appended to ~/.flow-pocket/perf.log with the GPU WebView2 is drawing
+    // with, so frame-rate problems can be diagnosed from outside the window
+    let gpu = "unknown";
+    try {
+      const gl = document.createElement("canvas").getContext("webgl");
+      const ext = gl && gl.getExtension("WEBGL_debug_renderer_info");
+      gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl ? gl.getParameter(gl.RENDERER) : "no webgl";
+    } catch (e) {}
+    window.addEventListener("message", async (e) => {
+      if (!e.data || e.data.type !== "flow:fps") return;
+      document.getElementById("fps").textContent = e.data.fps + " FPS";
+      try {
+        const home = await Neutralino.os.getEnv("USERPROFILE");
+        const line = JSON.stringify({ t: new Date().toISOString(), game: store("pocket.game"), fps: e.data.fps, workMs: e.data.workMs, canvas: e.data.canvas, dpr: devicePixelRatio, view: innerWidth + "x" + innerHeight, gpu, args: navigator.userAgent.slice(-40) });
+        await Neutralino.filesystem.appendFile(home + "/.flow-pocket/perf.log", line + "\n");
+      } catch (err) {}
     });
 
     // ---- Claude signal ------------------------------------------------------------------

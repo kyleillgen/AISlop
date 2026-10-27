@@ -110,14 +110,21 @@
     const reduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 
     let W = 0, H = 0, started = false, flash = 0, bulbFlash = 0;
-    // Frames cap at 60 everywhere (so 120/144 Hz monitors don't draw more than needed). Pocket
-    // mode (the desktop pocket app, or ?pocket=1) renders at up to 1.5x pixels instead of 2x.
+    // Frame pacing: a steady 60 fps on average, scheduled by time rather than by counting
+    // display ticks. Measured in the pocket app, the browser's ticks weren't tied to any screen
+    // (about 180 a second), and a tick-counting cap drew an uneven 48 on a 144 Hz screen; a
+    // deadline that advances by exactly 1/60 s keeps the average at 60 whatever the tick rate.
+    // Pocket mode (the pocket app, or ?pocket=1) draws at 0.75x resolution, because the
+    // browser's raster and compositing, not the game's code (~0.15 ms a frame), costs the most.
     const pocket = /[?&]pocket=1/.test(location.search) || !!window.NL_OS;
-    const fpsCap = () => 60;
+    const FRAME_MS = 1000 / 60;
+    let due = 0;
     let fpsFrames = 0;
+    let fpsWork = 0; // ms spent drawing, to tell slow JS apart from a slow compositor
     let fpsSince = performance.now();
     const particles = [];
     const callouts = [];
+    const rings = [];
     const cache = new Map();
     let phrase = 0, phraseClean = true;
     const BEST_KEY = g.key + ".best";
@@ -148,6 +155,7 @@
           if (phraseClean) {
             eng.chime();
             bulbFlash = 0.8; // the whole bulb row blinks, like a pinball bonus
+            api.ring(W / 2, H * 0.45, api.color(), Math.min(W, H) * 0.35);
             if (g.onPhrase) g.onPhrase(api);
           }
           phrase = 0;
@@ -170,12 +178,18 @@
       callout(text, x, y, color = "#e2e8f0", scale = 1) {
         callouts.push({ text, x, y, vy: -0.55, a: 1, color, scale });
       },
-      // dir -1 floats up, 1 falls with gravity
+      // dir -1 floats up, 1 falls with gravity. Sizes vary and fade on a curve, not a line.
       burst(x, y, color, n = 6, dir = -1) {
         if (reduced) n = Math.ceil(n / 2);
         for (let i = 0; i < n && particles.length < 160; i++) {
-          particles.push({ x, y, vx: (Math.random() - 0.5) * 80, vy: dir > 0 ? 60 + Math.random() * 120 : -40 - Math.random() * 70, g: dir > 0 ? 260 : 60, a: 1, color });
+          const a = Math.random() * Math.PI * 2;
+          const v = 40 + Math.random() * 90;
+          particles.push({ x, y, vx: Math.cos(a) * v, vy: dir > 0 ? 60 + Math.random() * 120 : Math.sin(a) * v - 50, g: dir > 0 ? 260 : 90, a: 1, s: 2 + Math.random() * 2.5, color });
         }
+      },
+      // An expanding ring of light that eases out: the "perfect" moment, or a phrase bonus
+      ring(x, y, color, size = 44) {
+        if (rings.length < 12) rings.push({ x, y, color, size, t: 0 });
       },
       // Build a gradient (or anything costly) once per key instead of every frame
       cached(key, make) {
@@ -188,7 +202,7 @@
       const vv = window.visualViewport;
       W = window.innerWidth;
       H = vv ? Math.round(vv.height) : window.innerHeight; // stays above a phone keyboard
-      const dpr = Math.min(window.devicePixelRatio || 1, pocket ? 1.5 : 2);
+      const dpr = pocket ? 0.75 : Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = W * dpr;
       canvas.height = H * dpr;
       canvas.style.height = H + "px";
@@ -350,7 +364,8 @@
 
     let last = performance.now();
     function frame(now) {
-      if (now - last < 1000 / fpsCap() - 2) return requestAnimationFrame(frame);
+      if (now < due - 1) return requestAnimationFrame(frame);
+      due = Math.max(due + FRAME_MS, now); // never bank more than one late frame
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
       last = now;
       eng.update(dt);
@@ -359,13 +374,19 @@
         if (g.update) g.update(dt, api);
         flash = Math.max(0, flash - dt * 1.4);
         bulbFlash = Math.max(0, bulbFlash - dt);
+        const drag = Math.pow(0.12, dt); // particles slow as they spread, then hang and fade
         for (let i = particles.length - 1; i >= 0; i--) {
           const p = particles[i];
+          p.vx *= drag;
+          p.vy = p.vy * drag + p.g * dt;
           p.x += p.vx * dt;
           p.y += p.vy * dt;
-          p.vy += p.g * dt;
-          p.a -= dt * 1.6;
+          p.a -= dt * 1.4;
           if (p.a <= 0) particles.splice(i, 1);
+        }
+        for (let i = rings.length - 1; i >= 0; i--) {
+          rings[i].t += dt / 0.45;
+          if (rings[i].t >= 1) rings.splice(i, 1);
         }
         for (let i = callouts.length - 1; i >= 0; i--) {
           const c = callouts[i];
@@ -378,21 +399,36 @@
         // Every frame starts fully opaque: a leftover alpha here would paint the background
         // translucently and leave smeared ghosts of earlier frames
         ctx.globalAlpha = 1;
+        const workStart = performance.now();
         if (g.draw) g.draw(ctx, api, t);
         // Report the real frame rate to a host page (the pocket app shows it in its strip)
         fpsFrames++;
+        fpsWork += performance.now() - workStart;
         if (now - fpsSince > 2000) {
-          if (window.parent !== window) window.parent.postMessage({ type: "flow:fps", fps: Math.round((fpsFrames * 1000) / (now - fpsSince)) }, "*");
+          if (window.parent !== window) {
+            window.parent.postMessage({ type: "flow:fps", fps: Math.round((fpsFrames * 1000) / (now - fpsSince)), workMs: +(fpsWork / fpsFrames).toFixed(2), canvas: canvas.width + "x" + canvas.height }, "*");
+          }
           fpsFrames = 0;
+          fpsWork = 0;
           fpsSince = now;
         }
         for (const p of particles) {
-          ctx.globalAlpha = Math.max(0, p.a);
+          ctx.globalAlpha = Math.max(0, p.a * p.a);
           ctx.fillStyle = p.color;
-          ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+          const sz = p.s * (0.5 + 0.5 * p.a);
+          ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
+        }
+        for (const r of rings) {
+          const e = 1 - Math.pow(1 - r.t, 3); // ease-out cubic
+          ctx.globalAlpha = 1 - r.t;
+          ctx.strokeStyle = r.color;
+          ctx.lineWidth = 4 * (1 - r.t) + 1;
+          ctx.beginPath();
+          ctx.arc(r.x, r.y, 8 + r.size * e, 0, Math.PI * 2);
+          ctx.stroke();
         }
         ctx.globalAlpha = 1;
-        for (const c of callouts) Skin.callout(ctx, c.text, c.x, c.y, c.color, 20 * c.scale, Math.max(0, Math.min(1, (1 - c.a) * 8, c.a)));
+        for (const c of callouts) Skin.callout(ctx, c.text, c.x, c.y, c.color, 20 * c.scale, Math.max(0, Math.min(1, (1 - c.a) * 8, c.a)), 1 - c.a);
         // Chaser bulbs along the bottom edge run on the eighth notes and blink on big moments
         if (g.bulbs !== false) Skin.bulbs(ctx, W, H - 9, eng.beatPos(), bulbFlash > 0 && Math.floor(bulbFlash * 10) % 2 === 0 ? 1 : 0);
         if (flash > 0) {
