@@ -187,3 +187,57 @@ test("Word Rain's typing fits leave no gaps from 125 to 620 ms a key", () => {
     assert.ok(inBand, `${ms} ms a key has no in-band fit`);
   }
 });
+
+// ---- Built-in rules ---------------------------------------------------------------------
+test("autopilot never scores and never costs, whatever the game calls", () => {
+  const c = createController();
+  c.score(10);
+  c.setAuto(true);
+  assert.equal(c.score(5), false);
+  assert.equal(c.clip(), false);
+  assert.equal(c.streak, 10);
+  assert.equal(c.assist, 0);
+});
+
+// ---- Pacer --------------------------------------------------------------------------------
+const { createPacer } = window.FlowEngine;
+const BEAT = 60 / 108;
+
+test("pacer follows the player's handling time with slack, in whole beats", () => {
+  const p = createPacer();
+  assert.equal(p.beats(BEAT), 4); // before any data
+  for (let i = 0; i < 12; i++) p.record(1.4, true); // 1.4 s an item
+  assert.equal(p.beats(BEAT), Math.round((1.4 * 1.15) / BEAT));
+  for (let i = 0; i < 20; i++) p.record(0.6, true); // faster player, items come faster
+  assert.equal(p.beats(BEAT), 2);
+});
+
+test("pacer adds room when the clean rate drops below 85%, gives it back above 95%", () => {
+  const p = createPacer();
+  for (let i = 0; i < 16; i++) p.record(1.4, true);
+  const base = p.beats(BEAT);
+  for (let i = 0; i < 8; i++) p.record(null, i % 2 === 0); // a rough patch: 50% clean
+  assert.ok(p.beats(BEAT) > base, "no room added after misses");
+  assert.ok(p.room <= 3);
+  for (let i = 0; i < 40; i++) p.record(1.4, true);
+  assert.equal(p.beats(BEAT), base, "room not given back after a clean run");
+});
+
+test("pacer never paces faster than the player's own capacity, however clean", () => {
+  const p = createPacer();
+  for (let i = 0; i < 200; i++) p.record(1.4, true);
+  assert.equal(p.beats(BEAT), Math.round((1.4 * 1.15) / BEAT));
+});
+
+test("pacer changes wait for at least 4 items (hysteresis)", () => {
+  const p = createPacer();
+  for (let i = 0; i < 16; i++) p.record(1.4, true);
+  const changes = [];
+  let last = p.room;
+  for (let i = 0; i < 16; i++) {
+    p.record(null, false);
+    if (p.room !== last) { changes.push(i); last = p.room; }
+  }
+  assert.equal(changes.length, 3, `expected 3 steps up to the cap, got ${changes.length}`);
+  for (let k = 1; k < changes.length; k++) assert.ok(changes[k] - changes[k - 1] >= 4, `steps at ${changes}`);
+});

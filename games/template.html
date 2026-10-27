@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Drop Catch</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<script src="flow-engine.js"></script>
+<script src="flow-shell.js"></script>
+<script>
+// TEMPLATE: the smallest complete game on the flow engine. Copy this file to start a new one.
+// Drop Catch: drops fall onto a pad and land on the beat; tap as each one lands.
+//
+// The engine and shell already handle music, tempo matching, autopilot, pause, settings,
+// the header, the start screen and particles. A game only answers five questions:
+//   1. What appears on the beat?            onBeat   (spawn; api.eng.paceBeats() says how often)
+//   2. How does it move?                    update   (use api.eng.beatPos() so it rides the music)
+//   3. What does the player do?             onAction (call api.eng.tap() on every action)
+//   4. What counts as a catch or a miss?    api.score(1, quality, handleSec) / api.miss()
+//   5. What does it look like?              draw
+// plus autopilot: what the game does by itself when the player stops (nothing scores then).
+(() => {
+  "use strict";
+
+  let drops = [];
+  let beatsSinceSpawn = 99;
+  let padY = 0;
+
+  // 1. On the beat: spawn a drop if the pacer says it's time. It will land exactly
+  //    `fall` beats later. The catch window comes from the assist and is fixed at spawn
+  //    (help only applies to things not yet on screen); the perfect window never changes.
+  function onBeat(n, api) {
+    if (++beatsSinceSpawn < api.eng.paceBeats()) return;
+    beatsSinceSpawn = 0;
+    drops.push({ landsAt: n + 4, window: 0.3 + 0.15 * api.eng.assist, state: "falling", fade: 1, ghost: false });
+  }
+
+  // 3. The player's action. Every action goes to the engine (that's how it hears your rhythm);
+  //    then the game decides what it did.
+  function onAction(api) {
+    const now = api.eng.beatPos();
+    const d = drops.find((x) => x.state === "falling" && Math.abs(now - x.landsAt) < x.window);
+    api.eng.tap({ height: d ? 0.3 : 0.7 }); // a catch plays a higher note
+    if (!d) return;
+    d.state = "caught";
+    const off = Math.abs(now - d.landsAt);
+    // 4. Score it. PERFECT within a tenth of a beat; handleSec feeds the pacer.
+    api.score(1, off < 0.1 ? "PERFECT" : "CLEAN", api.eng.beatSec * 1.5);
+    api.burst(api.W / 2, padY, api.color(), 10, -1);
+  }
+
+  // Autopilot: catch every drop as it lands. score() is ignored in autopilot, so this is safe.
+  function autopilot(dt, api) {
+    const now = api.eng.beatPos();
+    for (const d of drops) {
+      if (d.state === "falling" && now >= d.landsAt) {
+        d.state = "caught";
+        d.ghost = true;
+      }
+    }
+  }
+
+  // 2. Movement and misses
+  function update(dt, api) {
+    const now = api.eng.beatPos();
+    for (const d of drops) {
+      if (d.state === "falling" && now > d.landsAt + d.window) {
+        d.state = "missed";
+        api.miss(); // steps the streak down a little; never ends the game
+      }
+      if (d.state !== "falling") d.fade -= dt * 3;
+    }
+    drops = drops.filter((d) => d.fade > 0);
+  }
+
+  // 5. Drawing. Drops ride the beat: their height is a straight function of beatPos.
+  function draw(ctx, api) {
+    const { W, H } = api;
+    ctx.fillStyle = "#060b16";
+    ctx.fillRect(0, 0, W, H);
+    const x = W / 2;
+    const top = 110;
+    const now = api.eng.beatPos();
+    const pulse = 1 - (now % 1); // 1 on each beat, fading to 0
+    ctx.strokeStyle = api.color();
+    ctx.globalAlpha = 0.4 + 0.4 * pulse;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, padY, 26 + 4 * pulse, 0, Math.PI * 2);
+    ctx.stroke();
+    for (const d of drops) {
+      const p = Math.min(1, 1 - (d.landsAt - now) / 4);
+      ctx.globalAlpha = d.fade;
+      ctx.fillStyle = d.state === "missed" ? "#475569" : d.ghost ? "#94a3b8" : api.color();
+      ctx.beginPath();
+      ctx.arc(x, top + p * (padY - top), 9, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  FlowShell.mount({
+    key: "dropCatch",
+    title: "Drop Catch",
+    tagline: "Catch each drop<br>as it lands.",
+    about: "Drops fall onto the pad on the beat. Tap as each one lands. The music settles into your tapping, and missing one only steps your streak down a little.",
+    input: "tap",
+    engine: {}, // defaults suit taps: one action a beat, half or double time allowed
+    resize: (api) => (padY = api.H - 120),
+    onBeat,
+    onAction,
+    autopilot,
+    update,
+    draw
+  });
+})();
+</script>
+</body>
+</html>

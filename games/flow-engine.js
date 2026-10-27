@@ -662,17 +662,23 @@
 
     c.computeTier = (s) => (s >= o.tierAt[2] ? 4 : s >= o.tierAt[1] ? 3 : s >= o.tierAt[0] ? 2 : 1);
 
+    // Built-in rule: autopilot never scores and never costs. Enforced here so no game can
+    // break it. Both return false when ignored.
     c.score = (n) => {
+      if (c.auto) return false;
       c.streak += n;
       c.best = Math.max(c.best, c.streak);
       c.tier = c.computeTier(c.streak);
+      return true;
     };
-    // A miss steps the streak down by a quarter, never to zero, and raises the assist
+    // A miss steps the streak down by a quarter (never a reset) and raises the assist
     c.clip = () => {
+      if (c.auto) return false;
       c.streak = Math.floor(c.streak * 0.75);
       c.tier = c.computeTier(c.streak);
       c.assist = Math.min(1, c.assist + 0.35);
       c.flowIndex = Math.max(0.45, c.flowIndex - 0.12);
+      return true;
     };
     c.perfect = () => (c.assist = Math.max(0, c.assist - 0.04));
     c.clean = () => (c.assist = Math.max(0, c.assist - 0.01));
@@ -735,6 +741,48 @@
   }
 
   // ==========================================================================
+  // Pacer: how many beats between new things (words, obstacles, targets). Pure, like the
+  // controller. Two signals, kept separate:
+  //   capacity: how long the player takes to handle one item (first action to done),
+  //             times 15% slack, so items come at the player's own pace;
+  //   success:  the clean rate over the last 16 items. Below 85% adds a beat of room (up to
+  //             3); above 95% gives one back, but never below the capacity pace.
+  // Changes wait 4 items between steps (hysteresis), are whole beats, and apply only to the
+  // next item spawned. Nothing here ramps with time: it can only follow the player.
+  // ==========================================================================
+  function createPacer(options) {
+    const o = Object.assign(
+      { startBeats: 4, minBeats: 2, maxBeats: 8, slack: 1.15, window: 16, low: 0.85, high: 0.95, settle: 4, maxRoom: 3 },
+      options || {}
+    );
+    const p = { o, handleSec: null, outcomes: [], room: 0, sinceChange: 0 };
+    p.rate = () => (p.outcomes.length ? p.outcomes.reduce((a, b) => a + b, 0) / p.outcomes.length : 1);
+    // handleSec: seconds the player needed for this item (null for a miss)
+    p.record = (handleSec, ok) => {
+      if (ok && handleSec > 0 && isFinite(handleSec)) {
+        const sec = Math.min(8, handleSec);
+        p.handleSec = p.handleSec === null ? sec : p.handleSec * 0.75 + sec * 0.25;
+      }
+      p.outcomes.push(ok ? 1 : 0);
+      if (p.outcomes.length > o.window) p.outcomes.shift();
+      if (++p.sinceChange < o.settle) return;
+      const rate = p.rate();
+      if (rate < o.low && p.room < o.maxRoom) {
+        p.room++;
+        p.sinceChange = 0;
+      } else if (rate > o.high && p.room > 0 && p.outcomes.length >= o.window / 2) {
+        p.room--;
+        p.sinceChange = 0;
+      }
+    };
+    p.beats = (beatSec) => {
+      const base = p.handleSec === null ? o.startBeats : Math.round((p.handleSec * o.slack) / beatSec);
+      return Math.max(o.minBeats, Math.min(o.maxBeats, base + p.room));
+    };
+    return p;
+  }
+
+  // ==========================================================================
   // The engine: controller + synth + timing calibration + stopping cues + measurement
   // ==========================================================================
   function store(key, value) {
@@ -761,6 +809,7 @@
     const milestones = params.get("milestones") !== "off";
 
     const ctrl = createController(o);
+    const pacer = createPacer(o.pacing);
     const synth = new CoCreationResonanceSynth();
     const TEMPO_KEY = o.key + ".tempo";
     const PREFS_KEY = o.key + ".prefs";
@@ -947,6 +996,7 @@
     const eng = {
       ctrl,
       synth,
+      pacer,
       milestones,
       // Call from the first user gesture (audio needs one)
       start() {
@@ -1006,9 +1056,11 @@
         listeners[evt].push(fn);
         return eng;
       },
-      score(n = 1, quality) {
+      // handleSec (optional): how long the player took on this item, for the pacer
+      score(n = 1, quality, handleSec) {
         const prevTier = ctrl.tier;
-        ctrl.score(n);
+        if (!ctrl.score(n)) return false;
+        pacer.record(handleSec, true);
         if (quality === "PERFECT") ctrl.perfect();
         else ctrl.clean();
         if (quality) synth.playPipeHarmony(ctrl.streak, quality);
@@ -1019,11 +1071,17 @@
           ctrl.forgive--;
           return false;
         }
+        if (ctrl.auto) return false;
         tel.clips.push({ index: tel.intervals.length, before: avg(tel.intervals.slice(-3)), after: null });
         ctrl.clip();
+        pacer.record(null, false);
         synth.triggerCushionCrossfade();
         synth.playGentleCushionChord();
         return true;
+      },
+      // Beats until the next item should appear (see createPacer)
+      paceBeats() {
+        return pacer.beats(eng.beatSec);
       },
       chime() {
         synth.playGoldenOrbShimmer();
@@ -1096,5 +1154,5 @@
     return eng;
   }
 
-  window.FlowEngine = { create, createController, fitTempo, BAND_MIN, BAND_MAX, TRACKS, version: 1 };
+  window.FlowEngine = { create, createController, createPacer, fitTempo, BAND_MIN, BAND_MAX, TRACKS, version: 1 };
 })();

@@ -14,8 +14,15 @@ Design follows a sourced research brief ([docs/flow-engine-research.md](docs/flo
 
 Play at https://kyleillgen.github.io/AISlop/ or open `games/flow-resonance.html`.
 
-## Word Rain and the flow engine
+## The flow engine, and building on it
 
-Flow's engine now lives in its own module, [`games/flow-engine.js`](games/flow-engine.js). It handles tempo matching, the generated music, autopilot, stopping cues and on-device measurement for any rhythm micro-game. API and design: [docs/flow-engine.md](docs/flow-engine.md). Tests: `node --test tests/flow-engine.test.cjs`.
+Flow's engine is its own module, and any small rhythm game can sit on top of it. A game is three layers:
 
-**Word Rain** is the first game built on it: words drift down on the beat and you type them before they reach the river. The music settles into your typing rhythm, every letter is a note, and typos cost nothing. Stop typing and the rain types itself. Open `games/word-rain.html`.
+- **Engine** ([`games/flow-engine.js`](games/flow-engine.js)): tempo matching, Flow's music, pacing, autopilot, stopping cues and on-device measurement, plus built-in rules no game can break (you can't lose, autopilot never scores, the tempo never jumps, nothing gets harder with time).
+- **Shell** ([`games/flow-shell.js`](games/flow-shell.js)): the header, start, pause and keys screens, input, the frame loop and effects.
+- **Game**: one HTML file answering five questions (what appears on the beat, how it moves, what the player does, what counts, how it looks).
+
+Start here: [docs/build-on-the-engine.md](docs/build-on-the-engine.md), which includes a copy-paste prompt kit. API: [docs/flow-engine.md](docs/flow-engine.md). Tests: `node --test tests/flow-engine.test.cjs`.
+
+- **Word Rain** (`games/word-rain.html`): words drift down on the beat, and you type them before they reach the river. The music settles into your typing rhythm, every letter is a note, and typos cost nothing.
+- **Drop Catch** (`games/template.html`): the starter template. Drops land on a pad on the beat; tap as they land.
