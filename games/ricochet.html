@@ -30,7 +30,6 @@
   "use strict";
 
   const PERFECT = 0.08; // beats
-  const SKY = [["#0d0930", "#3f1d8a"], ["#04170f", "#134a1d"], ["#1a0520", "#561034"], ["#1f0806", "#6a2508"]];
   const TAU = Math.PI * 2;
   const BALL = 11;
 
@@ -110,7 +109,8 @@
   const api = FlowShell.mount({
     key: "ricochet",
     title: "Ricochet",
-    hint: "Tap or Space to kick off the wall as the ball reaches it",
+    hint: "Tap to kick off the wall as the ball lands",
+    vignette: false, // baked into the table layer
     input: "tap",
     tierNames: ["Finding your rhythm", "Climbing", "Skyward", "Pinball wizard"],
     modes: ["Star Ladder"],
@@ -267,74 +267,85 @@
 
     draw(ctx, api) {
       const { W, H, tier } = api;
+      const Skin = PinballSkin;
       const now = api.eng.beatPos();
       const col = api.color();
 
-      ctx.fillStyle = api.cached("sky" + tier + H, () => {
-        const g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, SKY[tier - 1][0]);
-        g.addColorStop(1, SKY[tier - 1][1]);
-        return g;
-      });
-      ctx.fillRect(0, 0, W, H);
-
-      // Up-arrow inserts scrolling down the middle of the shaft
-      const step = 110;
-      const first = Math.floor(camY / step) - 1;
-      for (let k = first; k < first + H / step + 3; k++) {
-        const y = k * step - camY;
-        ctx.globalAlpha = 0.14 + (k % 4 === 0 ? kick * 0.12 : 0);
-        ctx.fillStyle = k % 4 === 0 ? col : "#4a3326";
-        ctx.beginPath();
-        ctx.moveTo(W / 2, y - 12);
-        ctx.lineTo(W / 2 + 11, y + 6);
-        ctx.lineTo(W / 2 - 11, y + 6);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-
-      // The walls: a dark rail with red rubber facing the shaft and cream posts every so often
-      for (const side of [0, 1]) {
-        const x = side ? wallR : wallL;
-        ctx.fillStyle = "rgba(0,0,0,0.35)";
-        ctx.fillRect(side ? x : 0, 0, side ? W - x : x, H);
-        ctx.fillStyle = "#e8231f";
-        ctx.fillRect(side ? x - 4 : x, 0, 4, H);
-        const ps = 90;
-        const p0 = Math.floor(camY / ps) - 1;
-        for (let k = p0; k < p0 + H / ps + 3; k++) {
-          const y = k * ps - camY;
-          ctx.fillStyle = "#f6e6c0";
-          ctx.beginPath();
-          ctx.arc(side ? x - 2 : x + 2, y, 4, 0, TAU);
-          ctx.fill();
+      // The shaft: playfield between two walls of red rubber on steel rails, with dark aprons
+      // outside them, baked once per size and tier
+      Skin.layer(ctx, "ricochet" + tier + "|" + wallL + "," + wallR, W, H, (g) => {
+        Skin.playfield(g, W, H, tier);
+        for (const side of [0, 1]) {
+          const x = side ? wallR : wallL;
+          const m = side ? -1 : 1; // toward the shaft
+          const apron = g.createLinearGradient(x, 0, side ? W : 0, 0);
+          apron.addColorStop(0, "rgba(0,0,0,0.55)");
+          apron.addColorStop(1, "rgba(0,0,0,0.3)");
+          g.fillStyle = apron;
+          g.fillRect(side ? x : 0, 0, side ? W - x : x, H);
+          // A soft shadow the wall casts onto the shaft
+          const sh = g.createLinearGradient(x, 0, x + m * 14, 0);
+          sh.addColorStop(0, "rgba(0,0,0,0.35)");
+          sh.addColorStop(1, "rgba(0,0,0,0)");
+          g.fillStyle = sh;
+          g.fillRect(side ? x - 14 : x, 0, 14, H);
+          // The steel rail, then the rubber facing the shaft with a line of light along it
+          g.fillStyle = "#6f685f";
+          g.fillRect(side ? x : x - 3, 0, 3, H);
+          g.fillStyle = "rgba(255,248,230,0.55)";
+          g.fillRect(side ? x + 1 : x - 2, 0, 1, H);
+          g.fillStyle = "#b3170f";
+          g.fillRect(side ? x - 4 : x, 0, 4, H);
+          g.fillStyle = "#e8231f";
+          g.fillRect(side ? x - 3 : x, 0, 3, H);
+          g.fillStyle = "rgba(255,190,175,0.55)";
+          g.fillRect(side ? x - 4 : x + 3, 0, 1, H);
         }
-      }
+      });
+
+      // Arrow inserts scrolling down the middle of the shaft, every fourth lit with the beat
+      const step = 110;
+      Skin.column(ctx, "ricoIns" + col, W / 2, step * 4, camY + step / 2, H, 40, (g) => {
+        for (let j = 1; j < 4; j++) Skin.insert(g, 0, j * step + step / 2, 10, col, 0);
+      });
+      for (let k = Math.floor(camY / step / 4) * 4; k * step - camY < H + step; k += 4) Skin.insert(ctx, W / 2, k * step - camY, 10, col, 0.25 + kick * 0.6);
+      // Rubber posts along the walls
+      for (const x of [wallL + 2, wallR - 2]) Skin.column(ctx, "ricoPost", x, 90, camY + 45, H, 20, (g) => Skin.post(g, 0, 45, 4));
 
       ctx.save();
       ctx.translate(0, -camY);
 
       // Lights left where the ball landed cleanly, fading as it climbs on
       for (const m of marks) {
-        ctx.globalAlpha = Math.max(0, m.a);
-        ctx.fillStyle = m.perfect ? "#ffc400" : col;
+        const a = Math.max(0, m.a);
+        if (a <= 0) continue;
+        const c = m.perfect ? "#ffc400" : col;
+        const mx = m.side ? wallR - 12 : wallL + 12;
+        Skin.glow(ctx, mx, m.y, m.perfect ? 22 : 16, c, a);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = c;
         ctx.beginPath();
-        ctx.arc(m.side ? wallR - 12 : wallL + 12, m.y, m.perfect ? 6 : 4, 0, TAU);
+        ctx.arc(mx, m.y, m.perfect ? 5 : 3.5, 0, TAU);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
       // Kickers flash where they fired a sliding ball back across
       for (const k of kickers) {
+        if (k.a <= 0) continue;
+        const kx = k.side ? wallR - 5 : wallL + 5;
+        Skin.glow(ctx, kx, k.y, 34, "#e8231f", k.a);
         ctx.globalAlpha = k.a;
-        ctx.fillStyle = "#e8231f";
-        ctx.fillRect(k.side ? wallR - 10 : wallL, k.y - 14, 10, 28);
+        ctx.fillStyle = "#ff5a48";
+        ctx.beginPath();
+        ctx.roundRect(k.side ? wallR - 9 : wallL + 1, k.y - 14, 8, 28, 4);
+        ctx.fill();
       }
       ctx.globalAlpha = 1;
-      for (const s of stars) PinballSkin.star(ctx, s.x, s.y, 9 + kick * 2);
+      for (const s of stars) Skin.star(ctx, s.x, s.y, 9 + kick * 2);
       const kp = Math.floor(camY / POP_STEP);
       for (let k = kp; k <= kp + Math.ceil(H / POP_STEP) + 1; k++) {
         const pop = Math.max(0, popped.get(k) || 0);
-        PinballSkin.bumper(ctx, popX(k, api), k * POP_STEP, 20, pop > 0.2 ? "#fff8e6" : col, pop);
+        Skin.bumper(ctx, popX(k, api), k * POP_STEP, 20, pop > 0.2 ? "#fff8e6" : col, pop);
       }
 
       // The landing ring: closes on the spot where the ball will meet the wall
@@ -346,7 +357,7 @@
           const k = Math.max(0, left) / 1.5;
           ctx.strokeStyle = left < 0.12 ? "#ffc400" : col;
           ctx.globalAlpha = 0.35 + 0.6 * (1 - k);
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 2.5;
           ctx.beginPath();
           ctx.arc(lx, ly, 14 + 44 * k, 0, TAU);
           ctx.stroke();
@@ -354,46 +365,32 @@
         }
       }
 
-      // The ball: a short trail, then steel (finish from your lifetime rank) and the charge arc
-      for (let i = 2; i < trail.length; i++) {
-        ctx.globalAlpha = 0.2 * (1 - i / trail.length);
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        ctx.arc(trail[i][0], trail[i][1], 9 * (1 - i / trail.length) + 2, 0, TAU);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      const ball = api.cached("ball" + api.rankKey, () => {
-        const [a, b2, c] = api.ballStops();
-        const g = ctx.createRadialGradient(-4, -4, 1, 0, 0, BALL);
-        g.addColorStop(0, a);
-        g.addColorStop(0.45, b2);
-        g.addColorStop(1, c);
-        return g;
-      });
+      // The ball: a faint motion streak, the ball (finish from your lifetime rank), the charge arc
+      Skin.streak(ctx, trail, BALL);
       const [x, y] = ballAt(now);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(spin);
-      ctx.fillStyle = ball;
-      ctx.beginPath();
-      ctx.arc(0, 0, BALL, 0, TAU);
-      ctx.fill();
+      Skin.ball(ctx, x, y, BALL, api.ballStops());
       if (spinV > 2) {
-        ctx.strokeStyle = "rgba(20,15,12,0.35)";
+        // The spin shows as a mark turning on the ball; its light stays put
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(spin);
+        ctx.strokeStyle = "rgba(20,15,12,0.3)";
         ctx.lineWidth = 2;
+        ctx.lineCap = "round";
         ctx.beginPath();
         ctx.arc(0, 0, BALL * 0.6, 0.3, 1.6);
         ctx.stroke();
+        ctx.restore();
       }
-      ctx.restore();
       if (api.charge > 0) {
         ctx.strokeStyle = api.charge > 0.85 ? "#ffc400" : col;
-        ctx.globalAlpha = 0.7;
-        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.75;
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = "round";
         ctx.beginPath();
         ctx.arc(x, y, 19 + 7 * api.charge, -Math.PI / 2, -Math.PI / 2 + TAU * api.charge);
         ctx.stroke();
+        ctx.lineCap = "butt";
         ctx.globalAlpha = 1;
       }
       ctx.restore();

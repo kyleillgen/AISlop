@@ -37,18 +37,23 @@
   html, body { margin: 0; height: 100%; overflow: hidden; background: #140f0c; color: #f6e6c0; font-family: Inter, system-ui, sans-serif; }
   #fs-canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
   .fs button { font: inherit; }
-  .fs-head { position: fixed; top: 0; left: 0; right: 0; z-index: 20; padding: 8px 10px; max-width: 42rem; margin: 0 auto; pointer-events: none; }
+  .fs-head { position: fixed; top: 0; left: 0; right: 0; z-index: 20; padding: 8px 8px; max-width: 42rem; margin: 0 auto; pointer-events: none; }
+  .fs-score { display: flex; align-items: center; flex: none; }
   .fs-state { flex: 1; min-width: 0; max-width: 220px; }
-  .fs-controls { display: flex; gap: 7px; pointer-events: auto; }
-  .fs .pb-btn.on { background: #ffc400 !important; }
-  @media (max-width: 520px) { .fs-voice, .pb-best { display: none; } .pb-cap .pb-badge.pb-mult { display: inline-block; } }
+  .fs-labelrow { display: flex; align-items: center; gap: 5px; min-width: 0; }
+  .fs-labelrow .pb-label { min-width: 0; }
+  .fs .pb-mult { flex: none; }
+  .fs .pb-mult:not(.ready) { display: none; }
+  .fs-controls { display: flex; gap: 5px; pointer-events: auto; }
+  @media (max-width: 520px) { .fs-voice, .pb-best { display: none; } .fs-controls { gap: 4px; } }
   .fs-over { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(20,15,12,.72); }
   .fs-over.show { display: flex; }
   .fs-hint { position: fixed; bottom: 26px; left: 0; right: 0; z-index: 10; text-align: center; pointer-events: none; transition: opacity .7s; }
   /* Attract mode: the game plays itself under a marquee until the first input */
   .fs-marquee { position: fixed; left: 0; right: 0; top: 34%; z-index: 15; text-align: center; pointer-events: none; transition: opacity .6s, transform .6s cubic-bezier(.34,1.56,.64,1); }
   .fs-marquee.gone { opacity: 0; transform: translateY(-12px) scale(.96); }
-  .fs-marquee-title { font-size: 46px !important; margin: 0 0 12px !important; animation: fs-breathe 2.4s ease-in-out infinite; }
+  .fs-marquee-title { font-size: 44px !important; letter-spacing: .12em !important; margin: 0 0 14px !important; animation: fs-breathe 2.4s ease-in-out infinite; }
+  .fs-marquee-rule { width: 28px; height: 2px; margin: -4px auto 14px; border-radius: 2px; background: #e8231f; }
   @keyframes fs-breathe { 50% { transform: scale(1.04); } }
   @media (prefers-reduced-motion: reduce) { .fs-marquee-title { animation: none; } }
   #fs-typer { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; }`;
@@ -65,7 +70,7 @@
     const actionKeys = typing ? [["a–z", "type"]] : [["Space", "play"]];
     const extraKeys = g.keys || [];
 
-    Skin.install();
+    Skin.install({ vignette: g.vignette }); // a game that bakes its own vignette passes vignette: false
     const style = document.createElement("style");
     style.textContent = CSS;
     document.head.appendChild(style);
@@ -74,8 +79,8 @@
     root.innerHTML = `
       <canvas id="fs-canvas"></canvas>
       <header class="fs-head"><div class="pb-bar">
-        <div><span class="pb-cap">Score <span class="pb-badge pb-mult" data-mult>1&times;</span></span><span class="pb-window" data-streak></span><span class="pb-best">high <b data-best>0</b></span></div>
-        <div class="fs-state"><span class="pb-label" data-label></span><div class="pb-lights" data-lights></div></div>
+        <div class="fs-score" title="Score"><span class="pb-window" data-streak></span><span class="pb-best">high <b data-best>0</b></span></div>
+        <div class="fs-state"><div class="fs-labelrow"><span class="pb-label" data-label></span><span class="pb-badge pb-mult" data-mult>1&times;</span></div><div class="pb-lights" data-lights></div></div>
         <div class="fs-controls">
           <button class="pb-btn" data-style title="Flow or fidget (${typing ? "\\" : "F"})"></button>
           <button class="pb-btn fs-voice" data-intensity title="Chill, normal or intense (\`)"></button>
@@ -87,6 +92,7 @@
       ${typing ? '<input id="fs-typer" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Type here">' : ""}
       <div class="fs-marquee" data-marquee>
         <div class="pb-title fs-marquee-title">${g.title}</div>
+        <div class="fs-marquee-rule"></div>
         <span class="pb-hint">${g.hint || (typing ? "Start typing" : "Tap or Space in a steady rhythm")}</span>
       </div>
       <div class="fs-over" data-pausecard><div style="text-align:center">
@@ -394,7 +400,7 @@
         clearTimeout(hintTimer);
         hintTimer = setTimeout(hideHint, 4500);
       },
-      callout(text, x, y, color = "#e2e8f0", scale = 1) {
+      callout(text, x, y, color = "#f6e6c0", scale = 1) {
         callouts.push({ text, x, y, vy: -0.55, a: 1, color, scale });
       },
       // dir -1 floats up, 1 falls with gravity. Sizes vary and fade on a curve, not a line.
@@ -623,7 +629,7 @@
         fn();
         hud();
       });
-    const note = (text, color) => api.callout(text, W / 2, 130, color || "#94a3b8", 0.95);
+    const note = (text, color) => api.callout(text, W / 2, 130, color || "#f6e6c0", 0.95);
     const cycleIntensity = () => setIntensity(INTENSITIES[(INTENSITIES.indexOf(intensity) + 1) % INTENSITIES.length]);
     press("[data-intensity]", cycleIntensity);
     press("[data-style]", toggleStyle);
