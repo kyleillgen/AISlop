@@ -17,8 +17,6 @@
 // goes left, late and it goes right. Knock the whole bank of targets down and it pays.
 //
 // Flow: a ring closes on the flipper the ball is heading for, and the ball lands as it closes.
-// A small upper flipper on the right fires with the pair, and catches a ball that is still high
-// when the beat comes, so nothing has to plummet the whole table to make the beat.
 // The clean window is about ±0.24 beat and "perfect" is ±0.08 (about ±45 ms). Flip well off the
 // mark and you whiff; miss it and the ball drops between the flippers, and the kickback in the
 // outlane fires it straight back into play. The ball is never lost.
@@ -53,21 +51,16 @@
   let lastBall = [0, 0];
 
   // Geometry, set on resize
-  let cx = 0, fy = 0, pivL = [0, 0], pivR = [0, 0], pivU = [0, 0], FL = 64;
-  const UK = 0.7; // the upper flipper's size against the main pair
+  let cx = 0, fy = 0, pivL = [0, 0], pivR = [0, 0], FL = 64;
   const TOP = 88; // the table starts below the score header
   const Y = (f) => TOP + f * (fy - TOP); // 0 top of the table .. 1 the flippers
   const DOWN = 0.5, UP = -0.42; // flipper angles (radians, left flipper; the right mirrors it)
   // Where the ball sits on a flipper: on its top surface (not its middle line), a little past
   // halfway along, for the flipper at angle a (down unless given)
-  // side 0 and 1 are the main pair; side 2 is the small upper flipper on the right, which every
-  // tap fires too, so a ball high on the table when the beat comes is played up there instead
-  // of falling the whole table
   function strike(side, a = DOWN) {
-    const k = side === 2 ? UK : 1;
-    const d = (FL + 10) * 0.62 * k;
-    const lift = (11 - 6 * 0.62) * k + 11 + 1; // bat half-thickness there + ball radius + a hair
-    const [px, py] = side === 2 ? pivU : side ? pivR : pivL;
+    const d = (FL + 10) * 0.62;
+    const lift = 11 - 6 * 0.62 + 11 + 1; // bat half-thickness there + ball radius + a hair
+    const [px, py] = side ? pivR : pivL;
     const m = side ? -1 : 1;
     return [px + m * (Math.cos(a) * d + Math.sin(a) * lift), py + Math.sin(a) * d - Math.cos(a) * lift];
   }
@@ -80,7 +73,6 @@
     FL = Math.max(52, Math.min(70, W * 0.16));
     pivL = [cx - FL - 14, fy - 22];
     pivR = [cx + FL + 14, fy - 22];
-    pivU = [Math.round(W * 0.84), Math.round(Y(0.28))];
     const ty = Math.round(Y(0.15));
     const span = Math.min(W - 140, 260); // clear of the orbit lane at the sides
     targets = Array.from({ length: NT }, (_, i) => {
@@ -130,10 +122,41 @@
   // carries it the rest of the way, arriving exactly at tEnd. So every shot goes somewhere different, and still lands on
   // the beat. aim (-1 left .. 1 right) tilts the launch; Flow sets it from how early or late you
   // flipped, the way the spot on a real flipper decides where the ball goes.
-  function shot(api, x, y, t0, tEnd, opts) {
+  // The inlanes: like a real machine, the ball comes home down a lane onto the flipper. It drops
+  // into the lane a beat before the flip and rolls down at a pace you can read, so the moment to
+  // flip is never a ball falling out of the sky. lane(side) gives the ball's path along the guide
+  // wire (offset by its radius) and on to the strike spot.
+  function lane(side) {
+    const W = cx * 2;
+    const [a0, a1] = side ? [[W - 30, fy - 110], pivR] : [[30, fy - 110], pivL];
+    const dx = a1[0] - a0[0], dy = a1[1] - a0[1], len = Math.hypot(dx, dy);
+    let nx = dy / len, ny = -dx / len;
+    if (ny > 0) (nx = -nx), (ny = -ny);
+    const r = 13.5; // ball radius plus the wire
+    const at = (f) => [a0[0] + dx * f + nx * r, a0[1] + dy * f + ny * r];
+    return { pts: [at(0.18), at(0.86), strike(side)], dir: [dx / len, dy / len] };
+  }
+  // Points for the roll down the lane, from tIn to tEnd (beats), gathering speed a little
+  function rollPts(side, tIn, tEnd) {
+    const L = lane(side).pts;
+    const d1 = Math.hypot(L[1][0] - L[0][0], L[1][1] - L[0][1]), d2 = Math.hypot(L[2][0] - L[1][0], L[2][1] - L[1][1]);
+    const out = [];
+    for (let k = 1; k <= 16; k++) {
+      const u = k / 16, f = (0.6 * u + 0.4 * u * u) * (d1 + d2);
+      const [p, q, w] = f <= d1 ? [L[0], L[1], f / d1] : [L[1], L[2], (f - d1) / d2];
+      out.push({ x: p[0] + (q[0] - p[0]) * w, y: p[1] + (q[1] - p[1]) * w, t: tIn + (tEnd - tIn) * u, straight: true, lane: true });
+    }
+    return { out, v0: (0.6 * (d1 + d2)) / ((tEnd - tIn) * 1) }; // entry speed, px per beat
+  }
+
+  function shot(api, x, y, t0, tEnd0, opts) {
     opts = opts || {};
     const { W } = api;
+    // The flight proper ends where the ball drops into the lane; the roll takes the rest
+    const rollB = Math.min(1, (tEnd0 - t0) * 0.4);
+    const tEnd = tEnd0 - rollB;
     const secs = Math.max(0.25, (tEnd - t0) * api.eng.beatSec);
+    const strike = (side) => lane(side).pts[0];
     const span = fy - TOP;
     const g = 2.6 * span; // px/s²
     const land = Math.min(0.3, secs * 0.25);
@@ -141,15 +164,8 @@
     const aim0 = opts.aim !== undefined ? opts.aim : (Math.random() * 2 - 1) * 0.6;
     const DT = 1 / 120;
     // One candidate flight: launch at a given aim and let it ricochet until the steer takes over
-    const [ux, uy] = strike(2);
-    const fromUpper = Math.hypot(x - ux, y - uy) < 6;
-    // The upper flipper as a solid bat for flights that aren't coming to it
-    const ua = DOWN, uL = (FL + 10) * UK;
-    const uTip = [pivU[0] - Math.cos(ua) * uL, pivU[1] + Math.sin(ua) * uL];
     function fly(aim) {
-      const a = fromUpper
-        ? -Math.PI / 2 - 0.55 + aim * 0.35 + (Math.random() - 0.5) * 0.16
-        : -Math.PI / 2 + (x < cx ? 0.2 : -0.2) + aim * 0.5 + (Math.random() - 0.5) * 0.16;
+      const a = -Math.PI / 2 + (x < cx ? 0.2 : -0.2) + aim * 0.5 + (Math.random() - 0.5) * 0.16;
       const v0 = Math.sqrt(2 * g * Math.max(90, y - TOP) * 0.88);
       let vx = Math.cos(a) * v0, vy = Math.sin(a) * v0;
       const knocked = new Set();
@@ -182,18 +198,6 @@
             mark(b);
           }
         }
-        // The upper flipper's bat (skipped just after leaving it)
-        if (tt > 0.15) {
-          const sx0 = uTip[0] - pivU[0], sy0 = uTip[1] - pivU[1], l2 = sx0 * sx0 + sy0 * sy0;
-          const w = Math.max(0, Math.min(1, ((px - pivU[0]) * sx0 + (py - pivU[1]) * sy0) / l2));
-          const qx = px - (pivU[0] + sx0 * w), qy = py - (pivU[1] + sy0 * w), d = Math.hypot(qx, qy);
-          if (d < 19 && d > 0) {
-            const nx = qx / d, ny = qy / d, vn = vx * nx + vy * ny;
-            if (vn < 0) (vx -= 1.8 * vn * nx), (vy -= 1.8 * vn * ny);
-            px += nx * (19 - d);
-            py += ny * (19 - d);
-          }
-        }
         // Drop targets knock down and bounce it back
         for (const t of targets) {
           if (!t.up || knocked.has(t)) continue;
@@ -214,37 +218,27 @@
         if (sp > 1500) (vx *= 1500 / sp), (vy *= 1500 / sp);
         if (i % 2 === 0) samples.push({ x: px, y: py, s: tt, vx, vy });
       }
-      // Where the steer takes over for a given flipper: late, but never so late that the ball
-      // would have to come down faster than it could fall from there. The cost is how far plain
-      // gravity would leave it from the flipper, plus a little for every extra moment of steer
-      const fit = (side) => {
-        const [tx, ty] = strike(side);
-        let k = samples.length - 1;
-        for (; k > 0; k--) {
-          const q = samples[k], r = secs - q.s;
-          const up = Math.max(0, -q.vy) / g; // still rising: the time to stop climbing
-          const fall = up + Math.sqrt((2 * Math.max(0, ty - q.y + 0.5 * g * up * up)) / g);
-          if (r >= Math.max(land, fall * 1.05, Math.hypot(tx - q.x, ty - q.y) / (1.6 * span))) break;
-        }
+      // Where the steer takes over: late, but never so late that the ball would have to come
+      // down faster than it could fall from there, so a ball high on the table when the beat
+      // is due drops at its natural pace instead of being yanked onto the flipper
+      let k = samples.length - 1;
+      const side0 = opts.side;
+      for (; k > 0; k--) {
         const q = samples[k], r = secs - q.s;
-        const fx = q.x + q.vx * r, fyy = q.y + q.vy * r + 0.5 * g * r * r;
-        return { side, k, r, q, fx, cost: Math.hypot(fx - tx, fyy - ty) + 120 * Math.max(0, r - land) };
-      };
-      // The nearer of the main pair (or the one asked for); and a ball still high on the table
-      // near the beat, above the upper flipper, can come down onto that one instead of dropping
-      // the whole table (not straight back to it from itself, unless that's the natural way)
-      let f = fit(opts.side !== undefined ? opts.side : samples[samples.length - 1].x < cx ? 0 : 1);
-      if (opts.side === undefined) {
-        const o = fit(1 - f.side);
-        if (o.cost < f.cost) f = o;
-        const u = fit(2);
-        if (u.q.y < uy - 8) {
-          u.cost += fromUpper ? 60 : 0;
-          if (u.cost < f.cost) f = u;
-        }
+        const [tx, ty] = strike(side0 !== undefined ? side0 : q.x < cx ? 0 : 1);
+        const up = Math.max(0, -q.vy) / g; // still rising: the time to stop climbing
+        const fall = up + Math.sqrt((2 * Math.max(0, ty - q.y + 0.5 * g * up * up)) / g);
+        if (r >= Math.max(land, fall * 1.05, Math.hypot(tx - q.x, ty - q.y) / (1.6 * span))) break;
       }
-      const [sx, sy] = strike(f.side);
-      return { samples: samples.slice(0, f.k + 1), px: f.q.x, py: f.q.y, vx: f.q.vx, vy: f.q.vy, r: f.r, side: f.side, sx, sy, cost: f.cost };
+      samples.length = k + 1;
+      const q = samples[k], r = secs - q.s;
+      // How much steering it would need: where plain gravity would carry it by tEnd, compared
+      // with the nearer flipper (or the one asked for)
+      const fx = q.x + q.vx * r, fyy = q.y + q.vy * r + 0.5 * g * r * r;
+      const side = side0 !== undefined ? side0 : fx < cx ? 0 : 1;
+      const [sx, sy] = strike(side);
+      // A long steer reads as scripted, so prefer flights already on their way down
+      return { samples, px: q.x, py: q.y, vx: q.vx, vy: q.vy, r, side, sx, sy, cost: Math.hypot(fx - sx, fyy - sy) + 120 * Math.max(0, r - land) };
     }
     // Try a dozen launches around the chosen aim and keep the one that comes down most naturally,
     // so the final steer is barely there
@@ -254,9 +248,11 @@
       if (c.cost < best.cost) best = c;
     }
     const { samples, px, py, vx, vy, r, side, sx, sy } = best;
-    // The steer: a smooth (Hermite) curve onto the flipper, leaving with the ball's own velocity
-    // and arriving the way gravity would bring it
-    const ex = vx * 0.6 + (side === 2 ? -20 : side ? -40 : 40), ey = Math.min(Math.max(300, vy + g * r), Math.sqrt(2 * g * span));
+    // The steer: a smooth (Hermite) curve into the lane, leaving with the ball's own velocity and
+    // arriving already rolling down the lane
+    const roll = rollPts(side, tEnd, tEnd0), dir = lane(side).dir;
+    const vIn = roll.v0 / api.eng.beatSec;
+    const ex = dir[0] * vIn, ey = dir[1] * vIn + 160;
     const s0 = samples[samples.length - 1].s;
     const steps = Math.max(18, Math.round(r * 50));
     for (let k = 1; k <= steps; k++) {
@@ -264,8 +260,8 @@
       const h00 = 2 * u ** 3 - 3 * u * u + 1, h10 = u ** 3 - 2 * u * u + u, h01 = -2 * u ** 3 + 3 * u * u, h11 = u ** 3 - u * u;
       samples.push({ x: h00 * px + h10 * T * vx + h01 * sx + h11 * T * ex, y: h00 * py + h10 * T * vy + h01 * sy + h11 * T * ey, s: s0 + (secs - s0) * u });
     }
-    const pts = samples.map((q) => ({ x: q.x, y: q.y, t: t0 + (q.s / secs) * (tEnd - t0), straight: true, hit: q.hit, sling: q.sling }));
-    path = Object.assign({ pts, next: 1, kind: "shot", side, whiffed: false }, opts, { side });
+    const pts = samples.map((q) => ({ x: q.x, y: q.y, t: t0 + (q.s / secs) * (tEnd - t0), straight: true, hit: q.hit, sling: q.sling })).concat(roll.out);
+    path = Object.assign({ pts, next: 1, kind: "shot", side, whiffed: false, laneT: tEnd }, opts, { side });
     rest = null;
   }
 
@@ -716,6 +712,19 @@
 
       // The landing ring: closes on the flipper the ball is heading for, shut as it lands
       const T = arrivalT();
+      // The inlane lights while the ball rolls home down it
+      if (T !== null && path.laneT !== undefined && now >= path.laneT - 0.1 && now < T + 0.15) {
+        const L = lane(path.side).pts;
+        ctx.strokeStyle = col;
+        ctx.globalAlpha = 0.55 * Math.min(1, (now - path.laneT + 0.1) / 0.2);
+        ctx.lineWidth = 4;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(L[0][0], L[0][1] + 13);
+        ctx.lineTo(L[1][0], L[1][1] + 13);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       if (T !== null && !path.whiffed && api.style === "flow") {
         const left = T - now;
         if (left < 1.5 && left > -0.3) {
@@ -774,13 +783,12 @@
         g.fill();
       });
       const a = DOWN + (UP - DOWN) * flipAng;
-      for (const s of [0, 1, 2]) {
-        const [px, py] = s === 2 ? pivU : s ? pivR : pivL;
-        const k = s === 2 ? UK : 1;
+      for (const s of [0, 1]) {
+        const [px, py] = s ? pivR : pivL;
         for (const [sp, dx, dy] of [[shadow, 2, 4], [body, 0, 0]]) {
           ctx.save();
           ctx.translate(px + dx, py + dy);
-          ctx.scale(s ? -k : k, k);
+          ctx.scale(s ? -1 : 1, 1);
           ctx.rotate(a);
           Skin.draw(ctx, sp, 0, 0);
           ctx.restore();
