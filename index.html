@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <link rel="icon" href="data:,">
     <title>FLOW // RESONANCE - Cadence Entrainment Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
@@ -50,7 +51,7 @@
     <header id="hudHeader" class="absolute top-0 left-0 right-0 z-20 p-2 sm:p-3 pointer-events-none flex flex-col gap-1.5 max-w-2xl mx-auto">
         
         <!-- Primary Card: Streak, Tier/Shield, Resonance Meter, and Live Controls -->
-        <div class="flex items-center justify-between gap-2 bg-slate-950/85 backdrop-blur-xl border border-slate-800/90 rounded-2xl px-3 py-2 shadow-2xl">
+        <div class="flex items-center justify-between gap-2 bg-slate-950/90 border border-slate-800/90 rounded-2xl px-3 py-2">
             
             <!-- Left: Streak & Rechargeable Shield Indicator -->
             <div class="flex items-center gap-2.5">
@@ -79,13 +80,13 @@
                 </div>
             </div>
 
-            <!-- Right: Groove Voice Selector, Cadence Lock & Audio Mute (Pointer Events Enabled) -->
+            <!-- Right: Track, Groove Voice & Audio Mute (cadence lock lives on the L key) -->
             <div class="flex items-center gap-1 sm:gap-1.5 pointer-events-auto">
-                <button id="voiceBtn" type="button" title="Switch Musical Groove Voice" class="px-2 sm:px-2.5 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-indigo-950/90 text-indigo-300 border-indigo-500/50 shadow-[0_0_12px_rgba(99,102,241,0.25)]">
-                    LO-FI RHODES
+                <button id="trackBtn" type="button" title="Switch track (T)" class="px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[10px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-slate-900/90 text-cyan-300 border-slate-700/70">
+                    <span id="phraseReadout">MIDNIGHT</span>
                 </button>
-                <button id="lockCadenceBtn" type="button" title="Freeze Current Speed & Cadence" class="px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-slate-900/90 text-slate-300 border-slate-700/70">
-                    AUTO SYNC
+                <button id="voiceBtn" type="button" title="Switch groove voice (V)" class="px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[10px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-slate-900/90 text-indigo-300 border-slate-700/70">
+                    LO-FI RHODES
                 </button>
                 <button id="muteBtn" type="button" aria-label="Toggle Audio" class="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/70 transition-all active:scale-95">
                     <svg id="speakerOnIcon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -99,25 +100,6 @@
             </div>
         </div>
 
-        <!-- Secondary Row: Resonance & Phrase Telemetry Pills -->
-        <div class="grid grid-cols-4 gap-1.5">
-            <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
-                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">CADENCE</span>
-                <span id="bpmReadout" class="text-[11px] font-mono-tech font-bold text-emerald-300">108 BPM</span>
-            </div>
-            <button id="trackBtn" type="button" title="Switch track (T)" class="pointer-events-auto bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between active:scale-95 transition-transform">
-                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">TRACK</span>
-                <span id="phraseReadout" class="text-[11px] font-mono-tech font-bold text-cyan-300 truncate ml-1">MIDNIGHT</span>
-            </button>
-            <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
-                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">CHORD</span>
-                <span id="chordReadout" class="text-[11px] font-mono-tech font-bold text-fuchsia-300">Dmin9</span>
-            </div>
-            <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
-                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">TIER</span>
-                <span id="tierReadout" class="text-[11px] font-mono-tech font-bold text-amber-300">TIER 1 / 4</span>
-            </div>
-        </div>
     </header>
 
     <!-- Bottom Subtle Guidance Banner -->
@@ -370,6 +352,21 @@
                     this.cushionedFilterTimer = 2.0;
                 }
 
+                // Signed seconds from the nearest eighth-note (+ = late). Used for calibration
+                // and phase following; eighths because required actions are never finer.
+                getBeatOffset(atTime) {
+                    if (!this.lastBeatTime || !this.beatSec) return null;
+                    const half = this.beatSec / 2;
+                    const rel = (atTime - this.lastBeatTime) / half;
+                    return (rel - Math.round(rel)) * half;
+                }
+
+                // Light phase following: slide the grid a little toward the player's taps
+                nudgePhase(sec) {
+                    this.nextStepTime += sec;
+                    this.lastBeatTime += sec;
+                }
+
                 updateSynesthesia(flowIndex, tier, bpm, dt) {
                     if (!this.isInitialized || !this.ctx) return;
                     const now = this.ctx.currentTime;
@@ -398,19 +395,22 @@
                 }
 
                 // Immediate warm tactile transient + queues a quantized lead note on the next 16th subdivision
-                queueQuantizedTap(heightNorm, tier) {
+                queueQuantizedTap(heightNorm, tier, leadNote = true) {
                     if (!this.isInitialized || this.isMuted) return;
                     const now = this.ctx.currentTime;
                     const chord = CHORD_PROGRESSION[this.chordIndex];
                     const clampedH = Math.max(0, Math.min(1, 1 - heightNorm));
 
-                    // Queue for the 16th-note grid scheduler so it lands 100% in time and in key
-                    this.queuedTapNotes.push({
-                        heightNorm: clampedH,
-                        tier
-                    });
-                    if (this.queuedTapNotes.length > 2) {
-                        this.queuedTapNotes.shift();
+                    // Queue for the 16th-note grid scheduler so it lands 100% in time and in key.
+                    // Skipped while calibrating: a grid-snapped echo would bias the player's timing
+                    if (leadNote) {
+                        this.queuedTapNotes.push({
+                            heightNorm: clampedH,
+                            tier
+                        });
+                        if (this.queuedTapNotes.length > 2) {
+                            this.queuedTapNotes.shift();
+                        }
                     }
 
                     // Immediate soft tactile body resonance (sub-octave warm air impulse)
@@ -538,6 +538,7 @@
                     if (!this.isInitialized || !this.ctx) return;
                     const now = this.ctx.currentTime;
                     const secondsPerBeat = 60.0 / Math.max(88, Math.min(136, bpm));
+                    this.beatSec = secondsPerBeat;
                     const sixteenthDuration = secondsPerBeat / 4.0;
 
                     if (this.nextStepTime < now - 0.2) {
@@ -551,7 +552,9 @@
                             this.barCount++;
                             // Cycle through the 4-chord progression (faster cycling in Tier 4 for lush movement)
                             const barsPerChord = tier >= 4 ? 1 : 2;
-                            if (this.barCount % barsPerChord === 0) {
+                            if (this.holdTonic) {
+                                this.chordIndex = 0; // stopping cue: resolve home and stay there
+                            } else if (this.barCount % barsPerChord === 0) {
                                 this.chordIndex = (this.chordIndex + 1) % CHORD_PROGRESSION.length;
                             }
                         }
@@ -560,8 +563,9 @@
                 }
 
                 scheduleStep(step, time, flowIndex, tier, callbacks) {
-                    if (step % 4 === 0 && callbacks && callbacks.onQuarterBeat) {
-                        callbacks.onQuarterBeat(step / 4);
+                    if (step % 4 === 0) {
+                        this.lastBeatTime = time;
+                        if (callbacks && callbacks.onQuarterBeat) callbacks.onQuarterBeat(step / 4);
                     }
                     if (callbacks && callbacks.onSixteenth) {
                         callbacks.onSixteenth(step);
@@ -693,7 +697,7 @@
             // 2. HARMONIC WAVE PATTERNS & CADENCE SYNCHRONIZATION STATE
             // ============================================================================
             const canvas = document.getElementById("gameCanvas");
-            const ctx = canvas.getContext("2d");
+            const ctx = canvas.getContext("2d", { alpha: false });
             const synth = new CoCreationResonanceSynth();
 
             // DOM Elements
@@ -706,14 +710,10 @@
             const flowPctDisplay = document.getElementById("flowPctDisplay");
             const flowBarFill = document.getElementById("flowBarFill");
             const voiceBtn = document.getElementById("voiceBtn");
-            const lockCadenceBtn = document.getElementById("lockCadenceBtn");
             const muteBtn = document.getElementById("muteBtn");
             const speakerOnIcon = document.getElementById("speakerOnIcon");
             const speakerOffIcon = document.getElementById("speakerOffIcon");
-            const bpmReadout = document.getElementById("bpmReadout");
             const phraseReadout = document.getElementById("phraseReadout");
-            const chordReadout = document.getElementById("chordReadout");
-            const tierReadout = document.getElementById("tierReadout");
             const touchHint = document.getElementById("touchHint");
 
             let width = window.innerWidth;
@@ -741,8 +741,19 @@
                 { name: "SOLAR GOLD & AMBER FLARE", stops: ["#1a1004", "#3d2706", "#6b4210"] },
                 { name: "DEEP COSMOS PRISM", stops: ["#0a0420", "#1d0b3d", "#0b3a4a"] }
             ];
+            const PARAMS = new URLSearchParams(window.location.search);
+            const PHASE_FOLLOW = PARAMS.get("phase") !== "frozen"; // A/B: frozen grid vs alpha 0.2 following
+            const MILESTONES = PARAMS.get("milestones") !== "off"; // A/B: milestone callouts on vs off
+            const PHASE_ALPHA = 0.2; // brief: correct 10-30% of each tap's timing error
+
+            // Milestone progress persists across short sessions, so leaving mid-epoch costs
+            // nothing (brief: milestones must not create "protect the streak" pressure)
+            const PROGRESS_KEY = "flowResonanceProgress";
             let runPeak = 0;
-            let epochPos = 0;
+            try {
+                runPeak = Math.max(0, parseInt(localStorage.getItem(PROGRESS_KEY) || "0", 10) || 0);
+            } catch (e) {}
+            let epochPos = Math.min(runPeak / 500, 4);
 
             function getTierBackdropStops(tier) {
                 if (tier === 4) return ["#0b041d", "#190a36", "#061d2c"];
@@ -946,8 +957,11 @@
 
                         // Convert player's natural inter-tap interval into a resonant BPM (clamped 96 - 124 BPM)
                         const rawBpm = 60000 / meanMs;
-                        // Handle half-time taps smoothly
-                        const normalizedBpm = rawBpm < 88 ? rawBpm * 1.5 : rawBpm > 140 ? rawBpm * 0.75 : rawBpm;
+                        // Fold half- and double-time tappers into the band by octaves (brief: fold
+                        // ~50-62 and ~192-248 BPM rather than forcing them)
+                        let normalizedBpm = rawBpm;
+                        if (normalizedBpm < 96 && normalizedBpm * 2 <= 136) normalizedBpm *= 2;
+                        else if (normalizedBpm > 124 && normalizedBpm / 2 >= 88) normalizedBpm /= 2;
                         const clampedBpm = Math.max(96, Math.min(124, normalizedBpm));
                         flowCtrl.detectedCadenceBpm =
                             flowCtrl.detectedCadenceBpm * 0.82 + clampedBpm * 0.18;
@@ -955,6 +969,144 @@
                         flowCtrl.tapCount++;
                     }
                 }
+            }
+
+            // ============================================================================
+            // MEASUREMENT (local only; nothing is sent anywhere). Behavioural proxies from the
+            // brief: tap-interval variability, asynchrony to the beat, burst length, slowing
+            // after a clip. window.flowTelemetry() returns the stored sessions.
+            // ============================================================================
+            const TELEMETRY_KEY = "flowResonanceTelemetry";
+            const telemetry = {
+                startedAt: Date.now(),
+                variant: { phase: PHASE_FOLLOW ? "follow" : "frozen", milestones: MILESTONES ? "on" : "off" },
+                activeSec: 0,
+                intervals: [],
+                asyncs: [],
+                bursts: [],
+                burstTaps: 0,
+                lastTapMs: 0,
+                clips: [],
+                check: null
+            };
+
+            function recentIntervals(n) {
+                const a = telemetry.intervals.slice(-n);
+                return a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+            }
+
+            function recordTapTelemetry(nowMs) {
+                const gap = telemetry.lastTapMs ? nowMs - telemetry.lastTapMs : Infinity;
+                telemetry.lastTapMs = nowMs;
+                if (gap > 1800) {
+                    // A pause longer than 1.8 s ends a burst
+                    if (telemetry.burstTaps > 1) telemetry.bursts.push(telemetry.burstTaps);
+                    telemetry.burstTaps = 1;
+                    return;
+                }
+                telemetry.burstTaps++;
+                telemetry.intervals.push(gap);
+                // Fill in the tap pace just after each clip once three more intervals exist
+                telemetry.clips.forEach((c) => {
+                    if (c.after === null && telemetry.intervals.length - c.index >= 3) c.after = recentIntervals(3);
+                });
+            }
+
+            function stats(a) {
+                if (a.length < 2) return { mean: null, sd: null };
+                const mean = a.reduce((x, y) => x + y, 0) / a.length;
+                const sd = Math.sqrt(a.reduce((acc, v) => acc + (v - mean) ** 2, 0) / a.length);
+                return { mean, sd };
+            }
+
+            function summarizeTelemetry() {
+                const iv = stats(telemetry.intervals);
+                const as = stats(telemetry.asyncs);
+                const bursts = telemetry.bursts.concat(telemetry.burstTaps > 1 ? [telemetry.burstTaps] : []);
+                const slowing = telemetry.clips.filter((c) => c.before && c.after).map((c) => c.after / c.before);
+                return {
+                    startedAt: new Date(telemetry.startedAt).toISOString(),
+                    variant: telemetry.variant,
+                    activeSec: Math.round(telemetry.activeSec),
+                    taps: telemetry.intervals.length,
+                    intervalCv: iv.mean ? +(iv.sd / iv.mean).toFixed(3) : null,
+                    asyncMeanMs: as.mean !== null ? Math.round(as.mean * 1000) : null,
+                    asyncSdMs: as.sd !== null ? Math.round(as.sd * 1000) : null,
+                    bursts,
+                    clips: telemetry.clips.length,
+                    postClipSlowing: slowing.length ? +(slowing.reduce((x, y) => x + y, 0) / slowing.length).toFixed(3) : null,
+                    lockedBpm: +flowCtrl.bpm.toFixed(1),
+                    peak: runPeak,
+                    check: telemetry.check
+                };
+            }
+
+            function saveTelemetry() {
+                if (telemetry.activeSec < 5) return;
+                try {
+                    const all = JSON.parse(localStorage.getItem(TELEMETRY_KEY) || "[]");
+                    const summary = summarizeTelemetry();
+                    const i = all.findIndex((x) => x.startedAt === summary.startedAt);
+                    if (i >= 0) all[i] = summary;
+                    else all.push(summary);
+                    localStorage.setItem(TELEMETRY_KEY, JSON.stringify(all.slice(-50)));
+                } catch (e) {}
+            }
+            window.flowTelemetry = () => {
+                try {
+                    return JSON.parse(localStorage.getItem(TELEMETRY_KEY) || "[]");
+                } catch (e) {
+                    return [];
+                }
+            };
+
+            // About one session in five, at a natural stopping point (entering auto glide) after
+            // at least 45 s of play: two flow items (fluency, absorption; 1-7) and a time
+            // estimate. Answers stay on this device with the session's numbers.
+            let flowCheckEl = null;
+            function maybeAskFlowCheck() {
+                if (telemetry.check || flowCheckEl || telemetry.activeSec < 45) return;
+                let count = 0;
+                try {
+                    count = (parseInt(localStorage.getItem("flowResonanceSessions") || "0", 10) || 0) + 1;
+                    localStorage.setItem("flowResonanceSessions", String(count));
+                } catch (e) {}
+                telemetry.check = "skipped";
+                if (count % 5 !== 0) return;
+                const scale = (name) =>
+                    `<div style="display:flex;gap:4px;margin:6px 0 10px">${[1, 2, 3, 4, 5, 6, 7]
+                        .map((n) => `<button data-q="${name}" data-v="${n}" style="flex:1;padding:6px 0;border-radius:6px;border:1px solid #334155;background:#0f172a;color:#cbd5e1;font:600 12px monospace">${n}</button>`)
+                        .join("")}</div>`;
+                flowCheckEl = document.createElement("div");
+                flowCheckEl.style.cssText =
+                    "position:fixed;left:50%;bottom:16px;transform:translateX(-50%);width:min(340px,calc(100vw - 32px));z-index:50;background:#020617;border:1px solid #1e293b;border-radius:12px;padding:12px 14px;color:#cbd5e1;font:12px system-ui,sans-serif";
+                flowCheckEl.innerHTML =
+                    `<div style="display:flex;justify-content:space-between;margin-bottom:6px"><b style="color:#e2e8f0">Quick check (optional)</b><button data-close style="background:none;border:0;color:#64748b;font-size:14px">✕</button></div>` +
+                    `<div>My tapping ran fluidly and smoothly <span style="color:#64748b">(1 no – 7 yes)</span></div>${scale("fluency")}` +
+                    `<div>I was absorbed and lost track of time <span style="color:#64748b">(1–7)</span></div>${scale("absorption")}` +
+                    `<label>About how many minutes did that feel like? <input data-est type="number" min="0" step="0.5" style="width:60px;margin-left:4px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#e2e8f0;padding:2px 4px"></label>`;
+                telemetry.check = { fluency: null, absorption: null, estimatedMin: null, actualMin: +(telemetry.activeSec / 60).toFixed(2) };
+                flowCheckEl.addEventListener("pointerdown", (e) => e.stopPropagation());
+                flowCheckEl.addEventListener("keydown", (e) => e.stopPropagation());
+                flowCheckEl.addEventListener("click", (e) => {
+                    const b = e.target.closest("button");
+                    if (!b) return;
+                    if (b.hasAttribute("data-close")) return closeFlowCheck();
+                    telemetry.check[b.dataset.q] = +b.dataset.v;
+                    flowCheckEl.querySelectorAll(`[data-q="${b.dataset.q}"]`).forEach((x) => (x.style.background = x === b ? "#155e75" : "#0f172a"));
+                    saveTelemetry();
+                });
+                flowCheckEl.querySelector("[data-est]").addEventListener("input", (e) => {
+                    telemetry.check.estimatedMin = parseFloat(e.target.value) || null;
+                    saveTelemetry();
+                });
+                document.body.appendChild(flowCheckEl);
+            }
+            function closeFlowCheck() {
+                if (!flowCheckEl) return;
+                saveTelemetry();
+                flowCheckEl.remove();
+                flowCheckEl = null;
             }
 
             function incrementStreak(amount) {
@@ -975,8 +1127,13 @@
                     const prevEpoch = Math.floor(runPeak / EPOCH_SPAN);
                     const wasPlatinum = runPeak >= PLATINUM_AT;
                     runPeak = streak;
+                    try {
+                        localStorage.setItem(PROGRESS_KEY, String(runPeak));
+                    } catch (e) {}
                     const newEpoch = Math.floor(runPeak / EPOCH_SPAN);
-                    if (!wasPlatinum && runPeak >= PLATINUM_AT) {
+                    if (!MILESTONES) {
+                        // Off arm: the world still evolves, silently
+                    } else if (!wasPlatinum && runPeak >= PLATINUM_AT) {
                         spawnCallout("PLATINUM", width * 0.5, height * 0.3, "#f1f5f9", 1.35);
                         spawnBeatRing(bird.x, bird.y, 320, "#e2e8f0");
                         spawnParticles(bird.x, bird.y, "#f8fafc", 40);
@@ -989,7 +1146,7 @@
                     }
                 }
 
-                if (flowCtrl.tier > prevTier) {
+                if (MILESTONES && flowCtrl.tier > prevTier) {
                     const tierNames = [
                         "",
                         "TIER 1 • CALIBRATING",
@@ -1008,7 +1165,6 @@
                     if (flowCtrl.shieldCharge >= 0.999) {
                         flowCtrl.shieldCharge = 1.0;
                         flowCtrl.shieldReady = true;
-                        spawnCallout("FLOW SHIELD CHARGED", bird.x + 25, bird.y - 32, "#38bdf8", 1.08);
                     }
                 }
             }
@@ -1025,17 +1181,17 @@
                     // Shield absorbs the clip with zero streak loss!
                     flowCtrl.shieldReady = false;
                     flowCtrl.shieldCharge = 0.0;
-                    spawnCallout("SHIELD GLIDE • STREAK INTACT", bird.x + 28, bird.y - 28, "#38bdf8", 1.1);
                 } else {
                     // Unshielded clip: gently step down 25% (or 1 tier step) instead of wiping to 0
                     streak = Math.max(0, Math.floor(streak * 0.75));
                     streakDisplay.textContent = streak;
                     flowCtrl.tier = computeTierFromStreak(streak);
-                    spawnCallout("SOFT CUSHION • KEEP GROOVING", bird.x + 28, bird.y - 28, "#a78bfa", 1.05);
                 }
 
                 // A clip means the challenge is outpacing the player right now: raise the assist
                 flowCtrl.assist = Math.min(1, flowCtrl.assist + 0.35);
+                phraseClean = false;
+                telemetry.clips.push({ index: telemetry.intervals.length, before: recentIntervals(3), after: null });
 
                 flowCtrl.bulletTimeTimer = 0.45;
                 bird.ghostTimer = 1.15;
@@ -1069,10 +1225,11 @@
 
                 // Calibrated = the tempo has actually reached the player's own cadence (and the
                 // scroll speed has followed), not just that a few seconds have passed. A long run
-                // of steady taps locks regardless, so an unusual cadence can't stall it forever.
+                // of steady taps locks once the tempo is close, so an unusual cadence can't stall it
+                // forever (but a re-sync still finishes its slow walk before re-locking).
                 const matchedVxNow = 2.85 + ((flowCtrl.bpm - 96) / 28) * 0.55;
                 const calibrated =
-                    flowCtrl.tapCount >= 24 ||
+                    (flowCtrl.tapCount >= 24 && Math.abs(flowCtrl.bpm - flowCtrl.detectedCadenceBpm) < 3) ||
                     (flowCtrl.tapCount >= (flowCtrl.savedTempo ? 4 : 8) &&
                         Math.abs(flowCtrl.detectedCadenceBpm - flowCtrl.recentCadenceBpm) < 1.5 &&
                         Math.abs(flowCtrl.bpm - flowCtrl.recentCadenceBpm) < 2 &&
@@ -1088,7 +1245,7 @@
                 const drifted = flowCtrl.driftTimer > 4;
                 if (drifted) {
                     flowCtrl.tapCount = Math.min(flowCtrl.tapCount, 6);
-                    spawnCallout("RE-SYNCING TO YOUR RHYTHM", width * 0.5, height * 0.30, "#7dd3fc", 1.0);
+                    flowCtrl.resyncing = true;
                 }
 
                 flowCtrl.resonanceLocked =
@@ -1096,7 +1253,7 @@
                     (flowCtrl.flowIndex >= 0.75 && (wasLocked ? !drifted : calibrated));
 
                 if (flowCtrl.resonanceLocked && !wasLocked && !flowCtrl.manualLock) {
-                    spawnCallout("RESONANCE LOCKED • SWEET SPOT FROZEN", width * 0.5, height * 0.30, "#34d399", 1.12);
+                    spawnCallout("LOCKED IN", width * 0.5, height * 0.30, "#34d399", 1.1);
                     try {
                         localStorage.setItem(TEMPO_KEY, flowCtrl.bpm.toFixed(1));
                     } catch (e) {}
@@ -1104,8 +1261,15 @@
 
                 // When NOT locked yet, gently adapt BPM & horizontal speed to match player's natural cadence
                 // Once locked (Flow >= 75% or Manual Lock), physics FREEZE at that exact effortless sweet spot!
+                if (flowCtrl.resonanceLocked) flowCtrl.resyncing = false;
                 if (!flowCtrl.resonanceLocked) {
-                    flowCtrl.bpm += (flowCtrl.detectedCadenceBpm - flowCtrl.bpm) * Math.min(1.0, dt * 1.4);
+                    // Tempo moves at most 3% per bar while first calibrating and 1.5% per bar when
+                    // re-syncing, so changes stay below what players notice (brief: tempo correction
+                    // is slow and conscious; keep steps sub-threshold)
+                    const barSec = (4 * 60) / Math.max(88, flowCtrl.bpm);
+                    const maxStep = ((flowCtrl.resyncing ? 0.015 : 0.03) * flowCtrl.bpm * dt) / barSec;
+                    const wanted = (flowCtrl.detectedCadenceBpm - flowCtrl.bpm) * Math.min(1.0, dt * 1.4);
+                    flowCtrl.bpm += Math.max(-maxStep, Math.min(maxStep, wanted));
                     const matchedVx = 2.85 + ((flowCtrl.bpm - 96) / 28) * 0.55;
                     flowCtrl.vx += (matchedVx - flowCtrl.vx) * Math.min(1.0, dt * 1.2);
                 }
@@ -1115,7 +1279,7 @@
                 // felt, not noticed. It only ever helps: gaps widen from 175px (never narrower;
                 // applied to pipes as they spawn off-screen) and buoyancy toward the ribbon
                 // strengthens. Help rises fast (each clip) and falls slowly.
-                flowCtrl.assist = Math.max(0, flowCtrl.assist - dt * 0.012);
+                flowCtrl.assist = Math.max(0, flowCtrl.assist - dt * 0.03); // full help fades over ~15 clean bars
                 const assistStep = 0.08 * dt;
                 flowCtrl.assistApplied += Math.max(-assistStep, Math.min(assistStep, flowCtrl.assist - flowCtrl.assistApplied));
                 flowCtrl.gapHeight = 175 + 26 * flowCtrl.assistApplied;
@@ -1224,8 +1388,10 @@
 
             function evaluatePipePass(pipe) {
                 const deltaY = Math.abs(bird.y - pipe.gapY);
-                const halfGap = pipe.gapHeight * 0.5;
-                const normDist = deltaY / Math.max(halfGap, 45);
+                // Judged against the baseline gap, so a gap the assist widened never widens
+                // the "perfect" band (brief: fixed perfect window; assist helps survival only)
+                const halfGap = 175 * 0.5;
+                const normDist = deltaY / halfGap;
 
                 // Each pass tells the assist how it's going: centred passes let it back off,
                 // edge grazes ask for a little more help. The "perfect" window itself stays fixed
@@ -1243,14 +1409,12 @@
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.055);
                     synth.playPipeHarmony(streak, "PERFECT");
                     triggerHaptic(10);
-                    spawnCallout("HARMONIC LOCK +2", bird.x + 24, bird.y - 26, "#34d399", 1.08);
                     spawnBeatRing(bird.x, bird.y, 115, "#10b981");
                     spawnParticles(bird.x, bird.y, "#34d399", 14);
                 } else if (normDist > 0.72 || pipe.wasGrazed) {
                     incrementStreak(2);
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.04);
                     synth.playPipeHarmony(streak, "GRAZE");
-                    spawnCallout("VELVET GRAZE +2", bird.x + 24, bird.y - 26, "#f472b6", 1.05);
                     spawnBeatRing(bird.x, bird.y, 95, "#ec4899");
                     spawnParticles(bird.x, bird.y, "#f472b6", 12);
                 } else {
@@ -1273,7 +1437,9 @@
                 beatRings.push({ x, y, radius: 16, maxRadius, alpha: 0.82, color });
             }
 
+            const MAX_PARTICLES = 160;
             function spawnParticles(x, y, color, count) {
+                count = Math.min(count, MAX_PARTICLES - particles.length);
                 for (let i = 0; i < count; i++) {
                     const angle = Math.random() * Math.PI * 2;
                     const speed = 1.2 + Math.random() * 4.4;
@@ -1299,24 +1465,82 @@
             // ============================================================================
             let autoMode = false;
             let forgivePillars = 0;
+            let lastFlapMs = -1e9;
+            let phrasePasses = 0;
+            let phraseClean = true;
+
+            // Tap timing. Taps are judged against the beat as heard: scheduled time plus the
+            // device's output latency plus a manual offset ([ and ] keys). The mean asynchrony
+            // is learned while calibrating (most people tap slightly early) and becomes the
+            // player's own zero, so phase following corrects only real drift.
+            const OFFSET_KEY = "flowResonanceOffsetMs";
+            let userOffsetMs = 0;
+            try {
+                userOffsetMs = Math.max(-150, Math.min(150, parseInt(localStorage.getItem(OFFSET_KEY) || "0", 10) || 0));
+            } catch (e) {}
+            const timing = { meanAsync: 0, samples: 0 };
+
+            function measureTapAsync() {
+                if (!synth.ctx) return null;
+                const latency = synth.ctx.outputLatency || synth.ctx.baseLatency || 0;
+                const off = synth.getBeatOffset(synth.ctx.currentTime - latency - userOffsetMs / 1000);
+                // Taps far from any eighth are not attempts at the beat; ignore them
+                return off !== null && Math.abs(off) < 0.12 ? off : null;
+            }
+
+            function adjustOffset(deltaMs) {
+                userOffsetMs = Math.max(-150, Math.min(150, userOffsetMs + deltaMs));
+                try {
+                    localStorage.setItem(OFFSET_KEY, String(userOffsetMs));
+                } catch (e) {}
+                spawnCallout(`AUDIO OFFSET ${userOffsetMs > 0 ? "+" : ""}${userOffsetMs} MS`, width * 0.5, 138, "#94a3b8", 0.95);
+            }
+
+            // Stopping cue: when you step away (auto glide or a build-done signal) the music
+            // winds down about 5% (at most 1.5% per bar), quiets, and resolves to the home chord,
+            // so there is a natural place to stop. Taking control back restores it at the same rate.
+            let windDown = 0;
+            const WIND_RATE = 0.12; // per second: about 4 bars to wind fully down at 108 BPM
 
             function enterAuto() {
                 if (!gameStarted || autoMode) return;
                 autoMode = true;
+                synth.holdTonic = true;
+                saveTelemetry();
+                maybeAskFlowCheck();
                 updateHudDisplays();
             }
 
             function exitAuto() {
                 if (!autoMode) return;
                 autoMode = false;
+                synth.holdTonic = false;
                 forgivePillars = 2;
+                closeFlowCheck();
                 updateHudDisplays();
             }
 
             window.addEventListener("blur", enterAuto);
+            // The scheduler runs from animation frames, which stop in a hidden tab; suspend the
+            // audio clock with them so nothing runs in the background
             document.addEventListener("visibilitychange", () => {
-                if (document.visibilityState === "hidden") enterAuto();
+                if (document.visibilityState === "hidden") {
+                    enterAuto();
+                    if (synth.ctx) synth.ctx.suspend().catch(() => {});
+                } else if (synth.ctx) {
+                    synth.ctx.resume().catch(() => {});
+                }
             });
+
+            // Build-done hook: a wrapper page or extension can post {type: "flow:build-done"}
+            // when the compile finishes; the game glides and winds down so you can leave
+            window.addEventListener("message", (e) => {
+                if (e.data && e.data.type === "flow:build-done" && gameStarted) {
+                    spawnCallout("BUILD DONE", width * 0.5, height * 0.3, "#e2e8f0", 1.1);
+                    enterAuto();
+                }
+            });
+            window.addEventListener("pagehide", () => saveTelemetry());
 
             function triggerFlap() {
                 if (!gameStarted) return;
@@ -1324,12 +1548,29 @@
 
                 const nowMs = performance.now();
                 recordTapAndEntrainCadence(nowMs);
+                recordTapTelemetry(nowMs);
+                lastFlapMs = nowMs;
+
+                const asyncSec = measureTapAsync();
+                if (asyncSec !== null) {
+                    telemetry.asyncs.push(asyncSec);
+                    if (!flowCtrl.resonanceLocked) {
+                        // Calibrating: learn this player's habitual lead or lag
+                        timing.samples++;
+                        timing.meanAsync += (asyncSec - timing.meanAsync) * (timing.samples < 6 ? 1 / timing.samples : 0.15);
+                    } else if (PHASE_FOLLOW && timing.samples >= 4) {
+                        // Locked: correct 20% of this tap's error relative to the player's own
+                        // zero, at most 20 ms per tap (brief: alpha 0.1-0.3 beats a frozen grid)
+                        const err = asyncSec - timing.meanAsync;
+                        synth.nudgePhase(Math.max(-0.02, Math.min(0.02, err * PHASE_ALPHA)));
+                    }
+                }
 
                 const speedScale = Math.sqrt(flowCtrl.vx / 3.1);
                 bird.vy = bird.jumpImpulse * Math.max(0.92, Math.min(1.06, speedScale));
 
                 const heightNorm = Math.max(0, Math.min(1, (bird.y - 108) / (height - 146)));
-                synth.queueQuantizedTap(heightNorm, flowCtrl.tier);
+                synth.queueQuantizedTap(heightNorm, flowCtrl.tier, flowCtrl.resonanceLocked);
 
                 const bloomCount = flowCtrl.tier >= 4 ? 10 : 5;
                 spawnParticles(bird.x - 10, bird.y + 6, getTierPrimaryColor(), bloomCount);
@@ -1407,6 +1648,8 @@
                 else if (e.code === "KeyV") cycleVoice();
                 else if (e.code === "KeyL") toggleCadenceLock();
                 else if (e.code === "KeyM") toggleMute();
+                else if (e.code === "BracketLeft") adjustOffset(-10);
+                else if (e.code === "BracketRight") adjustOffset(10);
             });
 
             // Preferences that carry over between sessions: voice, track, mute
@@ -1451,11 +1694,6 @@
                 cycleTrack();
             });
 
-            // Lock Current Cadence Toggle Pill
-            lockCadenceBtn.addEventListener("pointerdown", (e) => {
-                e.stopPropagation();
-                toggleCadenceLock();
-            });
             function toggleCadenceLock() {
                 synth.init();
                 flowCtrl.manualLock = !flowCtrl.manualLock;
@@ -1497,26 +1735,7 @@
                 flowPctDisplay.textContent = pct + "%";
                 flowBarFill.style.width = pct + "%";
 
-                const lockSuffix = flowCtrl.resonanceLocked ? " 🔒" : "";
-                bpmReadout.textContent = Math.round(flowCtrl.bpm) + " BPM" + lockSuffix;
                 phraseReadout.textContent = TRACKS[trackIndex].name;
-                chordReadout.textContent = synth.getCurrentChordName();
-                tierReadout.textContent = `TIER ${flowCtrl.tier} / 4`;
-
-                // Update Cadence Lock Button Appearance
-                if (flowCtrl.manualLock) {
-                    lockCadenceBtn.textContent = "LOCKED";
-                    lockCadenceBtn.className =
-                        "px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-emerald-950/90 text-emerald-300 border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.3)]";
-                } else if (flowCtrl.resonanceLocked) {
-                    lockCadenceBtn.textContent = "SYNCED";
-                    lockCadenceBtn.className =
-                        "px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-cyan-950/90 text-cyan-300 border-cyan-500/50";
-                } else {
-                    lockCadenceBtn.textContent = "AUTO SYNC";
-                    lockCadenceBtn.className =
-                        "px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-slate-900/90 text-slate-300 border-slate-700/70";
-                }
 
                 // Shield Badge
                 const shieldPct = Math.round(flowCtrl.shieldCharge * 100);
@@ -1559,9 +1778,14 @@
             // ============================================================================
             let lastFrameTime = performance.now();
             let gridScrollX = 0;
+            let bgCache = null;
+            let bgCacheKey = "";
 
             function updatePhysics(rawDt) {
-                synth.updateScheduler(flowCtrl.bpm, flowCtrl.flowIndex, flowCtrl.tier, {
+                windDown = Math.max(0, Math.min(1, windDown + (autoMode ? 1 : -1) * WIND_RATE * rawDt));
+                if (synth.masterGain && !synth.isMuted) synth.masterGain.gain.value = 0.8 * (1 - 0.35 * windDown);
+                if (gameStarted && !autoMode) telemetry.activeSec += rawDt;
+                synth.updateScheduler(flowCtrl.bpm * (1 - 0.05 * windDown), flowCtrl.flowIndex, flowCtrl.tier, {
                     onQuarterBeat: () => {
                         kickPulse = 1.0;
                     },
@@ -1611,6 +1835,16 @@
                     // Subtle Resonant Buoyancy toward the Harmonic Guide Ribbon (effortless cruising),
                     // a little stronger while the assist controller is helping
                     const idealGuideY = getHarmonicGuideYAtX(bird.x);
+                    let nearGap = false;
+                    for (const p of pipes) {
+                        const distX = p.x + p.width * 0.5 - bird.x;
+                        if (distX > -20 && distX < 140) {
+                            nearGap = true;
+                            break;
+                        }
+                    }
+                    const pull = idealGuideY - bird.y;
+                    const fightsTap = performance.now() - lastFlapMs < 220 && Math.sign(pull) !== Math.sign(bird.vy);
                     const buoyancyStrength =
                         (flowCtrl.hyperGlideTimer > 0
                             ? 0.075
@@ -1620,7 +1854,7 @@
                             ? 0.036
                             : 0.022) *
                         (1 + 1.2 * flowCtrl.assistApplied);
-                    bird.vy += (idealGuideY - bird.y) * buoyancyStrength * dt;
+                    if (nearGap && !fightsTap) bird.vy += pull * buoyancyStrength * dt;
                 }
 
                 // Update & Check Tier 3+ Harmonic Slipstreams (Glowing wind tunnels between pipes)
@@ -1644,7 +1878,6 @@
                                 incrementStreak(1);
                                 synth.playSlipstreamTick(slipstreamTickCounter);
                                 spawnParticles(bird.x, bird.y, "#c084fc", 4);
-                                spawnCallout("SLIPSTREAM +1", bird.x + 18, bird.y - 22, "#e879f9", 0.92);
                             }
                         }
                     }
@@ -1727,7 +1960,6 @@
 
                         synth.playGoldenOrbShimmer();
                         triggerHaptic([12, 24, 16]);
-                        spawnCallout("GOLDEN RESONANCE +3", orb.x, orb.y - 24, "#fbbf24", 1.15);
                         spawnBeatRing(orb.x, orb.y, 135, "#fbbf24");
                         spawnParticles(orb.x, orb.y, "#fde047", 22);
                         updateHudDisplays();
@@ -1785,6 +2017,15 @@
                         if (!autoMode) {
                             if (forgivePillars > 0) forgivePillars--;
                             if (bird.ghostTimer <= 0) evaluatePipePass(p);
+                            phrasePasses++;
+                            if (phrasePasses >= 8) {
+                                if (phraseClean) {
+                                    synth.playGoldenOrbShimmer();
+                                    spawnBeatRing(bird.x, bird.y, 220, getTierPrimaryColor());
+                                }
+                                phrasePasses = 0;
+                                phraseClean = true;
+                            }
                         }
                     }
 
@@ -1845,35 +2086,32 @@
                 const nowSec = performance.now() * 0.001;
 
                 // 1. 4-Tier Evolving Backdrop
-                const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
                 // Ease toward this run's epoch position, then blend each 500-point band into the next
                 epochPos += (Math.min(runPeak / EPOCH_SPAN, EPOCHS.length - 1) - epochPos) * 0.02;
+                let stops;
                 if (epochPos > 0.001) {
                     const base = Math.floor(epochPos);
                     const f = epochPos - base;
                     const t = f * f * (3 - 2 * f);
                     const from = getEpochStops(base, tier);
                     const to = getEpochStops(base + 1, tier);
-                    bgGrad.addColorStop(0, mixHex(from[0], to[0], t));
-                    bgGrad.addColorStop(0.55, mixHex(from[1], to[1], t));
-                    bgGrad.addColorStop(1, mixHex(from[2], to[2], t));
+                    stops = [[0, mixHex(from[0], to[0], t)], [0.55, mixHex(from[1], to[1], t)], [1, mixHex(from[2], to[2], t)]];
                 } else if (tier === 4) {
-                    bgGrad.addColorStop(0, "#0b041d");
-                    bgGrad.addColorStop(0.5, "#190a36");
-                    bgGrad.addColorStop(1, "#061d2c");
+                    stops = [[0, "#0b041d"], [0.5, "#190a36"], [1, "#061d2c"]];
                 } else if (tier === 3) {
-                    bgGrad.addColorStop(0, "#08061a");
-                    bgGrad.addColorStop(0.55, "#110d2e");
-                    bgGrad.addColorStop(1, "#071829");
+                    stops = [[0, "#08061a"], [0.55, "#110d2e"], [1, "#071829"]];
                 } else if (tier === 2) {
-                    bgGrad.addColorStop(0, "#050914");
-                    bgGrad.addColorStop(0.6, "#071827");
-                    bgGrad.addColorStop(1, "#041e20");
+                    stops = [[0, "#050914"], [0.6, "#071827"], [1, "#041e20"]];
                 } else {
-                    bgGrad.addColorStop(0, "#050711");
-                    bgGrad.addColorStop(1, "#0b1326");
+                    stops = [[0, "#050711"], [1, "#0b1326"]];
                 }
-                ctx.fillStyle = bgGrad;
+                const bgKey = height + stops.join("|");
+                if (bgKey !== bgCacheKey) {
+                    bgCacheKey = bgKey;
+                    bgCache = ctx.createLinearGradient(0, 0, 0, height);
+                    stops.forEach(([at, color]) => bgCache.addColorStop(at, color));
+                }
+                ctx.fillStyle = bgCache;
                 ctx.fillRect(0, 0, width, height);
 
                 // Tier 4 Transcendent Bioluminescent Aurora Waves
@@ -2172,8 +2410,6 @@
                     ctx.textAlign = "center";
                     ctx.globalAlpha = Math.max(0, c.alpha);
                     ctx.fillStyle = c.color;
-                    ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
-                    ctx.shadowBlur = 8;
                     ctx.fillText(c.text, c.x, c.y);
                     ctx.restore();
                 });
