@@ -33,7 +33,6 @@
   "use strict";
 
   const PERFECT = 0.08; // beats
-  const SKY = [["#0d0930", "#3f1d8a"], ["#04170f", "#134a1d"], ["#1a0520", "#561034"], ["#1f0806", "#6a2508"]];
   const TAU = Math.PI * 2;
   const NT = 5; // drop targets in the bank
 
@@ -295,7 +294,8 @@
   const api = FlowShell.mount({
     key: "flipper",
     title: "Flipper",
-    hint: "Tap or Space to flip as the ball comes down",
+    hint: "Tap to flip as the ball comes down",
+    vignette: false, // baked into the table layer
     input: "tap",
     tierNames: ["Finding your rhythm", "Lit up", "Multiball", "Wizard mode"],
     modes: ["Lit Target"],
@@ -458,111 +458,209 @@
 
     draw(ctx, api) {
       const { W, H, tier } = api;
+      const Skin = PinballSkin;
       const now = api.eng.beatPos();
       const col = api.color();
+      const sling = (s) => {
+        const m = s ? -1 : 1;
+        const x0 = s ? W - 44 : 44;
+        return [[x0, fy - 150], [x0, fy - 80], [x0 + m * 34, fy - 66]];
+      };
 
-      ctx.fillStyle = api.cached("sky" + tier + H, () => {
-        const g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, SKY[tier - 1][0]);
-        g.addColorStop(1, SKY[tier - 1][1]);
-        return g;
+      // The table: everything that never moves, baked once per size and tier
+      Skin.layer(ctx, "flipper" + tier, W, H, (g) => {
+        Skin.playfield(g, W, H, tier);
+        // Wire rails: a soft shadow, the steel and a hairline of light along it
+        const wire = (trace, width) => {
+          g.lineCap = "round";
+          g.lineJoin = "round";
+          for (const [st, lw, dx, dy] of [["rgba(0,0,0,0.22)", width + 4, 1.5, 3], ["rgba(0,0,0,0.2)", width + 1.5, 1, 2], ["#8f877c", width, 0, 0], ["rgba(255,248,230,0.7)", 1.1, -0.5, -0.6]]) {
+            g.save();
+            g.translate(dx, dy);
+            g.strokeStyle = st;
+            g.lineWidth = lw;
+            g.beginPath();
+            trace();
+            g.stroke();
+            g.restore();
+          }
+        };
+        // The cabinet rail: up both sides and round the top arch
+        wire(() => {
+          g.moveTo(6, H);
+          g.lineTo(6, Y(0.12));
+          g.quadraticCurveTo(6, TOP - 14, cx, TOP - 14);
+          g.quadraticCurveTo(W - 6, TOP - 14, W - 6, Y(0.12));
+          g.lineTo(W - 6, H);
+        }, 4);
+        // The orbit lane inside it: a row of lamp dots
+        g.strokeStyle = "rgba(246,230,192,0.16)";
+        g.lineWidth = 3;
+        g.lineCap = "round";
+        g.setLineDash([0, 11]);
+        g.beginPath();
+        g.moveTo(W * 0.09, Y(0.55));
+        g.lineTo(W * 0.09, Y(0.1));
+        g.quadraticCurveTo(W * 0.1, TOP - 2, cx, TOP - 2);
+        g.quadraticCurveTo(W * 0.9, TOP - 2, W * 0.91, Y(0.1));
+        g.lineTo(W * 0.91, Y(0.55));
+        g.stroke();
+        g.setLineDash([]);
+        // Inlane guides down to the flippers
+        wire(() => {
+          g.moveTo(30, fy - 110);
+          g.lineTo(pivL[0], pivL[1]);
+          g.moveTo(W - 30, fy - 110);
+          g.lineTo(pivR[0], pivR[1]);
+        }, 3);
+        // Slingshots: a cream plastic body with red rubber on the kicking face, on a soft shadow
+        for (const s of [0, 1]) {
+          const [p0, p1, p2] = sling(s);
+          const tri = () => {
+            g.beginPath();
+            g.moveTo(p0[0], p0[1]);
+            g.lineTo(p1[0], p1[1]);
+            g.lineTo(p2[0], p2[1]);
+            g.closePath();
+          };
+          g.lineJoin = "round";
+          for (const [a, lw] of [[0.1, 9], [0.14, 5], [0.2, 2]]) {
+            g.save();
+            g.translate(1.5, 3.5);
+            tri();
+            g.strokeStyle = g.fillStyle = "rgba(0,0,0," + a + ")";
+            g.lineWidth = lw;
+            g.stroke();
+            g.fill();
+            g.restore();
+          }
+          tri();
+          const body = g.createLinearGradient(0, p0[1], 0, p2[1]);
+          body.addColorStop(0, "#fbf1da");
+          body.addColorStop(1, "#d9bf8c");
+          g.fillStyle = body;
+          g.strokeStyle = body;
+          g.lineWidth = 4;
+          g.stroke();
+          g.fill();
+          g.strokeStyle = "#e8231f";
+          g.lineWidth = 3.5;
+          g.lineCap = "round";
+          g.beginPath();
+          g.moveTo(p0[0], p0[1]);
+          g.lineTo(p2[0], p2[1]);
+          g.stroke();
+          for (const p of [p0, p1, p2]) Skin.post(g, p[0], p[1], 3.5);
+          // The outlane kickback lamp's socket
+          const kx = s ? W - 20 : 20;
+          g.fillStyle = "#1a110c";
+          g.beginPath();
+          g.arc(kx, fy + 20, 7, 0, TAU);
+          g.fill();
+          g.strokeStyle = "rgba(255,255,255,0.08)";
+          g.lineWidth = 1;
+          g.stroke();
+        }
+        // Drop target slots and the insert under each target
+        for (const t of targets) {
+          g.fillStyle = "rgba(0,0,0,0.5)";
+          g.fillRect(t.x - 14, t.y + 14, 28, 4);
+          g.fillStyle = "#1a110c";
+          g.beginPath();
+          g.arc(t.x, t.y + 32, 5.5, 0, TAU);
+          g.fill();
+        }
+        // The spinner's posts
+        Skin.post(g, cx - 18, TOP - 2, 3);
+        Skin.post(g, cx + 18, TOP - 2, 3);
       });
-      ctx.fillRect(0, 0, W, H);
 
-      // Insert arrows pointing up the table, the middle ones breathing with the kick
-      for (let i = 0; i < 4; i++) {
-        const y = H * (0.6 + i * 0.045);
-        ctx.globalAlpha = 0.14 + (i === 0 ? kick * 0.15 : 0);
-        ctx.fillStyle = i === 0 ? col : "#3a2418";
-        ctx.beginPath();
-        ctx.moveTo(cx, y - 12);
-        ctx.lineTo(cx + 11, y + 6);
-        ctx.lineTo(cx - 11, y + 6);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
+      // Arrow inserts pointing up the table, the first breathing with the kick
+      for (let i = 0; i < 4; i++) Skin.insert(ctx, cx, H * (0.6 + i * 0.045), 10, col, i === 0 ? 0.2 + kick * 0.6 : 0);
 
-      // The cabinet rail: up both sides and round the top arch, with the orbit lane inside it
-      ctx.strokeStyle = "#f6e6c0";
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.moveTo(6, H);
-      ctx.lineTo(6, Y(0.12));
-      ctx.quadraticCurveTo(6, TOP - 14, cx, TOP - 14);
-      ctx.quadraticCurveTo(W - 6, TOP - 14, W - 6, Y(0.12));
-      ctx.lineTo(W - 6, H);
-      ctx.stroke();
-      ctx.strokeStyle = "rgba(246,230,192,0.25)";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([5, 9]);
-      ctx.beginPath();
-      ctx.moveTo(W * 0.09, Y(0.55));
-      ctx.lineTo(W * 0.09, Y(0.1));
-      ctx.quadraticCurveTo(W * 0.1, TOP - 2, cx, TOP - 2);
-      ctx.quadraticCurveTo(W * 0.9, TOP - 2, W * 0.91, Y(0.1));
-      ctx.lineTo(W * 0.91, Y(0.55));
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Spinner at the top of the orbit
+      // Spinner at the top of the orbit: a steel plate turning on its wire
       ctx.save();
       ctx.translate(cx, TOP - 2);
       ctx.scale(Math.cos(spinner), 1);
-      ctx.fillStyle = spinnerV > 2 ? "#ffc400" : "#f6e6c0";
+      ctx.fillStyle = spinnerV > 2 ? "#ffc400" : "#b9b1a5";
       ctx.fillRect(-14, -5, 28, 10);
+      ctx.fillStyle = "rgba(255,255,255,0.45)";
+      ctx.fillRect(-14, -5, 28, 3);
       ctx.restore();
 
-      // Inlane guides and slingshots above the flippers
-      ctx.strokeStyle = "#f6e6c0";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(30, fy - 110);
-      ctx.lineTo(pivL[0], pivL[1]);
-      ctx.moveTo(W - 30, fy - 110);
-      ctx.lineTo(pivR[0], pivR[1]);
-      ctx.stroke();
+      // Slingshot rubber and kickback lamps flash when they fire
       for (const s of [0, 1]) {
-        const m = s ? -1 : 1;
-        const x0 = s ? W - 44 : 44;
-        ctx.fillStyle = slingFlash[s] > 0 ? "rgba(232,35,31,0.55)" : "rgba(0,0,0,0.28)";
-        ctx.strokeStyle = "#e8231f";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x0, fy - 150);
-        ctx.lineTo(x0, fy - 80);
-        ctx.lineTo(x0 + m * 34, fy - 66);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-        // Outlane kickback light
-        ctx.fillStyle = kickFlash[s] > 0 ? "#e8231f" : "#3a2418";
-        ctx.beginPath();
-        ctx.arc(s ? W - 20 : 20, fy + 20, 6 + kickFlash[s] * 4, 0, TAU);
-        ctx.fill();
+        if (slingFlash[s] > 0) {
+          const [p0, , p2] = sling(s);
+          Skin.glow(ctx, (p0[0] + p2[0]) / 2, (p0[1] + p2[1]) / 2, 50, "#e8231f", slingFlash[s]);
+          ctx.globalAlpha = slingFlash[s];
+          ctx.strokeStyle = "#ffd2c4";
+          ctx.lineWidth = 3.5;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(p0[0], p0[1]);
+          ctx.lineTo(p2[0], p2[1]);
+          ctx.stroke();
+          ctx.lineCap = "butt";
+          ctx.globalAlpha = 1;
+        }
+        if (kickFlash[s] > 0) {
+          const kx = s ? W - 20 : 20;
+          Skin.glow(ctx, kx, fy + 20, 26 + kickFlash[s] * 10, "#e8231f", kickFlash[s]);
+          ctx.globalAlpha = kickFlash[s];
+          ctx.fillStyle = "#ff5a48";
+          ctx.beginPath();
+          ctx.arc(kx, fy + 20, 6 + kickFlash[s] * 2, 0, TAU);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
       }
 
-      // Drop targets: cream faces with a red band and a soft shadow; down ones are just a slot
+      // Drop targets: cream faces with a red band on a soft shadow, sinking into their slots;
+      // the insert under each lights while it's down
       for (const t of targets) {
-        const h = t.up ? 32 : 4 + 28 * t.drop;
-        if (t.up) {
-          ctx.fillStyle = "rgba(0,0,0,0.3)";
-          ctx.fillRect(t.x - 11, t.y - h / 2 + 4, 26, h);
+        if (!t.up) {
+          Skin.glow(ctx, t.x, t.y + 32, 16, col, 0.8);
+          ctx.fillStyle = col;
+          ctx.beginPath();
+          ctx.arc(t.x, t.y + 32, 4.5, 0, TAU);
+          ctx.fill();
+          if (t.drop <= 0) continue;
         }
-        ctx.fillStyle = t.lit ? "#ffc400" : t.up ? "#f6e6c0" : "#2c1d14";
-        ctx.fillRect(t.x - 13, t.y - h / 2, 26, h);
-        if (t.up) {
-          ctx.fillStyle = "#e8231f";
-          ctx.fillRect(t.x - 13, t.y - h / 2 + 5, 26, 4);
+        const face = t.lit ? "#ffc400" : "#f6e6c0";
+        const sp = Skin.sprite(ctx, "target" + face, 40, 48, 20, 22, (g) => {
+          for (const [a, grow] of [[0.1, 4], [0.14, 2], [0.2, 0]]) {
+            g.fillStyle = "rgba(0,0,0," + a + ")";
+            g.beginPath();
+            g.roundRect(-11 - grow, -12 - grow, 26 + grow * 2, 32 + grow * 2, 3 + grow);
+            g.fill();
+          }
+          const lin = g.createLinearGradient(0, -16, 0, 16);
+          lin.addColorStop(0, Skin.mix(face, "#ffffff", 0.45));
+          lin.addColorStop(0.5, face);
+          lin.addColorStop(1, Skin.mix(face, "#000000", 0.18));
+          g.fillStyle = lin;
+          g.beginPath();
+          g.roundRect(-13, -16, 26, 32, 3);
+          g.fill();
+          g.fillStyle = "#e8231f";
+          g.fillRect(-13, -11, 26, 4);
+          g.fillStyle = "rgba(255,255,255,0.6)";
+          g.fillRect(-11, -15, 22, 1);
+        });
+        if (t.up) Skin.draw(ctx, sp, t.x, t.y);
+        else {
+          ctx.save();
+          ctx.globalAlpha = t.drop;
+          ctx.translate(t.x, t.y + 16);
+          ctx.scale(1, (4 + 28 * t.drop) / 32);
+          Skin.draw(ctx, sp, 0, -16);
+          ctx.restore();
         }
-        // An insert light under each target, lit while it's down
-        ctx.fillStyle = t.up ? "#3a2418" : col;
-        ctx.beginPath();
-        ctx.arc(t.x, t.y + 32, 5, 0, TAU);
-        ctx.fill();
       }
 
       // Pop bumpers
-      for (const b of pops) PinballSkin.bumper(ctx, b.x, b.y, 22, b.pop > 0.2 ? "#fff8e6" : col, b.pop);
+      for (const b of pops) Skin.bumper(ctx, b.x, b.y, 22, b.pop > 0.2 ? "#fff8e6" : col, b.pop);
 
       // The landing ring: closes on the flipper the ball is heading for, shut as it lands
       const T = arrivalT();
@@ -573,7 +671,7 @@
           const k = Math.max(0, left) / 1.5;
           ctx.strokeStyle = left < 0.12 ? "#ffc400" : col;
           ctx.globalAlpha = 0.35 + 0.6 * (1 - k);
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 2.5;
           ctx.beginPath();
           ctx.arc(sx, sy, 12 + 46 * k, 0, TAU);
           ctx.stroke();
@@ -581,68 +679,74 @@
         }
       }
 
-      // Flippers: cream bats edged with red rubber, pivoting up together
+      // Flippers: cream bats wrapped in red rubber on a steel pivot, pivoting up together
+      const bat = (g) => {
+        g.beginPath();
+        g.arc(0, 0, 11, Math.PI / 2, -Math.PI / 2);
+        g.lineTo(FL + 10, -5);
+        g.arc(FL + 10, 0, 5, -Math.PI / 2, Math.PI / 2);
+        g.closePath();
+      };
+      const fk = FL.toFixed(1);
+      const bw = FL + 15 + 11 + 16;
+      const shadow = Skin.sprite(ctx, "batS" + fk, bw, 38, 19, 19, (g) => {
+        g.lineJoin = "round";
+        for (const [a, lw] of [[0.08, 8], [0.1, 4], [0.16, 0]]) {
+          bat(g);
+          g.fillStyle = g.strokeStyle = "rgba(0,0,0," + a + ")";
+          g.lineWidth = lw;
+          if (lw) g.stroke();
+          g.fill();
+        }
+      });
+      const body = Skin.sprite(ctx, "batB" + fk, bw, 38, 19, 19, (g) => {
+        bat(g);
+        const lin = g.createLinearGradient(0, -11, 0, 11);
+        lin.addColorStop(0, "#fffaf0");
+        lin.addColorStop(0.45, "#f6e6c0");
+        lin.addColorStop(1, "#d6bc88");
+        g.fillStyle = lin;
+        g.fill();
+        const rub = g.createLinearGradient(0, -11, 0, 11);
+        rub.addColorStop(0, "#ff5a48");
+        rub.addColorStop(1, "#b3170f");
+        g.strokeStyle = rub;
+        g.lineWidth = 2.5;
+        g.stroke();
+        const cap = g.createRadialGradient(-1.2, -1.5, 0, 0, 0, 4.5);
+        cap.addColorStop(0, "#ffffff");
+        cap.addColorStop(1, "#7d766d");
+        g.fillStyle = cap;
+        g.beginPath();
+        g.arc(0, 0, 4, 0, TAU);
+        g.fill();
+      });
+      const a = DOWN + (UP - DOWN) * flipAng;
       for (const s of [0, 1]) {
         const [px, py] = s ? pivR : pivL;
-        const a = DOWN + (UP - DOWN) * flipAng;
-        ctx.save();
-        ctx.translate(px, py);
-        ctx.scale(s ? -1 : 1, 1);
-        ctx.rotate(a);
-        ctx.beginPath();
-        ctx.arc(0, 0, 11, Math.PI / 2, -Math.PI / 2);
-        ctx.lineTo(FL + 10, -5);
-        ctx.arc(FL + 10, 0, 5, -Math.PI / 2, Math.PI / 2);
-        ctx.closePath();
-        ctx.save();
-        ctx.translate(2, 5);
-        ctx.fillStyle = "rgba(0,0,0,0.3)";
-        ctx.fill();
-        ctx.restore();
-        ctx.fillStyle = "#f6e6c0";
-        ctx.fill();
-        ctx.strokeStyle = "#e8231f";
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.fillStyle = "#e8231f";
-        ctx.beginPath();
-        ctx.arc(0, 0, 4, 0, TAU);
-        ctx.fill();
-        ctx.restore();
+        for (const [sp, dx, dy] of [[shadow, 2, 4], [body, 0, 0]]) {
+          ctx.save();
+          ctx.translate(px + dx, py + dy);
+          ctx.scale(s ? -1 : 1, 1);
+          ctx.rotate(a);
+          Skin.draw(ctx, sp, 0, 0);
+          ctx.restore();
+        }
       }
 
-      // The ball: trail, then steel (finish from your lifetime rank), and the charge arc
-      const ball = api.cached("ball" + api.rankKey, () => {
-        const [a, b2, c] = api.ballStops();
-        const g = ctx.createRadialGradient(-4, -4, 1, 0, 0, 11);
-        g.addColorStop(0, a);
-        g.addColorStop(0.45, b2);
-        g.addColorStop(1, c);
-        return g;
-      });
-      for (let i = 2; i < trail.length; i++) {
-        ctx.globalAlpha = 0.2 * (1 - i / trail.length);
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        ctx.arc(trail[i][0], trail[i][1], 9 * (1 - i / trail.length) + 2, 0, TAU);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
+      // The ball: a faint motion streak, the ball (finish from your lifetime rank), the charge arc
+      Skin.streak(ctx, trail, 11);
       const [x, y] = ballAt(now);
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.fillStyle = ball;
-      ctx.beginPath();
-      ctx.arc(0, 0, 11, 0, TAU);
-      ctx.fill();
-      ctx.restore();
+      Skin.ball(ctx, x, y, 11, api.ballStops());
       if (api.charge > 0) {
         ctx.strokeStyle = api.charge > 0.85 ? "#ffc400" : col;
-        ctx.globalAlpha = 0.7;
-        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.75;
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = "round";
         ctx.beginPath();
         ctx.arc(x, y, 19 + 7 * api.charge, -Math.PI / 2, -Math.PI / 2 + TAU * api.charge);
         ctx.stroke();
+        ctx.lineCap = "butt";
         ctx.globalAlpha = 1;
       }
     }

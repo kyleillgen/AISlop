@@ -7,22 +7,28 @@
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #140f0c; }
   body { display: flex; flex-direction: column; }
-  .strip { display: flex; flex-direction: column; gap: 5px; padding: 5px 6px 6px; background: #140f0c; border-bottom: 1px solid rgba(255,196,0,.45); position: relative; z-index: 2; }
-  .strip .pb-btn { padding: 4px 8px !important; font-size: 10px !important; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
-  .strip .pb-btn.on { background: #ffc400 !important; }
-  .grow { flex: 1; }
-  .row { display: flex; align-items: center; gap: 5px; min-width: 0; }
-  .strip .pb-btn { flex: none; }
-  .grow { min-width: 0; }
-  .fps { font: 600 9px Oswald, Impact, sans-serif; letter-spacing: .08em; color: #8a6a4a; min-width: 30px; text-align: right; }
-  .strip { cursor: grab; user-select: none; }
-  .strip .pb-btn.win { padding: 4px 7px !important; min-width: 22px; }
-  .lamp { display: flex; align-items: center; gap: 5px; flex: 0 1 auto; font: 600 10px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #f6e6c0; white-space: nowrap; min-width: 0; }
-  .lamp i { width: 9px; height: 9px; border-radius: 50%; background: #3a2418; }
-  .lamp.working i { background: #ffc400; }
-  .lamp.done i { background: #1fbf55; animation: blink 0.5s steps(1) 8; }
-  .lamp.needs i { background: #e8231f; animation: blink 0.5s steps(1) 8; }
-  @keyframes blink { 50% { background: #3a2418; } }
+  /* The title strip: a dark cabinet rail. Window controls are quiet glass; the game picker is
+     one segmented control with the playing game lit cream */
+  .strip { display: flex; flex-direction: column; gap: 6px; padding: 6px 7px 7px; background: linear-gradient(#1f1814, #130e0b); box-shadow: 0 1px 0 rgba(246,230,192,.07), 0 6px 16px rgba(0,0,0,.45); position: relative; z-index: 2; cursor: grab; user-select: none; }
+  .row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .grow { flex: 1; min-width: 0; }
+  .strip .pb-btn { flex: none; height: 22px; padding: 0 8px !important; font: 500 10px/22px Oswald, Impact, sans-serif !important; letter-spacing: .1em; color: #f6e6c0 !important; background: rgba(246,230,192,.07) !important; box-shadow: 0 0 0 1px rgba(246,230,192,.07) inset; border-radius: 7px !important; }
+  .strip .pb-btn:hover { background: rgba(246,230,192,.14) !important; transform: none; }
+  .strip .pb-btn.on { color: #ffc400 !important; background: rgba(255,196,0,.12) !important; box-shadow: 0 0 0 1px rgba(255,196,0,.25) inset; }
+  .strip .pb-btn.win { display: grid; place-items: center; width: 24px; padding: 0 !important; }
+  .strip .pb-btn.win svg { width: 10px; height: 10px; }
+  .strip #closeBtn:hover { background: #e8231f !important; color: #fff !important; box-shadow: none; }
+  .seg { display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: rgba(0,0,0,.4); box-shadow: 0 1px 2px rgba(0,0,0,.5) inset, 0 0 0 1px rgba(246,230,192,.05); }
+  .seg .pb-btn { background: transparent !important; box-shadow: none; color: rgba(246,230,192,.62) !important; padding: 0 10px !important; }
+  .seg .pb-btn:hover { color: #f6e6c0 !important; background: rgba(246,230,192,.06) !important; }
+  .seg .pb-btn.on { color: #140f0c !important; background: linear-gradient(#fbf1da, #f0dcae) !important; box-shadow: 0 1px 3px rgba(0,0,0,.45); font-weight: 600 !important; }
+  .fps { font: 500 9px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: rgba(246,230,192,.32); min-width: 30px; text-align: right; }
+  .lamp { display: flex; align-items: center; gap: 6px; flex: 0 1 auto; padding-left: 2px; font: 500 10px Oswald, Impact, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: rgba(246,230,192,.8); white-space: nowrap; min-width: 0; }
+  .lamp i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #3a2a20; box-shadow: 0 1px 1px rgba(0,0,0,.5) inset; }
+  .lamp.working i { background: radial-gradient(circle at 35% 35%, #fff3c4, #ffc400 60%); box-shadow: 0 0 6px rgba(255,196,0,.6); }
+  .lamp.done i { background: radial-gradient(circle at 35% 35%, #d8ffe4, #1fbf55 60%); box-shadow: 0 0 6px rgba(31,191,85,.6); animation: blink 0.5s steps(1) 8; }
+  .lamp.needs i { background: radial-gradient(circle at 35% 35%, #ffd2c4, #e8231f 60%); box-shadow: 0 0 6px rgba(232,35,31,.6); animation: blink 0.5s steps(1) 8; }
+  @keyframes blink { 50% { background: #3a2a20; box-shadow: none; } }
   .lamp span { overflow: hidden; text-overflow: ellipsis; }
   iframe { flex: 1; width: 100%; border: 0; display: block; background: #140f0c; }
 </style>
@@ -36,14 +42,16 @@
       <span class="grow"></span>
       <button class="pb-btn" id="dock" title="Dock: right edge, corner or mini">Side</button>
       <button class="pb-btn" id="pin" title="Keep this window on top">Pin</button>
-      <button class="pb-btn win" id="minBtn" title="Minimise">&ndash;</button>
-      <button class="pb-btn win" id="closeBtn" title="Close">&times;</button>
+      <button class="pb-btn win" id="minBtn" title="Minimise" aria-label="Minimise"><svg viewBox="0 0 10 10"><path d="M1.5 5h7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+      <button class="pb-btn win" id="closeBtn" title="Close" aria-label="Close"><svg viewBox="0 0 10 10"><path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
     </div>
     <div class="row">
+    <div class="seg">
     <button class="pb-btn" data-game="flow-resonance.html" title="Flow // Resonance">Flow</button>
     <button class="pb-btn" data-game="orbit.html" title="Orbit: fling the ball from bumper to bumper">Orbit</button>
     <button class="pb-btn" data-game="flipper.html" title="Flipper: keep the ball up with the flippers">Flip</button>
     <button class="pb-btn" data-game="ricochet.html" title="Ricochet: kick off the walls and climb">Rico</button>
+    </div>
     <span class="grow"></span>
     <span class="fps" id="fps" title="Frames per second the game is actually drawing"></span>
     </div>

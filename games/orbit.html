@@ -30,7 +30,6 @@
 
   const PERFECT = 0.08; // beats
   const FLY = 0.5; // beats a Flow flight lasts, release on the beat to landing
-  const SKY = [["#0d0930", "#3f1d8a"], ["#04170f", "#134a1d"], ["#1a0520", "#561034"], ["#1f0806", "#6a2508"]];
   const TAU = Math.PI * 2;
 
   let bumpers = []; // { x, y, dir, phi, lane: {px, py, qx, qy}, pop, star }
@@ -242,7 +241,8 @@
   const api = FlowShell.mount({
     key: "orbit",
     title: "Orbit",
-    hint: "Tap or Space to fling the ball &middot; the next bumper catches it",
+    hint: "Tap to fling as the ball crosses the arrow",
+    vignette: false, // baked into the table layer
     input: "tap",
     tierNames: ["Finding your rhythm", "In orbit", "Slingshot", "Pinball wizard"],
     modes: ["Star Lane"],
@@ -348,134 +348,104 @@
 
     draw(ctx, api) {
       const { W, H, tier } = api;
+      const Skin = PinballSkin;
       const now = api.eng.beatPos();
       const col = api.color();
       const r = R(api);
       const br = BR(api);
 
-      ctx.fillStyle = api.cached("sky" + tier + H, () => {
-        const g = ctx.createLinearGradient(0, 0, 0, H);
-        g.addColorStop(0, SKY[tier - 1][0]);
-        g.addColorStop(1, SKY[tier - 1][1]);
-        return g;
+      // The table: painted playfield and the wire rails at the edges, baked once per size and tier
+      Skin.layer(ctx, "orbit" + tier, W, H, (g) => {
+        Skin.playfield(g, W, H, tier);
+        for (const x of [6, W - 6]) {
+          g.strokeStyle = "rgba(0,0,0,0.3)";
+          g.lineWidth = 6;
+          g.beginPath();
+          g.moveTo(x + 1, 0);
+          g.lineTo(x + 1, H);
+          g.stroke();
+          g.strokeStyle = "#8f877c";
+          g.lineWidth = 3;
+          g.beginPath();
+          g.moveTo(x, 0);
+          g.lineTo(x, H);
+          g.stroke();
+          g.strokeStyle = "rgba(255,248,230,0.7)";
+          g.lineWidth = 1;
+          g.beginPath();
+          g.moveTo(x - 0.5, 0);
+          g.lineTo(x - 0.5, H);
+          g.stroke();
+        }
       });
-      ctx.fillRect(0, 0, W, H);
 
-      // The playfield scrolling past: up-arrow inserts down the middle, rails at the edges
+      // The playfield scrolling past: arrow inserts up the middle (every fourth one lit, pulsing
+      // with the beat) and the posts that hold the rails
       const step = 120;
-      const first = Math.floor(camY / step) - 1;
-      for (let k = first; k < first + H / step + 3; k++) {
-        const y = k * step - camY;
-        ctx.globalAlpha = 0.16 + (k % 4 === 0 ? kick * 0.12 : 0);
-        ctx.fillStyle = k % 4 === 0 ? col : "#3a2418";
-        ctx.beginPath();
-        ctx.moveTo(W / 2, y - 14);
-        ctx.lineTo(W / 2 + 12, y + 6);
-        ctx.lineTo(W / 2 - 12, y + 6);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = "#f6e6c0";
-      ctx.fillRect(4, 0, 4, H);
-      ctx.fillRect(W - 8, 0, 4, H);
-      ctx.fillStyle = "#140f0c";
-      const off = ((-camY % 24) + 24) % 24;
-      for (let y = off - 24; y < H; y += 24) {
-        ctx.fillRect(4, y, 4, 12);
-        ctx.fillRect(W - 8, y, 4, 12);
-      }
+      Skin.column(ctx, "orbitIns" + col, W / 2, step * 4, camY + step / 2, H, 40, (g) => {
+        for (let j = 1; j < 4; j++) Skin.insert(g, 0, j * step + step / 2, 11, col, 0);
+      });
+      for (let k = Math.floor(camY / step / 4) * 4; k * step - camY < H + step; k += 4) Skin.insert(ctx, W / 2, k * step - camY, 11, col, 0.25 + kick * 0.6);
+      for (const x of [6, W - 6]) Skin.column(ctx, "orbitPost", x, step * 2, camY, H, 16, (g) => Skin.post(g, 0, step / 2, 3));
 
       ctx.save();
       ctx.translate(0, -camY);
 
-      // Lanes: a faint line from each bumper to the next; the one in play lights as the beat nears
+      // Lanes: a row of lamp dots from each bumper to the next; the one in play lights as the beat nears
+      ctx.lineCap = "round";
       for (const b of bumpers) {
         if (!b.lane) continue;
         const live = b === cur && !flight && api.style === "flow";
         const near = live ? Math.max(0, 1 - Math.abs(now - relBeat) / 1.2) : 0;
         ctx.strokeStyle = live ? col : "#f6e6c0";
-        ctx.globalAlpha = live ? 0.25 + 0.6 * near : 0.08;
-        ctx.lineWidth = live ? 3 : 2;
-        ctx.setLineDash([6, 10]);
+        ctx.globalAlpha = live ? 0.3 + 0.6 * near : 0.1;
+        ctx.lineWidth = live ? 3.5 : 2.5;
+        ctx.setLineDash([0, 10]);
         ctx.beginPath();
         ctx.moveTo(b.lane.px, b.lane.py);
         ctx.lineTo(b.lane.qx, b.lane.qy);
         ctx.stroke();
         ctx.setLineDash([]);
-        if (live) {
-          // The arrow on the orbit: fling as the ball crosses it
-          const [dx, dy] = dirVec(b.phi);
-          ctx.globalAlpha = 0.35 + 0.65 * near;
-          ctx.fillStyle = near > 0.85 ? "#ffc400" : col;
-          ctx.save();
-          ctx.translate(b.lane.px, b.lane.py);
-          ctx.rotate(Math.atan2(dy, dx));
-          const s = 9 + 4 * near;
-          ctx.beginPath();
-          ctx.moveTo(s, 0);
-          ctx.lineTo(-s * 0.7, s * 0.8);
-          ctx.lineTo(-s * 0.7, -s * 0.8);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-        }
+        ctx.globalAlpha = 1;
+        // The arrow insert on the orbit: fling as the ball crosses it
+        if (live) Skin.insert(ctx, b.lane.px, b.lane.py, 9 + 4 * near, near > 0.85 ? "#ffc400" : col, 0.35 + 0.65 * near, b.phi + Math.PI / 2);
       }
-      ctx.globalAlpha = 1;
+      ctx.lineCap = "butt";
 
       // Pop bumpers; the cap lights when the ball lands, and the next one glows in time
       for (const b of bumpers) {
         const sy = b.y - camY;
         if (sy < -80 || sy > H + 80) continue;
         if (b === cur) {
-          ctx.strokeStyle = col;
-          ctx.globalAlpha = 0.18;
-          ctx.lineWidth = 2;
+          // The ball's track round the bumper, a faint guide
+          ctx.strokeStyle = "#f6e6c0";
+          ctx.globalAlpha = 0.09;
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
           ctx.arc(b.x, b.y, r, 0, TAU);
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
         const lit = b.pop > 0.3 ? "#fff8e6" : b.pop > 0 || b === nextOf(cur) ? col : "#4a3326";
-        PinballSkin.bumper(ctx, b.x, b.y, br, lit, b.pop);
-        if (b.star) PinballSkin.star(ctx, b.x, b.y - br - 16, 9 + kick * 2);
+        Skin.bumper(ctx, b.x, b.y, br, lit, b.pop);
+        if (b.star) Skin.star(ctx, b.x, b.y - br - 16, 9 + kick * 2);
       }
 
-      // The ball: a short trail, then steel (finish from your lifetime rank)
-      const ball = api.cached("ball" + r + api.rankKey, () => {
-        const [a, b2, c] = api.ballStops();
-        const g = ctx.createRadialGradient(-4, -4, 1, 0, 0, 11);
-        g.addColorStop(0, a);
-        g.addColorStop(0.45, b2);
-        g.addColorStop(1, c);
-        return g;
-      });
-      for (let i = 2; i < trail.length; i++) {
-        ctx.globalAlpha = 0.22 * (1 - i / trail.length);
-        ctx.fillStyle = col;
-        ctx.beginPath();
-        ctx.arc(trail[i][0], trail[i][1], 9 * (1 - i / trail.length) + 2, 0, TAU);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
+      // The ball: a faint motion streak, the wind-up arc, then the ball (finish from your lifetime rank)
+      Skin.streak(ctx, trail, 11);
       const [x, y] = ballPos(api, now);
       if (grab > 0) {
         ctx.strokeStyle = grab > 0.95 ? "#ffc400" : col;
-        ctx.globalAlpha = 0.5;
-        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.6;
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = "round";
         ctx.beginPath();
         ctx.arc(x, y, 14 + 10 * grab, -Math.PI / 2, -Math.PI / 2 + TAU * grab);
         ctx.stroke();
+        ctx.lineCap = "butt";
         ctx.globalAlpha = 1;
       }
-      ctx.save();
-      ctx.translate(x, y);
-      const sq = 1 - grab * 0.15;
-      ctx.scale(1 + grab * 0.1, sq);
-      ctx.fillStyle = ball;
-      ctx.beginPath();
-      ctx.arc(0, 0, 11, 0, TAU);
-      ctx.fill();
-      ctx.restore();
+      Skin.ball(ctx, x, y, 11, api.ballStops(), 1 + grab * 0.1, 1 - grab * 0.15);
       ctx.restore();
     }
   });
