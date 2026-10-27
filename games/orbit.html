@@ -97,15 +97,17 @@
   // Choose when the ball next crosses the arrow: an exact beat, on the ball's FIRST pass whenever
   // the orbit speed allows (so you can fling on the first loop and keep a rhythm going), with the
   // speed near half a turn a beat and the timing near the pacer's spacing
-  function retime(now, api, target) {
+  // gap: the soonest the crossing may come (flings stay at least two beats apart). keep: hold
+  // the ball's current speed (after a missed crossing, so it never changes speed mid-loop)
+  function retime(now, api, target, gap = 0.5, keep = false) {
     const thR = cur.phi - cur.dir * (Math.PI / 2);
     const d0 = ((((thR - theta) * cur.dir) % TAU) + TAU) % TAU;
     let best = null;
-    for (let T = Math.ceil(now + 0.5); T <= Math.ceil(now) + 7; T++) {
+    for (let T = Math.ceil(now + gap); T <= Math.ceil(now + gap) + 7; T++) {
       for (let m = 0; m < 4; m++) {
         const w = (d0 + TAU * m) / (T - now);
         if (w < Math.PI * 0.4 || w > Math.PI * 1.8) continue;
-        const cost = Math.abs(Math.log(w / Math.PI)) * 3 + Math.abs(T - target) * 0.6 + m * 5;
+        const cost = keep ? Math.abs(Math.log(w / omega)) * 40 + Math.abs(T - target) * 0.1 : Math.abs(Math.log(w / Math.PI)) * 3 + Math.abs(T - target) * 0.6 + m * 5;
         if (!best || cost < best.cost) best = { T, w, cost };
       }
     }
@@ -190,7 +192,7 @@
     Y.star = false;
     // Forget the table well below, keep the chain ahead
     bumpers = bumpers.slice(Math.max(0, bumpers.indexOf(cur) - 2));
-    retime(now, api, now + Math.max(1, api.eng.paceBeats() - FLY));
+    retime(now, api, now + Math.max(1, api.eng.paceBeats() - FLY), 2 - FLY);
     if (pendingFling !== null) {
       const p = pendingFling;
       pendingFling = null;
@@ -205,8 +207,13 @@
     // A charged shot is a sling: the ball keeps whipping round the bumper and lets go only when
     // it faces up the table, so it always leaves off the loop like a stone from a sling
     const [ux, uy] = tangent();
-    if (power > 0.25 && Math.abs(Math.atan2(uy, ux) + Math.PI / 2) > 0.3) return (sling = held);
+    if (power > 0.25 && Math.abs(Math.atan2(uy, ux) + Math.PI / 2) > 0.4) {
+      sling = held;
+      grab = Math.max(grab, 0.6 + 0.4 * power); // keep whipping round at full wind-up until it lets go
+      return;
+    }
     sling = null;
+    grab = 0;
     let [tx, ty] = tangent();
     if (ty > 0) ty = -ty; // heading down the table: bank it back up
     let a = Math.atan2(ty, tx);
@@ -285,7 +292,7 @@
 
     onRelease(api, held) {
       if (api.style !== "fidget") return;
-      grab = 0;
+      // The wind-up stays on while a sling waits to let go; it ends when the ball actually flies
       fidgetFling(api, api.eng.beatPos(), held);
     },
 
@@ -322,7 +329,7 @@
             api.miss();
             api.hint("timing", "Fling as the ball crosses the lit arrow");
           }
-          retime(now, api, now + 2);
+          retime(now, api, now + 2, 0.5, true);
         }
       }
 
@@ -410,15 +417,12 @@
           ctx.lineTo(-s * 0.7, -s * 0.8);
           ctx.closePath();
           ctx.fill();
-          ctx.strokeStyle = "#140f0c";
-          ctx.lineWidth = 2;
-          ctx.stroke();
           ctx.restore();
         }
       }
       ctx.globalAlpha = 1;
 
-      // Pop bumpers: black skirt, cream body, red cap, a light that pops when the ball lands
+      // Pop bumpers; the cap lights when the ball lands, and the next one glows in time
       for (const b of bumpers) {
         const sy = b.y - camY;
         if (sy < -80 || sy > H + 80) continue;
@@ -431,26 +435,9 @@
           ctx.stroke();
           ctx.globalAlpha = 1;
         }
-        const s = 1 + b.pop * 0.18;
-        ctx.fillStyle = "#140f0c";
-        ctx.beginPath();
-        ctx.arc(b.x, b.y + 3, br * 1.12 * s, 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = "#f6e6c0";
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, br * s, 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = "#e8231f";
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, br * 0.72 * s, 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = b.pop > 0 || b === nextOf(cur) ? (b.pop > 0.3 ? "#fff8e6" : col) : "#3a2418";
-        ctx.globalAlpha = b === nextOf(cur) ? 0.6 + 0.4 * kick : 1;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, br * 0.38 * s, 0, TAU);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-        if (b.star) drawStar(ctx, b.x, b.y - br - 16, 9 + kick * 2);
+        const lit = b.pop > 0.3 ? "#fff8e6" : b.pop > 0 || b === nextOf(cur) ? col : "#4a3326";
+        PinballSkin.bumper(ctx, b.x, b.y, br, lit, b.pop);
+        if (b.star) PinballSkin.star(ctx, b.x, b.y - br - 16, 9 + kick * 2);
       }
 
       // The ball: a short trail, then steel (finish from your lifetime rank)
@@ -492,21 +479,6 @@
       ctx.restore();
     }
   });
-
-  function drawStar(ctx, x, y, r) {
-    ctx.beginPath();
-    for (let i = 0; i < 10; i++) {
-      const a = -Math.PI / 2 + (i * Math.PI) / 5;
-      const rr = i % 2 ? r * 0.45 : r;
-      ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
-    }
-    ctx.closePath();
-    ctx.fillStyle = "#ffc400";
-    ctx.strokeStyle = "#140f0c";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.fill();
-  }
 
   // Closest two bumpers on the table, for automated tests
   window.orbitMinGap = () => {

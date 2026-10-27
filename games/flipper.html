@@ -119,8 +119,9 @@
 
   // A shot is a real little flight: the ball leaves the flipper, rises against gravity and
   // ricochets off the walls, pop bumpers, drop targets and slingshots, simulated in advance. Only
-  // the last moment is steered: a smooth curve from wherever the ball has got to onto the nearer
-  // flipper, arriving exactly at tEnd. So every shot goes somewhere different, and still lands on
+  // the last moment (a quarter of a second at most) is steered: of a dozen slightly different
+  // launches, the one that comes down nearest a flipper on its own is kept, then a smooth curve
+  // carries it the rest of the way, arriving exactly at tEnd. So every shot goes somewhere different, and still lands on
   // the beat. aim (-1 left .. 1 right) tilts the launch; Flow sets it from how early or late you
   // flipped, the way the spot on a real flipper decides where the ball goes.
   function shot(api, x, y, t0, tEnd, opts) {
@@ -129,70 +130,86 @@
     const secs = Math.max(0.25, (tEnd - t0) * api.eng.beatSec);
     const span = fy - TOP;
     const g = 2.6 * span; // px/s²
-    const land = Math.min(0.4, secs * 0.35);
+    const land = Math.min(0.3, secs * 0.25);
     const simT = secs - land;
-    const aim = opts.aim !== undefined ? opts.aim : (Math.random() * 2 - 1) * 0.6;
-    const a = -Math.PI / 2 + (x < cx ? 0.2 : -0.2) + aim * 0.5 + (Math.random() - 0.5) * 0.16;
-    const v0 = Math.sqrt(2 * g * Math.max(90, y - TOP) * 0.88);
-    let vx = Math.cos(a) * v0, vy = Math.sin(a) * v0;
+    const aim0 = opts.aim !== undefined ? opts.aim : (Math.random() * 2 - 1) * 0.6;
     const DT = 1 / 120;
-    const knocked = new Set();
-    const samples = [{ x, y, s: 0 }];
-    let px = x, py = y;
-    const mark = (hit, sling) => {
-      const last = samples[samples.length - 1];
-      if (hit && !last.hit) last.hit = hit;
-      if (sling !== undefined) last.sling = sling;
-    };
-    for (let i = 1, tt = DT; tt <= simT; i++, tt += DT) {
-      vy += g * DT;
-      px += vx * DT;
-      py += vy * DT;
-      // Walls and the arch
-      if (px < 17) (px = 17), (vx = Math.abs(vx) * 0.85);
-      if (px > W - 17) (px = W - 17), (vx = -Math.abs(vx) * 0.85);
-      if (py < TOP + 2) (py = TOP + 2), (vy = Math.abs(vy) * 0.8);
-      // Pop bumpers kick the ball away
-      for (const b of pops) {
-        const dx = px - b.x, dy = py - b.y, d = Math.hypot(dx, dy);
-        if (d < 33 && d > 0) {
-          const nx = dx / d, ny = dy / d;
-          const vn = vx * nx + vy * ny;
-          if (vn < 0) (vx -= 2 * vn * nx), (vy -= 2 * vn * ny);
-          vx += nx * 260;
-          vy += ny * 260;
-          px = b.x + nx * 33;
-          py = b.y + ny * 33;
-          mark(b);
+    // One candidate flight: launch at a given aim and let it ricochet until the steer takes over
+    function fly(aim) {
+      const a = -Math.PI / 2 + (x < cx ? 0.2 : -0.2) + aim * 0.5 + (Math.random() - 0.5) * 0.16;
+      const v0 = Math.sqrt(2 * g * Math.max(90, y - TOP) * 0.88);
+      let vx = Math.cos(a) * v0, vy = Math.sin(a) * v0;
+      const knocked = new Set();
+      const samples = [{ x, y, s: 0 }];
+      let px = x, py = y;
+      const mark = (hit, sling) => {
+        const last = samples[samples.length - 1];
+        if (hit && !last.hit) last.hit = hit;
+        if (sling !== undefined) last.sling = sling;
+      };
+      for (let i = 1, tt = DT; tt <= simT; i++, tt += DT) {
+        vy += g * DT;
+        px += vx * DT;
+        py += vy * DT;
+        // Walls and the arch
+        if (px < 17) (px = 17), (vx = Math.abs(vx) * 0.85);
+        if (px > W - 17) (px = W - 17), (vx = -Math.abs(vx) * 0.85);
+        if (py < TOP + 2) (py = TOP + 2), (vy = Math.abs(vy) * 0.8);
+        // Pop bumpers kick the ball away
+        for (const b of pops) {
+          const dx = px - b.x, dy = py - b.y, d = Math.hypot(dx, dy);
+          if (d < 33 && d > 0) {
+            const nx = dx / d, ny = dy / d;
+            const vn = vx * nx + vy * ny;
+            if (vn < 0) (vx -= 2 * vn * nx), (vy -= 2 * vn * ny);
+            vx += nx * 260;
+            vy += ny * 260;
+            px = b.x + nx * 33;
+            py = b.y + ny * 33;
+            mark(b);
+          }
         }
-      }
-      // Drop targets knock down and bounce it back
-      for (const t of targets) {
-        if (!t.up || knocked.has(t)) continue;
-        if (Math.abs(px - t.x) < 24 && Math.abs(py - t.y) < 28) {
-          knocked.add(t);
-          if (vy < 0) (vy = Math.abs(vy) * 0.75), (py = t.y + 28);
-          else (vy = -Math.abs(vy) * 0.75), (py = t.y - 28);
-          mark(t);
+        // Drop targets knock down and bounce it back
+        for (const t of targets) {
+          if (!t.up || knocked.has(t)) continue;
+          if (Math.abs(px - t.x) < 24 && Math.abs(py - t.y) < 28) {
+            knocked.add(t);
+            if (vy < 0) (vy = Math.abs(vy) * 0.75), (py = t.y + 28);
+            else (vy = -Math.abs(vy) * 0.75), (py = t.y - 28);
+            mark(t);
+          }
         }
+        // Low on the table the slingshots fire it back up
+        if (py > fy - 90 && vy > 0) {
+          vy = -Math.sqrt(2 * g * span * (0.35 + Math.random() * 0.2));
+          vx += (px < cx ? 1 : -1) * (90 + Math.random() * 90);
+          mark(null, px < cx ? 0 : 1);
+        }
+        const sp = Math.hypot(vx, vy);
+        if (sp > 1500) (vx *= 1500 / sp), (vy *= 1500 / sp);
+        if (i % 2 === 0) samples.push({ x: px, y: py, s: tt });
       }
-      // Low on the table the slingshots fire it back up
-      if (py > fy - 90 && vy > 0) {
-        vy = -Math.sqrt(2 * g * span * (0.35 + Math.random() * 0.2));
-        vx += (px < cx ? 1 : -1) * (90 + Math.random() * 90);
-        mark(null, px < cx ? 0 : 1);
-      }
-      const sp = Math.hypot(vx, vy);
-      if (sp > 1500) (vx *= 1500 / sp), (vy *= 1500 / sp);
-      if (i % 2 === 0) samples.push({ x: px, y: py, s: tt });
+      // How much steering it would need: where plain gravity would carry it by tEnd, compared
+      // with the nearer flipper (or the one asked for)
+      const fx = px + vx * land, fyy = py + vy * land + 0.5 * g * land * land;
+      const side = opts.side !== undefined ? opts.side : fx < cx ? 0 : 1;
+      const [sx, sy] = strike(side);
+      return { samples, px, py, vx, vy, side, sx, sy, cost: Math.hypot(fx - sx, fyy - sy) };
     }
-    // The steer: a smooth (Hermite) curve from where it got to onto the nearer flipper
-    const side = opts.side !== undefined ? opts.side : px < cx ? 0 : 1;
-    const [sx, sy] = strike(side);
-    const ex = side ? -80 : 80, ey = 420; // arriving down the flipper, toward its tip
+    // Try a dozen launches around the chosen aim and keep the one that comes down most naturally,
+    // so the final steer is barely there
+    let best = fly(aim0);
+    for (let k = 0; k < 11 && best.cost > 12; k++) {
+      const c = fly(aim0 + (Math.random() * 2 - 1) * 0.35);
+      if (c.cost < best.cost) best = c;
+    }
+    const { samples, px, py, vx, vy, side, sx, sy } = best;
+    // The steer: a smooth (Hermite) curve onto the flipper, leaving with the ball's own velocity
+    // and arriving the way gravity would bring it
+    const ex = vx * 0.6 + (side ? -40 : 40), ey = Math.max(300, vy + g * land);
     const s0 = samples[samples.length - 1].s;
-    for (let k = 1; k <= 24; k++) {
-      const u = k / 24, T = land;
+    for (let k = 1; k <= 18; k++) {
+      const u = k / 18, T = land;
       const h00 = 2 * u ** 3 - 3 * u * u + 1, h10 = u ** 3 - 2 * u * u + u, h01 = -2 * u ** 3 + 3 * u * u, h11 = u ** 3 - u * u;
       samples.push({ x: h00 * px + h10 * T * vx + h01 * sx + h11 * T * ex, y: h00 * py + h10 * T * vy + h01 * sy + h11 * T * ey, s: s0 + (secs - s0) * u });
     }
@@ -507,9 +524,9 @@
       for (const s of [0, 1]) {
         const m = s ? -1 : 1;
         const x0 = s ? W - 44 : 44;
-        ctx.fillStyle = slingFlash[s] > 0 ? "#e8231f" : "#140f0c";
+        ctx.fillStyle = slingFlash[s] > 0 ? "rgba(232,35,31,0.55)" : "rgba(0,0,0,0.28)";
         ctx.strokeStyle = "#e8231f";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(x0, fy - 150);
         ctx.lineTo(x0, fy - 80);
@@ -524,17 +541,18 @@
         ctx.fill();
       }
 
-      // Drop targets: cream faces with red caps; down ones are just a slot
+      // Drop targets: cream faces with a red band and a soft shadow; down ones are just a slot
       for (const t of targets) {
-        const h = t.up ? 34 : 6 + 28 * t.drop;
-        ctx.fillStyle = t.lit ? "#ffc400" : t.up ? "#f6e6c0" : "#3a2418";
-        ctx.strokeStyle = "#140f0c";
-        ctx.lineWidth = 3;
+        const h = t.up ? 32 : 4 + 28 * t.drop;
+        if (t.up) {
+          ctx.fillStyle = "rgba(0,0,0,0.3)";
+          ctx.fillRect(t.x - 11, t.y - h / 2 + 4, 26, h);
+        }
+        ctx.fillStyle = t.lit ? "#ffc400" : t.up ? "#f6e6c0" : "#2c1d14";
         ctx.fillRect(t.x - 13, t.y - h / 2, 26, h);
-        ctx.strokeRect(t.x - 13, t.y - h / 2, 26, h);
         if (t.up) {
           ctx.fillStyle = "#e8231f";
-          ctx.fillRect(t.x - 13, t.y - h / 2, 26, 7);
+          ctx.fillRect(t.x - 13, t.y - h / 2 + 5, 26, 4);
         }
         // An insert light under each target, lit while it's down
         ctx.fillStyle = t.up ? "#3a2418" : col;
@@ -544,25 +562,7 @@
       }
 
       // Pop bumpers
-      for (const b of pops) {
-        const r = 22 * (1 + b.pop * 0.18);
-        ctx.fillStyle = "#140f0c";
-        ctx.beginPath();
-        ctx.arc(b.x, b.y + 3, r * 1.12, 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = "#f6e6c0";
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, r, 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = "#e8231f";
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, r * 0.72, 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = b.pop > 0.2 ? "#fff8e6" : col;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, r * 0.38, 0, TAU);
-        ctx.fill();
-      }
+      for (const b of pops) PinballSkin.bumper(ctx, b.x, b.y, 22, b.pop > 0.2 ? "#fff8e6" : col, b.pop);
 
       // The landing ring: closes on the flipper the ball is heading for, shut as it lands
       const T = arrivalT();
@@ -581,7 +581,7 @@
         }
       }
 
-      // Flippers: cream bats with red rubber, pivoting up together
+      // Flippers: cream bats edged with red rubber, pivoting up together
       for (const s of [0, 1]) {
         const [px, py] = s ? pivR : pivL;
         const a = DOWN + (UP - DOWN) * flipAng;
@@ -589,15 +589,20 @@
         ctx.translate(px, py);
         ctx.scale(s ? -1 : 1, 1);
         ctx.rotate(a);
-        ctx.fillStyle = "#f6e6c0";
-        ctx.strokeStyle = "#140f0c";
-        ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(0, 0, 11, Math.PI / 2, -Math.PI / 2);
         ctx.lineTo(FL + 10, -5);
         ctx.arc(FL + 10, 0, 5, -Math.PI / 2, Math.PI / 2);
         ctx.closePath();
+        ctx.save();
+        ctx.translate(2, 5);
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
         ctx.fill();
+        ctx.restore();
+        ctx.fillStyle = "#f6e6c0";
+        ctx.fill();
+        ctx.strokeStyle = "#e8231f";
+        ctx.lineWidth = 2;
         ctx.stroke();
         ctx.fillStyle = "#e8231f";
         ctx.beginPath();

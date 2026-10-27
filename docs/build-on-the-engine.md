@@ -45,7 +45,7 @@ These hold in every game because the engine and shell enforce them, not because 
 Plus `autopilot(dt, api)`: what the game does by itself when the player stops. The same function runs **attract mode**: until the first input, the game plays itself under a marquee of its `title` and `hint`, like a pinball table on show. There's no start card or rules screen. The first tap or key starts the sound and is also a move. Teach the rest in context with `api.hint(id, text)`, a tip shown once ever (after attract mode), when it becomes relevant (for example, after the first miss). Use `api.ring(x, y, color, size)` for perfect moments.
 
 The shell also runs the reward loop and the variety for every game:
-- **Score:** 100 a hit, doubled for perfect, times a combo multiplier (×1 to ×5, back to ×1 on a miss), scaled by intensity. `api.bonus(points)` awards extra, for example a star.
+- **Score:** 100 a hit, doubled for perfect, times a combo multiplier (×1 to ×5; a miss steps it down one level, never back to ×1, and never takes a Jackpot away), scaled by intensity. `api.bonus(points)` awards extra, for example a star.
 - **Replay score:** one per game and intensity. Beating it gives "REPLAY!" and the target creeps up 15% for future runs. If it keeps going unbeaten, it eases back down. There's also a high score per intensity.
 - **Lifetime rank,** shared by all games, from Rookie to Legend. Each rank gives a new ball finish via `api.ballStops()`.
 - **Intensity:** `api.intensity` and `api.pick({ chill, normal, intense })` let a game scale its own density and demands. The shell scales the pacer.

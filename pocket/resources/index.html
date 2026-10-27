@@ -7,8 +7,8 @@
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #140f0c; }
   body { display: flex; flex-direction: column; }
-  .strip { display: flex; flex-direction: column; gap: 5px; padding: 5px 6px 6px; background: #140f0c; border-bottom: 3px solid #000; box-shadow: 0 2px 0 #ffc400; position: relative; z-index: 2; }
-  .strip .pb-btn { padding: 4px 8px !important; font-size: 10px !important; box-shadow: 2px 2px 0 #000; }
+  .strip { display: flex; flex-direction: column; gap: 5px; padding: 5px 6px 6px; background: #140f0c; border-bottom: 1px solid rgba(255,196,0,.45); position: relative; z-index: 2; }
+  .strip .pb-btn { padding: 4px 8px !important; font-size: 10px !important; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
   .strip .pb-btn.on { background: #ffc400 !important; }
   .grow { flex: 1; }
   .row { display: flex; align-items: center; gap: 5px; min-width: 0; }
@@ -18,7 +18,7 @@
   .strip { cursor: grab; user-select: none; }
   .strip .pb-btn.win { padding: 4px 7px !important; min-width: 22px; }
   .lamp { display: flex; align-items: center; gap: 5px; flex: 0 1 auto; font: 600 10px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #f6e6c0; white-space: nowrap; min-width: 0; }
-  .lamp i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #000; background: #3a2418; }
+  .lamp i { width: 9px; height: 9px; border-radius: 50%; background: #3a2418; }
   .lamp.working i { background: #ffc400; }
   .lamp.done i { background: #1fbf55; animation: blink 0.5s steps(1) 8; }
   .lamp.needs i { background: #e8231f; animation: blink 0.5s steps(1) 8; }
@@ -43,7 +43,7 @@
     <button class="pb-btn" data-game="flow-resonance.html" title="Flow // Resonance">Flow</button>
     <button class="pb-btn" data-game="orbit.html" title="Orbit: fling the ball from bumper to bumper">Orbit</button>
     <button class="pb-btn" data-game="flipper.html" title="Flipper: keep the ball up with the flippers">Flip</button>
-    <button class="pb-btn" data-game="word-rain.html" title="Word Rain">Rain</button>
+    <button class="pb-btn" data-game="ricochet.html" title="Ricochet: kick off the walls and climb">Rico</button>
     <span class="grow"></span>
     <span class="fps" id="fps" title="Frames per second the game is actually drawing"></span>
     </div>
@@ -73,7 +73,18 @@
       frame.src = "games/" + game + "?pocket=1";
       document.querySelectorAll("[data-game]").forEach((b) => b.classList.toggle("on", b.dataset.game === game));
     }
-    document.querySelectorAll("[data-game]").forEach((b) => b.addEventListener("click", () => open(b.dataset.game)));
+    document.querySelectorAll("[data-game]").forEach((b, i) => {
+      b.addEventListener("click", () => open(b.dataset.game));
+      b.title += ` (${i + 1})`;
+    });
+    // Number keys pick a game: 1 Flow, 2 Orbit, 3 Flip, 4 Rico. The game in the frame has the
+    // keyboard, so it passes digits up (flow:game); the strip handles them itself when focused.
+    function openNth(n) {
+      const b = document.querySelectorAll("[data-game]")[n - 1];
+      if (b) open(b.dataset.game);
+    }
+    window.addEventListener("message", (e) => e.data && e.data.type === "flow:game" && openNth(e.data.n));
+    window.addEventListener("keydown", (e) => /^[1-9]$/.test(e.key) && openNth(+e.key));
     frame.addEventListener("load", () => frame.contentWindow.focus());
     // A saved game that's since been retired (Leap, Rollover) falls back to Flow
     const saved = store("pocket.game");

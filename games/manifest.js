@@ -27,6 +27,14 @@ window.AISLOP_GAMES = [
     hue: 350
   },
   {
+    id: "ricochet",
+    title: "Ricochet",
+    blurb: "A steel ball climbs a shaft between two rubber walls. Kick as it reaches a wall and it springs across, higher every time. Hold to grip, let go for a super jump.",
+    path: "games/ricochet.html",
+    status: "house",
+    hue: 120
+  },
+  {
     // First game on the shared flow engine (games/flow-engine.js)
     id: "word-rain",
     title: "Word Rain",

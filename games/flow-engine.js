@@ -1089,7 +1089,8 @@
       ctrl,
       synth,
       pacer,
-      quietLead: false, // true: actions don't queue the grid-snapped lead note (Fidget plays its own)
+      quietLead: false,
+      holdTempo: false, // true: actions don't queue the grid-snapped lead note (Fidget plays its own)
       // An immediate note for Fidget: no waiting for the grid, in key with the current chord.
       // height 0 (high) to 1 (low); sustain in seconds (long rings for slow presses, short
       // staccato for fast ones); a soft click on top so every press has a tactile edge.
@@ -1132,6 +1133,12 @@
       // A rhythmic action: a tap, a keystroke. height 0 (top) .. 1 (bottom) picks the note;
       // note:false counts toward cadence without a lead note (e.g. a wrong key)
       tap({ height = 0.5, note = true } = {}) {
+        // holdTempo (Fidget): the tap is heard but not measured, so mashing can't drag the
+        // player's calibrated tempo, timing zero or telemetry away from their natural rhythm
+        if (eng.holdTempo) {
+          synth.queueQuantizedTap(height, ctrl.tier, false);
+          return null;
+        }
         const nowMs = performance.now();
         ctrl.recordTap(nowMs);
         telemetryTap(nowMs);

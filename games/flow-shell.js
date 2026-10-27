@@ -77,7 +77,7 @@
         <div><span class="pb-cap">Score <span class="pb-badge pb-mult" data-mult>1&times;</span></span><span class="pb-window" data-streak></span><span class="pb-best">high <b data-best>0</b></span></div>
         <div class="fs-state"><span class="pb-label" data-label></span><div class="pb-lights" data-lights></div></div>
         <div class="fs-controls">
-          <button class="pb-btn" data-style title="Flow or fidget (\\)"></button>
+          <button class="pb-btn" data-style title="Flow or fidget (${typing ? "\\" : "F"})"></button>
           <button class="pb-btn fs-voice" data-intensity title="Chill, normal or intense (\`)"></button>
           <button class="pb-btn fs-voice" data-track title="Switch track (Tab)"></button>
           <button class="pb-btn pb-icon" data-pause title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
@@ -102,10 +102,11 @@
           ${actionKeys.concat(extraKeys).map(([k, d]) => `<div><span>${d}</span>${kbd(k)}</div>`).join("")}
           <div><span>Pause</span>${kbd("Esc")}</div>
           <div><span>Autopilot</span>${kbd("Enter")}</div>
-          <div><span>Flow / fidget</span>${kbd("\\")}</div>
+          <div><span>Flow / fidget</span>${kbd(typing ? "\\" : "F")}</div>
           <div><span>Chill / normal / intense</span>${kbd("`")}</div>
           <div><span>Track / voice</span><span>${kbd("Tab")} ${kbd("Shift+Tab")}</span></div>
           <div><span>Volume / mute</span><span>${kbd("-")} ${kbd("=")} ${kbd("0")}</span></div>
+          <div><span>Switch game (pocket)</span>${kbd("1")}&ndash;${kbd("4")}</div>
           <div><span>Audio offset</span><span>${kbd("[")} ${kbd("]")}</span></div>
         </div>
         <div class="pb-note">Stop for a few seconds and it plays itself, without scoring. Any input takes over again, and the next two misses are forgiven.</div>
@@ -215,6 +216,7 @@
       const fidget = playStyle === "fidget";
       eng.ctrl.o.idleSec = fidget ? Infinity : baseIdle;
       eng.quietLead = fidget; // Fidget plays its own immediate notes instead
+      eng.holdTempo = fidget; // and its presses don't count toward the player's tempo
       if (fidget && eng.auto) eng.setAuto(false);
       if (mode) endMode(false);
       if (switching && !fidget) {
@@ -368,14 +370,13 @@
         if (!started || playStyle === "fidget") return false;
         const counted = eng.clip();
         if (counted) {
-          combo = 0;
-          mult = 1; // like losing the bonus multiplier on a drain
-          if (mode === "Jackpot" && pot > 0 && !potLost) {
-            potLost = true;
-            api.callout("Jackpot lost", W / 2, H * 0.3, "#8a6a4a", 0.9);
-          }
+          // Steps the multiplier down one level, the way the engine steps the streak down a
+          // quarter: never a wipe, and a Jackpot already built is never taken away, so there's
+          // no streak to protect (research brief: milestones must not create that pressure)
+          combo = Math.max(0, combo - 10);
+          mult = Math.min(5, 1 + Math.floor(combo / 10));
           phraseClean = false;
-          if (!reduced) flash = 0.25;
+          if (!reduced) flash = 0.08; // a faint warm wash, not a red alarm
         }
         hud();
         return counted;
@@ -602,7 +603,7 @@
     // Session numbers go to a host page (the pocket app logs them for tuning), every 20 s
     // of play and whenever autopilot takes over
     function reportSession() {
-      if (!started || window.parent === window) return;
+      if (!started || window.parent === window || playStyle === "fidget") return;
       window.parent.postMessage({ type: "flow:session", session: Object.assign(eng.telemetry(), { points, high: hi, intensity, rank: rank.name }) }, "*");
     }
     setInterval(() => started && !eng.auto && !eng.paused && reportSession(), 20000);
@@ -705,12 +706,13 @@
       } else if (e.key === "-") note(`Volume ${Math.round(eng.changeVolume(-0.1) * 100)}%`);
       else if (e.key === "=" || e.key === "+") note(`Volume ${Math.round(eng.changeVolume(0.1) * 100)}%`);
       else if (e.key === "0") eng.toggleMute();
+      else if (/^[1-9]$/.test(e.key) && window.parent !== window) window.parent.postMessage({ type: "flow:game", n: +e.key }, "*"); // a host (the pocket) switches games
       else if (e.key === "[" || e.key === "]") {
         const ms = eng.adjustOffset(e.key === "[" ? -10 : 10);
         note(`Audio offset ${ms > 0 ? "+" : ""}${ms} ms`);
       } else if (e.key === "?") q("[data-keyscard]").classList.toggle("show");
       else if (e.key === "`") cycleIntensity();
-      else if (e.key === "\\") toggleStyle();
+      else if (e.key === "\\" || (!typing && (e.key === "f" || e.key === "F"))) toggleStyle(); // F too, except where letters are typing
       else if (g.onKey && !eng.paused && g.onKey(e.key, api)) {
         // A game's own keys start the game too, like Space or a tap
         e.preventDefault();

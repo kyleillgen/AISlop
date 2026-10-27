@@ -35,6 +35,7 @@ In Flow, every game scores like a pinball table:
 - a 20-second table mode every minute or so (Double Score, Hurry-Up, Jackpot, plus one of each game's own).
 
 - **Flipper** (`games/flipper.html`): one button works both flippers. The ball lands on a flipper on the beat (a ring closes to show where and when); flip it up into the drop targets and off the pop bumpers. A miss drops between the flippers and the outlane kickback fires it straight back. Hold to cradle the ball, let go for the orbit shot round the top of the table. In Fidget every press flips the ball off wherever it is.
+- **Ricochet** (`games/ricochet.html`): a steel ball climbs a shaft between two rubber walls, reaching a wall on the beat (a ring closes on the spot). Kick and it springs across, higher; early kicks hop flatter, late ones loftier. Miss and it slides down the rubber until a kicker fires it back across, a little lower. Hold to grip the wall, let go for a super jump. In Fidget every press springs it off, even in mid-air.
 - **Orbit** (`games/orbit.html`): a steel ball circles a pop bumper. Fling it as it crosses the lit arrow and the next bumper up the table catches it. Perfect is ±45 ms, a slightly-off fling is steered into the lane, and a bad one just swings out and gets reeled back. In Fidget, press to grab, let go to fling: the next bumper appears wherever the ball is heading, and holding longer winds up a bigger fling.
 - **Drop Catch** (`games/template.html`): the starter template. Drops land on a pad on the beat; tap as they land.
 
