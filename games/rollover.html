@@ -12,24 +12,29 @@
 <script src="pinball-skin.js"></script>
 <script src="flow-shell.js"></script>
 <script>
-// Rollover: lit inserts come down four lanes and land on the beat; slide the ball under them.
+// Rollover: lights come down four lanes and land on the beat; roll the ball under them.
 //
-// Each lane is a note, so moving is playing: the targets walk up, down and zigzag across the
-// lanes in short phrases, and following them plays the melody back. Arriving early and waiting
-// is "perfect" (be there on the beat, not lunging at it). A missed insert steps the streak down
-// a little and the next ones keep coming.
+// The lanes are F, L, O and W, like a pinball table's top lanes: catch a light in a lane and its
+// letter lights; light all four and the table pays a FLOW bonus and resets the letters. Some
+// lights are holds, with a tail to stay under until it ends: sitting still in the right lane is
+// play, not idling. Every lane is a note, so following the lights plays the tune. Arriving early
+// is perfect; a missed light steps the streak down a little and the next ones keep coming.
 (() => {
   "use strict";
 
   const N = 4;
-  const LEAD = 4; // beats an insert is visible before it lands
+  const LETTERS = ["F", "L", "O", "W"];
+  const LEAD = 4; // beats a light is visible before it lands
   const SKY = [["#0d0930", "#2a1460"], ["#04170f", "#0f3a1c"], ["#1a0520", "#45102e"], ["#1f0806", "#52200a"]];
 
   let targets = [];
   let lane = 1;
-  let laneSince = 0; // beatPos when the ball arrived in its lane
+  let laneSince = 0;
   let ballX = 0;
-  let laneFlash = [0, 0, 0, 0];
+  let ballV = 0;
+  let pop = [0, 0, 0, 0]; // switch pop per lane
+  let lit = [false, false, false, false];
+  let letterFlash = 0;
   let beatsSinceSpawn = 99;
   let nextLane = 1;
   let phrase = [];
@@ -40,20 +45,14 @@
   let laneW = 0;
 
   const laneX = (i) => left + laneW * (i + 0.5);
-  const yOf = (t, now) => hitY - (t.beat - now) * ((hitY - topY) / LEAD);
+  const speed = () => (hitY - topY - 40) / LEAD; // pixels per beat
+  const yAt = (beat, now) => hitY - (beat - now) * speed();
 
-  // Melodic phrases across the lanes: walks, zigzags and holds, chained from where the last
-  // one ended so the ball's path reads like a tune
+  // Melodic phrases across the lanes, chained from where the last one ended
   function nextPhrase(from) {
-    const shapes = [[1, 1, 1], [-1, -1, -1], [2, -1, 2], [-2, 1, -2], [0, 1, 0], [1, -1, 1, -1], [0, 0, 1], [-1, 0, -1]];
+    const shapes = [[1, 1, 1], [-1, -1, -1], [2, -1, 2], [-2, 1, -2], [0, 1, 0], [1, -1, 1, -1], [0, 0, 1], [-1, 0, -1], [3, -3]];
     const s = shapes[Math.floor(Math.random() * shapes.length)];
-    const out = [];
-    let at = from;
-    for (const d of s) {
-      at = Math.max(0, Math.min(N - 1, at + d));
-      out.push(at);
-    }
-    return out;
+    return s.map((d) => (from = Math.max(0, Math.min(N - 1, from + d))));
   }
 
   function move(to, api) {
@@ -61,26 +60,32 @@
     if (to === lane) return;
     lane = to;
     laneSince = api.eng.beatPos();
-    // Each lane is a note: left low, right high
-    api.eng.tap({ height: 0.8 - 0.6 * (lane / (N - 1)) });
+    api.eng.tap({ height: 0.8 - 0.6 * (lane / (N - 1)) }); // each lane is a note
+  }
+
+  function lightLetter(i, api) {
+    lit[i] = true;
+    if (!lit.every(Boolean)) return;
+    // FLOW: the table pays out, the letters flash and reset
+    api.score(4, "PERFECT", api.eng.beatSec);
+    api.callout("FLOW!", api.W / 2, topY + 80, "#ffc400", 1.3);
+    api.ring(api.W / 2, topY + 30, api.color(), Math.min(api.W, api.H) * 0.4);
+    letterFlash = 1;
+    setTimeout(() => (lit = [false, false, false, false]), 600);
   }
 
   const api = FlowShell.mount({
     key: "rollover",
     title: "Rollover",
-    tagline: "Roll under<br>the lights.",
-    about:
-      "Lit inserts come down four lanes and land on the beat. Slide the ball under each one as it lands. Every lane is a note, so following the lights plays the tune back. Be there early and it counts as perfect. A missed one just steps your streak down a little.",
-    hint: "← → or tap a lane",
+    hint: "Roll under the lights &middot; &larr; &rarr; or tap a lane",
     input: "tap",
-    keys: [["← →", "slide"], ["1–4", "jump to a lane"]],
+    keys: [["← →", "roll"], ["1–4", "jump to a lane"]],
     tierNames: ["Finding your rhythm", "Lit up", "Multiball", "Jackpot"],
-    // Moves follow the lights (every 1-4 beats), and waiting in the right lane is playing too,
-    // so autopilot waits longer before taking over
-    engine: { perBeat: [0.25, 1 / 3, 0.5, 1, 2], stableTol: 3, idleSec: 7, pacing: { minBeats: 1, startBeats: 2 } },
+    // Moves follow the lights (every 1-4 beats); waiting in the right lane counts as playing
+    engine: { perBeat: [0.25, 1 / 3, 0.5, 1, 2], stableTol: 3, pacing: { minBeats: 1, startBeats: 2 } },
 
     resize(api) {
-      const w = Math.min(api.W - 24, 460);
+      const w = Math.min(api.W - 24, 440);
       left = (api.W - w) / 2;
       laneW = w / N;
       hitY = Math.round(api.H * 0.8);
@@ -94,7 +99,10 @@
       beatsSinceSpawn = 0;
       if (!phrase.length) phrase = nextPhrase(nextLane);
       nextLane = phrase.shift();
-      targets.push({ beat: n + LEAD, lane: nextLane, state: "live", fade: 1 });
+      // Now and then a hold: a light with a tail one to three beats long
+      const len = api.tier >= 1 && Math.random() < 0.22 ? 1 + Math.floor(Math.random() * 3) : 0;
+      targets.push({ beat: n + LEAD, lane: nextLane, len, state: "live", fade: 1 });
+      if (len) beatsSinceSpawn = -len; // leave room for the tail
     },
 
     onKey(key, api) {
@@ -105,16 +113,17 @@
       return true;
     },
 
-    // Tap a lane to go there; Space nudges toward the next light
+    // Tap a lane to go there; Space rolls one lane toward the next light
     onAction(api, e) {
       if (e.x !== undefined) return move(Math.floor((e.x - left) / laneW), api);
       const next = targets.find((t) => t.state === "live");
       if (next) move(lane + Math.sign(next.lane - lane), api);
     },
 
-    // Autopilot glides to each light half a beat before it lands; nothing scores
+    // Autopilot (and attract mode) rolls to each light half a beat early and stays for holds
     autopilot(dt, api) {
       const now = api.eng.beatPos();
+      if (targets.some((t) => t.state === "holding")) return;
       const next = targets.find((t) => t.state === "live" && t.beat - now < 0.6);
       if (next && next.lane !== lane) {
         lane += Math.sign(next.lane - lane);
@@ -125,26 +134,42 @@
     update(dt, api) {
       const now = api.eng.beatPos();
       kick = Math.max(0, kick - dt * 4.2);
-      ballX += (laneX(lane) - ballX) * (1 - Math.pow(0.0005, dt)); // quick, smooth slide
-      for (let i = 0; i < N; i++) laneFlash[i] = Math.max(0, laneFlash[i] - dt * 2.5);
+      letterFlash = Math.max(0, letterFlash - dt * 1.5);
+      // A sprung ball: it rolls into a lane and settles with a little overshoot
+      ballV += ((laneX(lane) - ballX) * 520 - ballV * 30) * dt;
+      ballX += ballV * dt;
+      for (let i = 0; i < N; i++) pop[i] = Math.max(0, pop[i] - dt * 3);
+
       for (const t of targets) {
-        if (t.state !== "live") {
+        if (t.state === "got" || t.state === "missed" || t.state === "released" || t.state === "done") {
           t.fade -= dt * 2.5;
           continue;
         }
-        if (now < t.beat) continue;
-        if (lane === t.lane) {
-          t.state = "got";
-          laneFlash[t.lane] = 1;
-          api.burst(laneX(t.lane), hitY, api.color(), 6, -1);
-          api.ring(laneX(t.lane), hitY, api.color(), 30);
-          if (!api.eng.auto) {
+        if (t.state === "live" && t.len && t.beat - now < 1.2) api.hint("hold", "Long light: stay under it until it ends");
+        if (t.state === "live" && now >= t.beat) {
+          if (lane === t.lane) {
+            pop[t.lane] = 1;
+            api.burst(laneX(t.lane), hitY, api.color(), 6, -1);
+            api.ring(laneX(t.lane), hitY, api.color(), 30);
             const perfect = now - laneSince >= 0.25; // settled in before it landed
             api.score(1, perfect ? "PERFECT" : "CLEAN", api.eng.beatSec * 1.1);
+            if (!api.eng.auto && api.started) lightLetter(t.lane, api);
+            t.state = t.len ? "holding" : "got";
+          } else {
+            t.state = "missed";
+            api.miss();
+            api.hint("controls", "Roll with &larr; &rarr; or A/D, jump with 1&ndash;4, or tap a lane");
           }
-        } else {
-          t.state = "missed";
-          api.miss();
+        }
+        if (t.state === "holding") {
+          if (lane !== t.lane) t.state = "released"; // leaving early costs nothing
+          else if (now >= t.beat + t.len) {
+            t.state = "done";
+            pop[t.lane] = 1;
+            api.ring(laneX(t.lane), hitY, "#ffc400", 50);
+            api.burst(laneX(t.lane), hitY, "#ffc400", 10, -1);
+            api.score(1, "PERFECT", api.eng.beatSec);
+          }
         }
       }
       targets = targets.filter((t) => t.fade > 0);
@@ -162,76 +187,109 @@
       });
       ctx.fillRect(0, 0, W, H);
 
-      // Side slingshots: two black triangles with a rubber edge that kicks on the beat
-      for (const side of [-1, 1]) {
-        const x0 = side < 0 ? left - 10 : left + laneW * N + 10;
-        ctx.fillStyle = "#140f0c";
-        ctx.beginPath();
-        ctx.moveTo(x0, hitY - 160);
-        ctx.lineTo(x0, hitY - 20);
-        ctx.lineTo(x0 - side * 34, hitY - 20);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = col;
-        ctx.lineWidth = 3 + kick * 2;
-        ctx.beginPath();
-        ctx.moveTo(x0, hitY - 160);
-        ctx.lineTo(x0 - side * 34, hitY - 20);
-        ctx.stroke();
+      // Playfield arrows rolling up each lane on the beat, toward the letters
+      const spacing = speed();
+      const frac = now - Math.floor(now);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.12 + kick * 0.06;
+      ctx.beginPath();
+      for (let i = 0; i < N; i++) {
+        const x = laneX(i);
+        for (let k = 0; k < LEAD + 1; k++) {
+          const y = hitY - 30 - (k + frac) * spacing;
+          if (y < topY + 60) continue;
+          ctx.moveTo(x - 10, y + 7);
+          ctx.lineTo(x, y - 3);
+          ctx.lineTo(x + 10, y + 7);
+        }
       }
+      ctx.stroke();
+      ctx.globalAlpha = 1;
 
-      // Lane guides: cream rails with black outlines, the way inlanes look on a playfield
+      // Lane guides: cream rails with black outlines
       for (let i = 0; i <= N; i++) {
         const x = left + laneW * i;
         ctx.fillStyle = "#140f0c";
-        ctx.fillRect(x - 3, topY, 6, hitY - topY + 24);
+        ctx.fillRect(x - 3, topY + 50, 6, hitY - topY - 26);
         ctx.fillStyle = "#f6e6c0";
-        ctx.fillRect(x - 1.5, topY, 3, hitY - topY + 24);
+        ctx.fillRect(x - 1.5, topY + 50, 3, hitY - topY - 26);
       }
 
-      // Rollover switches on the line: cream buttons that light when an insert lands on them
+      // The F-L-O-W lane letters at the top: unlit inserts until you catch a light in that lane
+      ctx.font = `600 ${Math.round(Math.min(26, laneW * 0.3))}px Oswald, Impact, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       for (let i = 0; i < N; i++) {
         const x = laneX(i);
+        const on = lit[i] || (letterFlash > 0 && Math.floor(letterFlash * 12) % 2 === 0);
+        const r = Math.min(22, laneW * 0.3);
         ctx.fillStyle = "#140f0c";
         ctx.beginPath();
-        ctx.arc(x, hitY, 17, 0, Math.PI * 2);
+        ctx.arc(x, topY + 24, r + 4, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = laneFlash[i] > 0 ? col : "#3a2418";
+        ctx.fillStyle = on ? col : "#3a2418";
         ctx.beginPath();
-        ctx.arc(x, hitY, 12 + laneFlash[i] * 3, 0, Math.PI * 2);
+        ctx.arc(x, topY + 24, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = on ? "#fff8e6" : "#8a6a4a";
+        ctx.fillText(LETTERS[i], x, topY + 25);
+      }
+      ctx.textBaseline = "alphabetic";
+
+      // Rollover switches on the line: pop when a light lands on them
+      for (let i = 0; i < N; i++) {
+        const x = laneX(i);
+        const s = 1 + Math.sin(pop[i] * Math.PI) * 0.25;
+        ctx.fillStyle = "#140f0c";
+        ctx.beginPath();
+        ctx.arc(x, hitY, 17 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = pop[i] > 0 ? col : "#3a2418";
+        ctx.beginPath();
+        ctx.arc(x, hitY, 12 * s, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Inserts: arrow lights pointing down, lit in the tier colour with a hard white glint
+      // Lights: arrow inserts that warm up as they near the line; holds trail a lit tail
       const s = Math.min(22, laneW * 0.32);
       for (const t of targets) {
         const x = laneX(t.lane);
-        const y = t.state === "live" ? yOf(t, now) : hitY;
-        if (y < topY - s) continue;
-        // Lights warm up as they near the line, so the next one to land reads first
-        ctx.globalAlpha = t.state === "live" ? 0.45 + 0.55 * Math.max(0, 1 - (t.beat - now) / LEAD) : Math.max(0, t.fade);
+        const head = t.state === "live" ? yAt(t.beat, now) : hitY;
+        if (t.len && (t.state === "live" || t.state === "holding")) {
+          const tail = Math.max(topY + 50, yAt(t.beat + t.len, now));
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = "#140f0c";
+          ctx.fillRect(x - 9, tail, 18, head - tail);
+          ctx.fillStyle = t.state === "holding" ? "#ffc400" : col;
+          ctx.fillRect(x - 6, tail, 12, head - tail);
+        }
+        if (head < topY + 40) continue;
+        if (t.state === "holding" || t.state === "done") continue;
+        const warm = t.state === "live" ? 0.45 + 0.55 * Math.max(0, 1 - (t.beat - now) / LEAD) : Math.max(0, t.fade);
+        ctx.globalAlpha = warm;
         ctx.fillStyle = "#140f0c";
         ctx.beginPath();
-        ctx.moveTo(x - s - 3, y - s * 0.7 - 3);
-        ctx.lineTo(x + s + 3, y - s * 0.7 - 3);
-        ctx.lineTo(x, y + s * 0.7 + 4);
+        ctx.moveTo(x - s - 3, head - s * 0.7 - 3);
+        ctx.lineTo(x + s + 3, head - s * 0.7 - 3);
+        ctx.lineTo(x, head + s * 0.7 + 4);
         ctx.closePath();
         ctx.fill();
         ctx.fillStyle = t.state === "missed" ? "#5a3a2a" : col;
         ctx.beginPath();
-        ctx.moveTo(x - s, y - s * 0.7);
-        ctx.lineTo(x + s, y - s * 0.7);
-        ctx.lineTo(x, y + s * 0.7);
+        ctx.moveTo(x - s, head - s * 0.7);
+        ctx.lineTo(x + s, head - s * 0.7);
+        ctx.lineTo(x, head + s * 0.7);
         ctx.closePath();
         ctx.fill();
         if (t.state === "live") {
           ctx.fillStyle = "rgba(255,255,255,0.75)";
-          ctx.fillRect(x - s * 0.45, y - s * 0.5, s * 0.35, s * 0.18);
+          ctx.fillRect(x - s * 0.45, head - s * 0.5, s * 0.35, s * 0.18);
         }
       }
       ctx.globalAlpha = 1;
 
-      // The ball
+      // The ball: leans and stretches into a roll
       const r = Math.min(15, laneW * 0.2);
       const ball = api.cached("ball" + r, () => {
         const g = ctx.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r);
@@ -240,12 +298,11 @@
         g.addColorStop(1, "#4a443e");
         return g;
       });
-      // The ball leans and stretches into a slide
-      const slide = Math.max(-1, Math.min(1, (laneX(lane) - ballX) / laneW));
+      const slide = Math.max(-1, Math.min(1, ballV / 900));
       ctx.save();
-      ctx.translate(ballX, hitY + 30);
-      ctx.rotate(slide * 0.15);
-      ctx.scale(1 + Math.abs(slide) * 0.18, 1 - Math.abs(slide) * 0.1);
+      ctx.translate(ballX, hitY + 32);
+      ctx.rotate(slide * 0.2);
+      ctx.scale(1 + Math.abs(slide) * 0.2, 1 - Math.abs(slide) * 0.12);
       ctx.fillStyle = ball;
       ctx.beginPath();
       ctx.arc(0, 0, r, 0, Math.PI * 2);
@@ -263,12 +320,13 @@
       lane,
       nextLane: next ? next.lane : null,
       nextIn: next ? +(next.beat - now).toFixed(2) : null,
+      holding: targets.some((t) => t.state === "holding"),
+      lit: lit.map((v) => (v ? 1 : 0)).join(""),
       streak: api.eng.streak,
       bpm: +api.eng.bpm.toFixed(1),
       locked: api.eng.locked,
       auto: api.eng.auto,
-      got: targets.filter((t) => t.state === "got").length,
-      missed: targets.filter((t) => t.state === "missed").length
+      started: api.started
     };
   };
 })();

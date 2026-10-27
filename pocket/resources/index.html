@@ -181,6 +181,14 @@
     const lampText = document.getElementById("lampText");
     const LABELS = { start: "Claude working", done: "Claude done", needs: "Claude needs you" };
     let signalPath = null;
+    let workingSince = 0;
+    const clock = (ms) => {
+      const sec = Math.max(0, Math.round(ms / 1000));
+      return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0");
+    };
+    setInterval(() => {
+      if (workingSince) lampText.textContent = "Claude working · " + clock(Date.now() - workingSince);
+    }, 1000);
     let lastSignal = null;
     async function poll() {
       try {
@@ -193,6 +201,14 @@
         if (!LABELS[kind]) return;
         lamp.className = "lamp " + (kind === "start" ? "working" : kind);
         lampText.textContent = LABELS[kind];
+        // While Claude works, the lamp counts the wait; when it's done, it says how long it took.
+        // Knowing roughly how long you've been away makes switching back less jarring.
+        const at = +text.split(" ")[0];
+        if (kind === "start") workingSince = at;
+        else if (workingSince && at >= workingSince) {
+          lampText.textContent = LABELS[kind] + " · " + clock(at - workingSince);
+          workingSince = 0;
+        }
         // Only react to news, not to whatever the file said when the app opened
         if (!first && kind === "start") surface();
         if (!first && kind !== "start") {

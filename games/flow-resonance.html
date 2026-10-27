@@ -93,20 +93,10 @@
     </div>
 
     <!-- Start: the backglass -->
-    <div id="startOverlay" class="absolute inset-0 z-30 flex items-center justify-center p-4 sm:p-5 pb-backglass transition-opacity duration-500">
-        <div class="pb-card">
-            <div class="pb-kicker">Flow // Resonance</div>
-            <h1 class="pb-title">Find your rhythm.<br>Stay in it.</h1>
-            <p>Tap a steady beat. The music settles into your tempo, the pillars arrive on the beat, and every tap plays in key. You can't lose, and it never speeds up. Stop tapping and it flies itself.</p>
-            <div class="pb-keys">
-                <span><span class="pb-kbd">Space</span> fly</span>
-                <span><span class="pb-kbd">A</span> autopilot</span>
-                <span><span class="pb-kbd">P</span> pause</span>
-                <span><span class="pb-kbd">T</span> <span class="pb-kbd">V</span> track, voice</span>
-            </div>
-            <button id="startBtn" type="button" class="pb-start">Start</button>
-            <div class="pb-or">or just tap</div>
-        </div>
+    <div id="startOverlay" class="absolute left-0 right-0 z-30 text-center pointer-events-none transition-opacity duration-500" style="top: 34%">
+        <div class="pb-title" style="font-size: 44px; margin: 0 0 12px">Flow</div>
+        <span class="pb-hint">Tap or Space in a steady rhythm</span>
+        <button id="startBtn" type="button" hidden></button>
     </div>
 
     <!-- Pause -->
@@ -1418,32 +1408,52 @@
             }
 
             // Compute ideal Y along the smooth spline between pipes for the Harmonic Guide Ribbon & Buoyancy
+            // The guide line: a monotone cubic spline through the gap centres (Fritsch-Carlson).
+            // Slopes carry through each gap, so a run of rising pillars is one smooth climb rather
+            // than the stair-step kinks cosine easing made (it flattened to zero slope at every
+            // pillar), and it never overshoots between two pillars. Autopilot follows it too.
+            function guideSlope(i) {
+                const p = pipes[i];
+                const prev = pipes[i - 1];
+                const next = pipes[i + 1];
+                const cx = (q) => q.x + q.width * 0.5;
+                const dPrev = prev ? (p.gapY - prev.gapY) / Math.max(1, cx(p) - cx(prev)) : null;
+                const dNext = next ? (next.gapY - p.gapY) / Math.max(1, cx(next) - cx(p)) : null;
+                if (dPrev === null) return dNext || 0;
+                if (dNext === null) return dPrev;
+                if (dPrev * dNext <= 0) return 0; // a turning point stays level
+                return (2 * dPrev * dNext) / (dPrev + dNext); // harmonic mean: monotone, no overshoot
+            }
+
             function getHarmonicGuideYAtX(queryX) {
                 if (pipes.length === 0) return height * 0.52;
-
-                let leftPipe = null;
-                let rightPipe = null;
-
-                for (let i = 0; i < pipes.length; i++) {
-                    const pCenter = pipes[i].x + pipes[i].width * 0.5;
-                    if (pCenter <= queryX) {
-                        leftPipe = pipes[i];
-                    } else if (!rightPipe) {
-                        rightPipe = pipes[i];
-                        break;
-                    }
+                let i = -1;
+                for (let k = 0; k < pipes.length; k++) {
+                    if (pipes[k].x + pipes[k].width * 0.5 <= queryX) i = k;
+                    else break;
                 }
-
-                if (!leftPipe && rightPipe) return rightPipe.gapY;
-                if (leftPipe && !rightPipe) return leftPipe.gapY;
-                if (!leftPipe && !rightPipe) return height * 0.52;
-
-                const x0 = leftPipe.x + leftPipe.width * 0.5;
-                const x1 = rightPipe.x + rightPipe.width * 0.5;
-                const t = Math.max(0, Math.min(1, (queryX - x0) / Math.max(1, x1 - x0)));
-                // Cosine interpolation for a silky sine contour between pipe centers
-                const smoothT = (1 - Math.cos(t * Math.PI)) * 0.5;
-                return leftPipe.gapY + (rightPipe.gapY - leftPipe.gapY) * smoothT;
+                // Past either end, carry on along the end slope (gently) rather than going flat
+                const end = (k) => {
+                    const c = pipes[k].x + pipes[k].width * 0.5;
+                    const y = pipes[k].gapY + guideSlope(k) * 0.5 * (queryX - c);
+                    return Math.max(130, Math.min(height - 60, y));
+                };
+                if (i === -1) return end(0);
+                if (i === pipes.length - 1) return end(i);
+                const p0 = pipes[i];
+                const p1 = pipes[i + 1];
+                const x0 = p0.x + p0.width * 0.5;
+                const x1 = p1.x + p1.width * 0.5;
+                const h = Math.max(1, x1 - x0);
+                const t = Math.max(0, Math.min(1, (queryX - x0) / h));
+                const t2 = t * t;
+                const t3 = t2 * t;
+                return (
+                    (2 * t3 - 3 * t2 + 1) * p0.gapY +
+                    (t3 - 2 * t2 + t) * h * guideSlope(i) +
+                    (-2 * t3 + 3 * t2) * p1.gapY +
+                    (t3 - t2) * h * guideSlope(i + 1)
+                );
             }
 
             function evaluatePipePass(pipe) {
@@ -1849,12 +1859,6 @@
                 return PinballSkin.tiers[flowCtrl.tier - 1]; // playfield insert colours
             }
 
-            // The partner colour for double stripes (ribbon, lips)
-            function getTierStripeColor() {
-                if (runPeak >= PLATINUM_AT) return "#9aa3b2";
-                return ["", "#ff6a1a", "#ffc21a", "#ff6a1a", "#ff2d8a"][flowCtrl.tier];
-            }
-
             let lastHudTime = 0;
             function updateHudDisplays() {
                 const pct = Math.round(flowCtrl.flowIndex * 100);
@@ -2164,7 +2168,7 @@
                         }
                     }
 
-                    if (p.x + p.width < -60) {
+                    if (p.x + p.width < -320) { // kept a while off-screen so the guide line has a left neighbour
                         pipes.splice(i, 1);
                     }
                 }
@@ -2308,23 +2312,24 @@
                     ctx.save();
                     // Locking in thickens the ribbon over half a second instead of switching
                     lockVis += ((flowCtrl.resonanceLocked ? 1 : 0) - lockVis) * 0.05;
-                    const ribbonAlpha = 0.5 + lockVis * (0.3 + kickPulse * 0.15);
-                    ctx.strokeStyle = primaryColor;
-                    ctx.globalAlpha = ribbonAlpha;
-                    ctx.lineWidth = 2.2 + lockVis * 1.6;
+                    const ribbonAlpha = 0.55 + lockVis * (0.3 + kickPulse * 0.15);
+                    const lw = 2.2 + lockVis * 1.6;
                     ctx.lineJoin = "round";
+                    ctx.lineCap = "round";
                     ctx.beginPath();
-                    for (let x = 0; x <= width; x += 18) {
+                    for (let x = 0; x <= width + 10; x += 10) {
                         const gy = getHarmonicGuideYAtX(x);
                         if (x === 0) ctx.moveTo(x, gy);
                         else ctx.lineTo(x, gy);
                     }
+                    // One clean line with a black outline, like a lane guide on a playfield
+                    ctx.globalAlpha = ribbonAlpha * 0.8;
+                    ctx.strokeStyle = "#140f0c";
+                    ctx.lineWidth = lw + 3;
                     ctx.stroke();
-
-                    // A second, thinner stripe in the partner colour (70s racing stripes, no glow)
-                    ctx.translate(0, 8);
-                    ctx.strokeStyle = getTierStripeColor();
-                    ctx.lineWidth = 1.4 + lockVis;
+                    ctx.globalAlpha = ribbonAlpha;
+                    ctx.strokeStyle = primaryColor;
+                    ctx.lineWidth = lw;
                     ctx.stroke();
                     ctx.restore();
                 }

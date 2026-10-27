@@ -42,7 +42,7 @@ These hold in every game because the engine and shell enforce them, not because 
 | What counts? | `api.score(1, "PERFECT" \| "CLEAN", handleSec)` / `api.miss()` | `handleSec` (how long the player took) feeds the pacer |
 | How does it look? | `draw(ctx, api, t)` | The shell draws particles and callouts on top. Use `api.cached()` for gradients |
 
-Plus `autopilot(dt, api)`: what the game does by itself when the player stops. Optional: `setup`, `resize`, `start`, `onKey`, `onPhrase`, `tierNames`, `colors`, `engine` options.
+Plus `autopilot(dt, api)`: what the game does by itself when the player stops. The same function runs **attract mode**: until the first input, the game plays itself under a marquee of its `title` and `hint`, like a pinball table on show. There's no start card or rules screen. The first tap or key starts the sound and is also a move. Teach the rest in context with `api.hint(id, text)`, a tip shown once ever (after attract mode), when it becomes relevant (for example, after the first miss). Use `api.ring(x, y, color, size)` for perfect moments. Optional: `setup`, `resize`, `start`, `onKey`, `onPhrase`, `tierNames`, `colors`, `engine` options.
 
 ## Prompt kit
 

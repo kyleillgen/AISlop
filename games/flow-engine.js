@@ -744,6 +744,7 @@
     // break it. Both return false when ignored.
     c.score = (n) => {
       if (c.auto) return false;
+      c.idle = 0; // a hit is playing, even without input (waiting in the right lane counts)
       c.streak += n;
       c.best = Math.max(c.best, c.streak);
       c.tier = c.computeTier(c.streak);
@@ -899,6 +900,8 @@
     let started = false;
     let paused = false;
     let beatCount = 0;
+    let silentBeat = 0;
+    const audioLive = () => started && synth.ctx && synth.ctx.state === "running";
     const timing = { meanAsync: 0, samples: 0 };
     const listeners = { beat: [], lock: [], auto: [], manual: [], pause: [], signal: [] };
     const emit = (evt, arg) => listeners[evt].forEach((fn) => fn(arg));
@@ -1119,6 +1122,16 @@
           if (!ctrl.auto) tel.activeSec += dt;
           drainEvents();
         }
+        // Until audio is running (browsers need a gesture first), a silent clock keeps the
+        // same tempo, so games can play themselves in attract mode before anyone taps
+        if (!audioLive()) {
+          silentBeat += dt / eng.beatSec;
+          while (silentBeat >= beatCount + 1) {
+            beatCount++;
+            emit("beat", beatCount);
+          }
+          return;
+        }
         if (synth.masterGain && !synth.isMuted) synth.masterGain.gain.value = level * (1 - 0.35 * ctrl.windDown);
         synth.updateScheduler(ctrl.bpm * (1 - 0.05 * ctrl.windDown), ctrl.flowIndex, ctrl.tier, {
           onQuarterBeat: () => {
@@ -1126,11 +1139,12 @@
             emit("beat", beatCount);
           }
         });
-        if (synth.ctx) synth.updateSynesthesia(ctrl.flowIndex, ctrl.tier, ctrl.bpm, dt);
+        synth.updateSynesthesia(ctrl.flowIndex, ctrl.tier, ctrl.bpm, dt);
       },
       // Continuous beat count locked to what the player hears (e.g. 41.37)
       beatPos() {
-        if (!synth.ctx || !synth.beatSec || !synth.lastBeatTime) return beatCount;
+        if (!audioLive()) return silentBeat;
+        if (!synth.beatSec || !synth.lastBeatTime) return beatCount;
         const latency = synth.ctx.outputLatency || synth.ctx.baseLatency || 0;
         return beatCount + (synth.ctx.currentTime - latency - synth.lastBeatTime) / synth.beatSec;
       },

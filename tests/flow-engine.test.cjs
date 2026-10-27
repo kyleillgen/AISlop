@@ -261,3 +261,12 @@ test("a ragged typist between two folds keeps one fold", () => {
   const changes = folds.filter((f, i) => i > 0 && f !== folds[i - 1]).length;
   assert.ok(changes <= 1, `fold changed ${changes} times`);
 });
+
+test("a hit counts as activity, so waiting in the right place never trips autopilot", () => {
+  const c = createController({ idleSec: 2.5 });
+  for (let i = 0; i < 60 * 10; i++) {
+    if (i % 60 === 0) c.score(1); // a hit every second, no taps at all
+    c.update(1 / 60);
+  }
+  assert.equal(c.auto, false);
+});

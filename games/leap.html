@@ -151,6 +151,7 @@
           h.state = "hit";
           for (let i = 0; i < 5; i++) shards.push({ x: xOf(h.beat, now, api), y: groundY - h.h * Math.random(), vx: 60 + Math.random() * 120, vy: -120 - Math.random() * 120, a: 1 });
           api.miss(); // steps the streak down a little; ignored on autopilot
+          api.hint("timing", "Tap right on the beat: the hop peaks over the hurdle");
         }
       }
       hurdles = hurdles.filter((h) => xOf(h.beat, now, api) > -60);

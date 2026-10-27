@@ -156,6 +156,7 @@
         // A typo costs nothing: it still counts toward your rhythm, and there's nothing to fix
         api.eng.tap({ note: false });
         api.eng.error();
+        api.hint("typos", "Typos don't count: no backspace, just keep going");
         w.errors++;
         w.shake = 0.22;
       }

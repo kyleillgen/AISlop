@@ -40,6 +40,12 @@
   .fs-over { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(20,15,12,.72); }
   .fs-over.show { display: flex; }
   .fs-hint { position: fixed; bottom: 26px; left: 0; right: 0; z-index: 10; text-align: center; pointer-events: none; transition: opacity .7s; }
+  /* Attract mode: the game plays itself under a marquee until the first input */
+  .fs-marquee { position: fixed; left: 0; right: 0; top: 34%; z-index: 15; text-align: center; pointer-events: none; transition: opacity .6s, transform .6s cubic-bezier(.34,1.56,.64,1); }
+  .fs-marquee.gone { opacity: 0; transform: translateY(-12px) scale(.96); }
+  .fs-marquee-title { font-size: 46px !important; margin: 0 0 12px !important; animation: fs-breathe 2.4s ease-in-out infinite; }
+  @keyframes fs-breathe { 50% { transform: scale(1.04); } }
+  @media (prefers-reduced-motion: reduce) { .fs-marquee-title { animation: none; } }
   #fs-typer { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; }`;
 
   const Skin = window.PinballSkin;
@@ -71,16 +77,12 @@
           <button class="pb-btn pb-icon" data-pause title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
           <button class="pb-btn pb-icon" data-mute title="Mute (0)" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.6l4.7-4.7c.6-.6 1.7-.2 1.7.7v14c0 .9-1.1 1.3-1.7.7z"/><path data-waves d="M15.5 8.5a5 5 0 010 7M18.4 5.6a9 9 0 010 12.8"/><path data-cross d="M17 10l4 4m0-4l-4 4" style="display:none"/></svg></button>
         </div></div></header>
-      <div class="fs-hint" data-hint><span class="pb-hint">${g.hint || (typing ? "Start typing" : "Tap or Space in a steady rhythm")} &middot; ${kbd("?")} keys</span></div>
+      <div class="fs-hint" data-hint style="opacity:0"><span class="pb-hint" data-hinttext></span></div>
       ${typing ? '<input id="fs-typer" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Type here">' : ""}
-      <div class="fs-over show pb-backglass" data-startcard><div class="pb-card">
-        <div class="pb-kicker">${g.title}</div>
-        <h1 class="pb-title">${g.tagline || g.title}</h1>
-        <p>${g.about || ""}</p>
-        <div class="pb-keys">${actionKeys.concat(extraKeys.slice(0, 1), [["Esc", "pause"], ["Enter", "autopilot"]]).slice(0, 4).map(([k, d]) => `<span>${kbd(k)} ${d}</span>`).join("")}</div>
-        <button class="pb-start" data-start>Start</button>
-        <div class="pb-or">${typing ? "or just start typing" : "or just tap"}</div>
-      </div></div>
+      <div class="fs-marquee" data-marquee>
+        <div class="pb-title fs-marquee-title">${g.title}</div>
+        <span class="pb-hint">${g.hint || (typing ? "Start typing" : "Tap or Space in a steady rhythm")}</span>
+      </div>
       <div class="fs-over" data-pausecard><div style="text-align:center">
         <div class="pb-paused">Paused</div>
         <div class="pb-sub">Tap or ${kbd("Esc")} to resume</div>
@@ -127,6 +129,7 @@
     const rings = [];
     const cache = new Map();
     let phrase = 0, phraseClean = true;
+    let hintTimer = 0;
     const BEST_KEY = g.key + ".best";
     let best = 0;
     try { best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0; } catch (e) {}
@@ -144,7 +147,7 @@
       // handleSec feeds the pacer. Ignored during autopilot (the engine enforces it).
       score(n = 1, quality = "CLEAN", handleSec) {
         const prev = eng.tier;
-        if (eng.auto) return false;
+        if (eng.auto || !started) return false;
         eng.score(n, quality, handleSec);
         if (eng.tier > prev && eng.milestones) {
           api.callout(tierNames[eng.tier - 1], W / 2, H * 0.3, api.color(), 1.2);
@@ -167,6 +170,7 @@
       // Something got past the player. Steps the streak down by a quarter; never during
       // autopilot, and the two after taking control back are forgiven.
       miss() {
+        if (!started) return false;
         const counted = eng.clip();
         if (counted) {
           phraseClean = false;
@@ -174,6 +178,19 @@
         }
         hud();
         return counted;
+      },
+      // A tip shown once ever (per id), in context, then never again: discovery over manuals
+      hint(id, text) {
+        if (!started) return; // never spend a tip on the attract-mode demo
+        const key = g.key + ".hint." + id;
+        try {
+          if (localStorage.getItem(key)) return;
+          localStorage.setItem(key, "1");
+        } catch (e) {}
+        q("[data-hinttext]").innerHTML = text;
+        q("[data-hint]").style.opacity = "1";
+        clearTimeout(hintTimer);
+        hintTimer = setTimeout(hideHint, 4500);
       },
       callout(text, x, y, color = "#e2e8f0", scale = 1) {
         callouts.push({ text, x, y, vy: -0.55, a: 1, color, scale });
@@ -215,7 +232,7 @@
       if (started) return;
       started = true;
       eng.start();
-      q("[data-startcard]").classList.remove("show");
+      q("[data-marquee]").classList.add("gone");
       if (g.start) g.start(api);
       hud();
     }
@@ -224,7 +241,7 @@
     }
 
     eng.on("beat", (n) => {
-      if (started && !eng.paused && g.onBeat) g.onBeat(n, api);
+      if (!eng.paused && g.onBeat) g.onBeat(n, api); // attract mode spawns too
     });
     eng.on("lock", () => api.callout("In sync", W / 2, H * 0.3, "#ffc400", 1.05));
     eng.on("auto", hud);
@@ -279,28 +296,17 @@
     press("[data-pvoice]", () => eng.cycleVoice());
     press("[data-pause]", () => setPaused(!eng.paused));
     press("[data-mute]", () => eng.toggleMute());
-    press("[data-start]", () => {
-      start();
-      if (typer) typer.focus();
-    });
     q("[data-pausecard]").addEventListener("pointerdown", () => setPaused(false));
     q("[data-keyscard]").addEventListener("pointerdown", () => q("[data-keyscard]").classList.remove("show"));
-    q("[data-startcard]").addEventListener("pointerdown", (e) => {
-      if (e.target !== q("[data-startcard]")) return;
-      start();
-      if (typer) typer.focus();
-    });
 
     function action(e) {
       if (!started) start();
       if (eng.paused) return setPaused(false);
-      hideHint();
       if (g.onAction) g.onAction(api, e || {});
     }
     function letter(ch) {
       if (!started) start();
       if (eng.paused) return;
-      hideHint();
       if (g.onLetter) g.onLetter(ch, api);
     }
 
@@ -345,7 +351,6 @@
         // A game's own keys (arrows in Rollover) start the game too, like Space or a tap
         e.preventDefault();
         if (!started) start();
-        hideHint();
       }
       else return;
       hud();
@@ -370,7 +375,7 @@
       last = now;
       eng.update(dt);
       if (!eng.paused) {
-        if (started && eng.auto && g.autopilot) g.autopilot(dt, api);
+        if ((!started || eng.auto) && g.autopilot) g.autopilot(dt, api); // attract mode or autopilot
         if (g.update) g.update(dt, api);
         flash = Math.max(0, flash - dt * 1.4);
         bulbFlash = Math.max(0, bulbFlash - dt);
