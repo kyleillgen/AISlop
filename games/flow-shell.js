@@ -13,7 +13,10 @@
 //     tierNames: [...4], colors: [...4],     // optional
 //     onBeat(n, api)    spawn on the beat (api.eng.paceBeats() says how often)
 //     onAction(api, e)  a tap (input "tap"): e = { x, y } or {} from a key
-//     onRelease(api, heldSec, e)  optional: the tap's release (Space/↑ up, pointer up)
+//     onRelease(api, heldSec, e)  optional: the tap's release (Space/↑ up, pointer up; Space in
+//                       typing games). The standard: a tap is the rhythm, a hold then release is
+//                       a trick shot that's just for fun (it never scores or costs). api.charge
+//                       is 0..1 while held, and api.chargeOf(heldSec) gives the charge released.
 //     onLetter(ch, api) a letter (input "type")
 //     onKey(key, api)   any other key; return true if used
 //     update(dt, api)   move things (api.eng.beatPos() for beat-locked motion)
@@ -198,6 +201,7 @@
     // modes, and the game plays itself only after you've left it alone for a few seconds.
     let playStyle = store(g.key + ".style") === "fidget" ? "fidget" : "flow";
     let lastInputAt = 0;
+    const HOLD_SEC = 0.28; // held longer than this, a press becomes a charge
     const FIDGET_IDLE_MS = 4000; // slow pressing (one every 2-3 s) stays yours; autopilot waits
     const baseIdle = eng.ctrl.o.idleSec;
     function applyStyle() {
@@ -272,6 +276,8 @@
       get intensity() { return intensity; },
       get style() { return playStyle; }, // "flow" or "fidget"
       get held() { return downAt ? (performance.now() - downAt) / 1000 : 0; }, // seconds the tap is held down
+      chargeOf: (held) => Math.max(0, Math.min(1, (held - HOLD_SEC) / 0.7)),
+      get charge() { return api.chargeOf(api.held); }, // 0 for a tap; fills over 0.7 s after the hold starts
       get rev() { return rev; }, // Fidget: 0 calm .. 1 mashing flat out
       // Pick a value by intensity: api.pick({ chill: 13, normal: 10, intense: 8 })
       pick: (o) => (o[intensity] !== undefined ? o[intensity] : o.normal),
@@ -624,15 +630,21 @@
     if (!typing) {
       window.addEventListener("pointerup", (e) => release({ x: e.clientX, y: e.clientY }));
       window.addEventListener("pointercancel", () => release({}));
-      window.addEventListener("keyup", (e) => (e.code === "Space" || e.code === "ArrowUp") && release({}));
-      window.addEventListener("blur", () => release({}));
     }
+    window.addEventListener("keyup", (e) => (e.code === "Space" || (!typing && e.code === "ArrowUp")) && release({}));
+    window.addEventListener("blur", () => release({}));
 
     window.addEventListener("keydown", (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (keysShown() && e.key !== "?") {
         q("[data-keyscard]").classList.remove("show");
         if (e.key === "Escape") return;
+      }
+      if (typing && e.code === "Space") {
+        // Typing games: Space is the hold (letters are the taps)
+        e.preventDefault();
+        if (!e.repeat && started && !eng.paused) downAt = performance.now();
+        return;
       }
       if (typing && e.key.length === 1 && /[a-z]/i.test(e.key)) {
         e.preventDefault();
@@ -660,7 +672,7 @@
       else if (e.key === "`") cycleIntensity();
       else if (e.key === "\\") toggleStyle();
       else if (g.onKey && !eng.paused && g.onKey(e.key, api)) {
-        // A game's own keys (arrows in Rollover) start the game too, like Space or a tap
+        // A game's own keys start the game too, like Space or a tap
         e.preventDefault();
         lastInputAt = performance.now();
         fidgetPress();

@@ -35,7 +35,6 @@ In Flow, every game scores like a pinball table:
 - a 20-second table mode every minute or so (Double Score, Hurry-Up, Jackpot, plus one of each game's own).
 
 - **Orbit** (`games/orbit.html`): a steel ball circles a pop bumper. Fling it as it crosses the lit arrow and the next bumper up the table catches it. Perfect is ±45 ms, a slightly-off fling is steered into the lane, and a bad one just swings out and gets reeled back. In Fidget, press to grab, let go to fling: the next bumper appears wherever the ball is heading, and holding longer winds up a bigger fling.
-- **Rollover** (`games/rollover.html`): lit inserts come down four lanes on the beat. Slide under them; every lane is a note, so following the lights plays the tune.
 - **Drop Catch** (`games/template.html`): the starter template. Drops land on a pad on the beat; tap as they land.
 
 ## Flow Pocket (desktop)

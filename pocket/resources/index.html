@@ -42,7 +42,6 @@
     <div class="row">
     <button class="pb-btn" data-game="flow-resonance.html" title="Flow // Resonance">Flow</button>
     <button class="pb-btn" data-game="orbit.html" title="Orbit: fling the ball from bumper to bumper">Orbit</button>
-    <button class="pb-btn" data-game="rollover.html" title="Rollover: slide under the lights">Roll</button>
     <button class="pb-btn" data-game="word-rain.html" title="Word Rain">Rain</button>
     <span class="grow"></span>
     <span class="fps" id="fps" title="Frames per second the game is actually drawing"></span>
@@ -75,7 +74,9 @@
     }
     document.querySelectorAll("[data-game]").forEach((b) => b.addEventListener("click", () => open(b.dataset.game)));
     frame.addEventListener("load", () => frame.contentWindow.focus());
-    open(store("pocket.game") || "flow-resonance.html");
+    // A saved game that's since been retired (Leap, Rollover) falls back to Flow
+    const saved = store("pocket.game");
+    open(document.querySelector(`[data-game="${saved}"]`) ? saved : "flow-resonance.html");
 
     // Pinned (always on top) by default: the pocket is meant to sit over whatever you're working
     // in. Windows can drop a window's topmost flag (after minimising, or when another app raises

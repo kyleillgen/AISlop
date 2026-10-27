@@ -19,14 +19,6 @@ window.AISLOP_GAMES = [
     hue: 30
   },
   {
-    id: "rollover",
-    title: "Rollover",
-    blurb: "Lights come down four lanes. Roll under them to light up F-L-O-W; every lane is a note, so you play the tune.",
-    path: "games/rollover.html",
-    status: "house",
-    hue: 330
-  },
-  {
     // First game on the shared flow engine (games/flow-engine.js)
     id: "word-rain",
     title: "Word Rain",

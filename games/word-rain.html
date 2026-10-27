@@ -97,7 +97,7 @@
     for (let i = 0; i < w.text.length; i++) api.burst(letterX(w, i, api), y, ghost ? "#64748b" : api.color(), 2, 1);
     ripple(w.x, ghost ? 0.5 : 1);
     if (ghost) return;
-    const perfect = w.errors === 0 && progressOf(w, api) < 0.6;
+    const perfect = w.errors === 0 && progressOf(w, api) < 0.6 && !w.gusted;
     // Handling time (first key to last, plus a moment to read) paces the next words
     const handleSec = w.firstKeyMs ? (performance.now() - w.firstKeyMs) / 1000 + 0.6 : undefined;
     api.score(1, perfect ? "PERFECT" : "CLEAN", handleSec);
@@ -149,6 +149,22 @@
         spawnWord(n, api);
         beatsSinceSpawn = 0;
       }
+    },
+
+    // Hold Space and let go: a gust lifts every falling word back up the sky (up to two beats of
+    // fall). A breather you choose; a word that's been lifted can't be perfect, so it never pays.
+    onRelease(api, held) {
+      const c = api.chargeOf(held);
+      if (c <= 0) return;
+      const lift = 0.6 + 1.4 * c;
+      for (const w of words) {
+        if (w.state !== "falling") continue;
+        w.spawnBeat = Math.min(api.eng.beatPos(), w.spawnBeat + lift);
+        w.gusted = true;
+        api.burst(w.x, yOf(w, api), "#f6e6c0", 3, -1);
+      }
+      api.ring(api.W / 2, api.H * 0.7, c > 0.85 ? "#ffc400" : api.color(), api.W * (0.25 + 0.3 * c));
+      api.eng.pluck(0.2, 0.5 + 0.5 * c, 0.08);
     },
 
     onLetter(ch, api) {

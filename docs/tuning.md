@@ -30,7 +30,6 @@ One knob at a time, a few sessions each: the numbers are noisy, and changing two
 | All | assist effect | each game's spawn code (`api.eng.assist`) | How much help after misses (only on things not yet on screen) |
 | Orbit | `PERFECT`, `FLY`, the clean window (`api.pick` in `onAction`) | `games/orbit.html` | Perfect window, flight length, how forgiving flings are |
 | Orbit | lane length and spread (`addAfter`), orbit speed range (`retime`) | `games/orbit.html` | How far apart bumpers are and how fast the ball circles |
-| Rollover | `LEAD`, hold chance (0.22), phrase shapes | `games/rollover.html` | How early lights show, how many holds, melodic patterns |
 | Word Rain | `fallBeats` (10 + 5 × assist), word list | `spawnWord` | Fall time and vocabulary |
 | All | intensity scaling | each game's `api.pick({...})` calls, and `applyIntensity` in `flow-shell.js` | What chill, normal and intense change |
 | All | table modes: interval (45–75 s), length (20 s), Hurry-Up and Jackpot values | `flow-shell.js` (`startMode`, `tickModes`) | How often variety arrives and how big the bonuses are |

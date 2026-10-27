@@ -44,6 +44,7 @@
   let swing = null; // a fling off the arrow: { t0, dx, dy }
   let pendingFling = null; // Fidget: a release that came mid-flight, flung on arrival
   let grab = 0; // Fidget: squeeze while pressed
+  let sling = null; // Fidget: a charged release, flung when the ball swings round to face up the table
   let camY = 0;
   let kick = 0;
   let trail = [];
@@ -93,8 +94,9 @@
     while (bumpers[bumpers.length - 1].y > camY - 160) addAfter(bumpers[bumpers.length - 1], api);
   }
 
-  // Choose when the ball next crosses the arrow: an exact beat, with an orbit speed near half a
-  // turn a beat, as close to the pacer's spacing as that allows
+  // Choose when the ball next crosses the arrow: an exact beat, on the ball's FIRST pass whenever
+  // the orbit speed allows (so you can fling on the first loop and keep a rhythm going), with the
+  // speed near half a turn a beat and the timing near the pacer's spacing
   function retime(now, api, target) {
     const thR = cur.phi - cur.dir * (Math.PI / 2);
     const d0 = ((((thR - theta) * cur.dir) % TAU) + TAU) % TAU;
@@ -102,8 +104,8 @@
     for (let T = Math.ceil(now + 0.5); T <= Math.ceil(now) + 7; T++) {
       for (let m = 0; m < 4; m++) {
         const w = (d0 + TAU * m) / (T - now);
-        if (w < Math.PI * 0.55 || w > Math.PI * 1.7) continue;
-        const cost = Math.abs(Math.log(w / Math.PI)) * 3 + Math.abs(T - target) * 0.6;
+        if (w < Math.PI * 0.4 || w > Math.PI * 1.8) continue;
+        const cost = Math.abs(Math.log(w / Math.PI)) * 3 + Math.abs(T - target) * 0.6 + m * 5;
         if (!best || cost < best.cost) best = { T, w, cost };
       }
     }
@@ -194,6 +196,11 @@
   function fidgetFling(api, now, held) {
     if (flight) return (pendingFling = held);
     const power = Math.min(1, Math.max(0, (held - 0.15) / 0.85));
+    // A charged shot is a sling: the ball keeps whipping round the bumper and lets go only when
+    // it faces up the table, so it always leaves off the loop like a stone from a sling
+    const [ux, uy] = tangent();
+    if (power > 0.25 && Math.abs(Math.atan2(uy, ux) + Math.PI / 2) > 0.3) return (sling = held);
+    sling = null;
     let [tx, ty] = tangent();
     if (ty > 0) ty = -ty; // heading down the table: bank it back up
     let a = Math.atan2(ty, tx);
@@ -290,7 +297,9 @@
       const db = Math.max(0, Math.min(0.5, now - lastBeat));
       lastBeat = now;
       kick = Math.max(0, kick - dt * 4.2);
-      grab = api.style === "fidget" && api.held > 0 ? Math.min(1, api.held / 0.8) : Math.max(0, grab - dt * 6);
+      if (api.style === "fidget" && api.held > 0) grab = Math.min(1, api.held / 0.8);
+    else if (sling === null) grab = Math.max(0, grab - dt * 6);
+    if (sling !== null && (flight || api.style !== "fidget")) sling = null;
       for (const b of bumpers) b.pop = Math.max(0, b.pop - dt * 3);
 
       if (flight) {
@@ -298,6 +307,7 @@
       } else {
         // Holding in Fidget winds the orbit up
         theta += cur.dir * omega * db * (1 + 2.5 * grab);
+        if (sling !== null) fidgetFling(api, now, sling); // lets go once it faces up the table
         if (swing && now - swing.t0 >= 1) swing = null;
         // A crossing passed with no fling: Flow counts it, then the arrow comes round again
         const win = api.pick({ chill: 0.3, normal: 0.24, intense: 0.17 }) + 0.06 * api.eng.assist;
