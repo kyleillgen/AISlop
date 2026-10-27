@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Two Tone</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0b14; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  "use strict";
+  // Two Tone: drops rain down in two colours. Your catcher is one colour at a time.
+  // Catch your own colour, dodge the other, and flip whenever the rain changes.
+  const cv = document.getElementById("c");
+  const g = cv.getContext("2d");
+  let W = 0, H = 0;
+  function resize() {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W * d; cv.height = H * d;
+    g.setTransform(d, 0, 0, d, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const BEST_KEY = "aislop.two-tone.best";
+  let best = 0;
+  try { best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0; } catch (e) {}
+  function saveBest(s) {
+    if (s <= best) return;
+    best = s;
+    try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {}
+  }
+
+  const COLORS = ["#35d6f0", "#ff4fa3"];
+  const R = 24;
+  let state = "ready", overAt = 0;
+  let px, tone, drops, spawnT, score, combo, lives, hurtT, t, pops;
+  let targetX = null;
+  const keys = { left: false, right: false };
+  let downAt = 0, downX = 0, downY = 0, dragging = false;
+
+  function reset() {
+    px = W / 2; tone = 0; drops = []; spawnT = 0; score = 0; combo = 0; lives = 3; hurtT = 0; t = 0; pops = [];
+    targetX = null;
+  }
+  reset();
+
+  function flip() { tone = 1 - tone; }
+
+  function press() {
+    if (state === "ready") { state = "play"; return true; }
+    if (state === "over" && performance.now() - overAt > 600) { reset(); state = "ready"; return true; }
+    return false;
+  }
+
+  // Drag to move; a quick tap (no drag) flips colour
+  window.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    downAt = performance.now(); downX = e.clientX; downY = e.clientY; dragging = false;
+  }, { passive: false });
+  window.addEventListener("pointermove", (e) => {
+    if (!downAt) return;
+    if (!dragging && Math.hypot(e.clientX - downX, e.clientY - downY) > 12) dragging = true;
+    if (dragging) targetX = e.clientX;
+  });
+  window.addEventListener("pointerup", () => {
+    if (!downAt) return;
+    const quick = performance.now() - downAt < 260;
+    if (!dragging && quick && !press() && state === "play") flip();
+    downAt = 0; dragging = false; targetX = null;
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = true;
+    if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = true;
+    if ((e.code === "Space" || e.code === "ArrowUp" || e.code === "Enter") && !e.repeat) {
+      e.preventDefault();
+      if (!press() && state === "play") flip();
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = false;
+    if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = false;
+  });
+
+  function update(dt) {
+    for (let i = pops.length - 1; i >= 0; i--) { pops[i].t += dt; if (pops[i].t > 0.5) pops.splice(i, 1); }
+    if (state !== "play") return;
+    t += dt;
+    hurtT = Math.max(0, hurtT - dt);
+
+    if (targetX !== null) px += (targetX - px) * Math.min(1, dt * 14);
+    if (keys.left) px -= 460 * dt;
+    if (keys.right) px += 460 * dt;
+    px = Math.max(R, Math.min(W - R, px));
+
+    // Rain comes in colour streaks so flips feel deliberate rather than random
+    spawnT -= dt;
+    if (spawnT <= 0) {
+      const streakTone = Math.floor(t / 4) % 2 === 0 ? 0 : 1;
+      const c = Math.random() < 0.7 ? streakTone : 1 - streakTone;
+      drops.push({ x: 16 + Math.random() * (W - 32), y: -10, c, v: Math.min(430, 170 + score * 2.2) });
+      spawnT = Math.max(0.26, 0.7 - score * 0.006);
+    }
+
+    const py = H - 80;
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const d = drops[i];
+      d.y += d.v * dt;
+      if (Math.hypot(d.x - px, d.y - py) < R + 9) {
+        drops.splice(i, 1);
+        if (d.c === tone) {
+          combo++; score += combo >= 10 ? 2 : 1;
+          pops.push({ x: d.x, y: d.y, c: COLORS[d.c], t: 0 });
+        } else if (hurtT <= 0) {
+          lives--; combo = 0; hurtT = 0.8;
+          if (lives <= 0) { state = "over"; overAt = performance.now(); saveBest(score); return; }
+        }
+        continue;
+      }
+      if (d.y > H + 20) { drops.splice(i, 1); if (d.c === tone) combo = 0; }
+    }
+  }
+
+  function text(s, x, y, size, color) {
+    g.font = `700 ${size}px system-ui, -apple-system, Segoe UI, sans-serif`;
+    g.fillStyle = color; g.textAlign = "center";
+    g.fillText(s, x, y);
+  }
+
+  function draw() {
+    g.fillStyle = "#0c0b14"; g.fillRect(0, 0, W, H);
+    const wash = g.createLinearGradient(0, H, 0, 0);
+    wash.addColorStop(0, tone === 0 ? "rgba(53,214,240,0.16)" : "rgba(255,79,163,0.16)");
+    wash.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = wash; g.fillRect(0, 0, W, H);
+
+    for (const d of drops) {
+      g.fillStyle = COLORS[d.c];
+      g.beginPath();
+      g.moveTo(d.x, d.y - 14);
+      g.quadraticCurveTo(d.x + 9, d.y, d.x, d.y + 9);
+      g.quadraticCurveTo(d.x - 9, d.y, d.x, d.y - 14);
+      g.fill();
+    }
+    for (const p of pops) {
+      g.strokeStyle = p.c; g.globalAlpha = 1 - p.t * 2; g.lineWidth = 2;
+      g.beginPath(); g.arc(p.x, p.y, 10 + p.t * 50, 0, Math.PI * 2); g.stroke();
+      g.globalAlpha = 1;
+    }
+
+    const py = H - 80;
+    if (!(hurtT > 0 && Math.floor(hurtT * 12) % 2 === 0)) {
+      g.fillStyle = COLORS[tone];
+      g.beginPath(); g.arc(px, py, R, 0, Math.PI * 2); g.fill();
+      g.fillStyle = COLORS[1 - tone];
+      g.beginPath(); g.arc(px, py, R * 0.35, 0, Math.PI * 2); g.fill();
+    }
+
+    text(String(score), W / 2, 52, 34, "#ffffff");
+    text("BEST " + best + (combo >= 10 ? "   ·   DOUBLE" : ""), W / 2, 74, 12, "rgba(255,255,255,0.55)");
+    for (let i = 0; i < 3; i++) {
+      g.fillStyle = i < lives ? "#ffffff" : "rgba(255,255,255,0.15)";
+      g.beginPath(); g.arc(W / 2 - 18 + i * 18, 92, 5, 0, Math.PI * 2); g.fill();
+    }
+
+    if (state === "ready") {
+      text("TWO TONE", W / 2, H * 0.34, 34, "#ffffff");
+      text("Catch your colour, dodge the other", W / 2, H * 0.34 + 32, 15, "rgba(255,255,255,0.75)");
+      text("Drag or ← → to move · tap or Space to flip", W / 2, H * 0.34 + 54, 13, "rgba(255,255,255,0.55)");
+    } else if (state === "over") {
+      text("Colour clash", W / 2, H * 0.42, 26, "#ffffff");
+      text(score + " caught", W / 2, H * 0.42 + 30, 18, COLORS[tone]);
+      text("Tap to try again", W / 2, H * 0.42 + 56, 14, "rgba(255,255,255,0.7)");
+    }
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    update(dt); draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

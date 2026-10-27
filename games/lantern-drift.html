@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Lantern Drift</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0d1c; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  "use strict";
+  // Lantern Drift: a paper lantern rises through a forest canopy. Steer through
+  // gaps in the branches and catch embers before your flame burns out.
+  const cv = document.getElementById("c");
+  const g = cv.getContext("2d");
+  let W = 0, H = 0;
+  function resize() {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W * d; cv.height = H * d;
+    g.setTransform(d, 0, 0, d, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const BEST_KEY = "aislop.lantern-drift.best";
+  let best = 0;
+  try { best = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0; } catch (e) {}
+  function saveBest(s) {
+    if (s <= best) return;
+    best = s;
+    try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {}
+  }
+
+  const R = 14;
+  let state = "ready", overAt = 0, overReason = "";
+  let lx, lvx, fuel, dist, rows, embers, t, pointerX = null;
+  const keys = { left: false, right: false };
+
+  function rise() { return Math.min(320, 130 + t * 4); }
+
+  function addRow(y) {
+    const gapW = Math.max(105, 175 - t * 1.2);
+    rows.push({
+      y,
+      base: 40 + Math.random() * Math.max(10, W - 80 - gapW),
+      gapW,
+      sway: Math.random() * Math.PI * 2,
+      swayAmp: Math.min(60, t * 1.5)
+    });
+    if (Math.random() < 0.75) embers.push({ x: 40 + Math.random() * (W - 80), y: y - 110, taken: false });
+  }
+
+  function gapX(r) {
+    return Math.max(10, Math.min(W - r.gapW - 10, r.base + Math.sin(r.sway) * r.swayAmp));
+  }
+
+  function reset() {
+    lx = W / 2; lvx = 0; fuel = 1; dist = 0; t = 0;
+    rows = []; embers = [];
+    for (let i = 0; i < 6; i++) addRow(-i * 220 + H * 0.2);
+  }
+  reset();
+
+  function end(reason) {
+    state = "over"; overAt = performance.now(); overReason = reason;
+    saveBest(Math.floor(dist / 10));
+  }
+
+  function press() {
+    if (state === "ready") state = "play";
+    else if (state === "over" && performance.now() - overAt > 600) { reset(); state = "ready"; }
+  }
+  window.addEventListener("pointerdown", (e) => { e.preventDefault(); pointerX = e.clientX; press(); }, { passive: false });
+  window.addEventListener("pointermove", (e) => { if (pointerX !== null) pointerX = e.clientX; });
+  window.addEventListener("pointerup", () => { pointerX = null; });
+  window.addEventListener("pointercancel", () => { pointerX = null; });
+  window.addEventListener("keydown", (e) => {
+    if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = true;
+    if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = true;
+    if ((e.code === "Space" || e.code === "Enter") && !e.repeat) { e.preventDefault(); press(); }
+    if ((keys.left || keys.right) && state === "ready") state = "play";
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "ArrowLeft" || e.code === "KeyA") keys.left = false;
+    if (e.code === "ArrowRight" || e.code === "KeyD") keys.right = false;
+  });
+
+  function update(dt) {
+    if (state !== "play") return;
+    t += dt;
+    const ly = H * 0.72;
+
+    // Steering: drag/hold follows your finger; arrows push
+    if (pointerX !== null) lvx += (pointerX - lx) * 9 * dt;
+    if (keys.left) lvx -= 900 * dt;
+    if (keys.right) lvx += 900 * dt;
+    lvx *= Math.exp(-4 * dt);
+    lx = Math.max(R, Math.min(W - R, lx + lvx * dt));
+
+    const dy = rise() * dt;
+    dist += dy;
+    fuel -= dt * 0.065;
+    if (fuel <= 0) { fuel = 0; end("Your flame went out"); return; }
+
+    for (const r of rows) {
+      r.y += dy; r.sway += dt * 0.9;
+      if (Math.abs(r.y - ly) < R + 7) {
+        const gx = gapX(r);
+        if (lx - R < gx || lx + R > gx + r.gapW) { end("Snagged on a branch"); return; }
+      }
+    }
+    for (const e of embers) {
+      e.y += dy;
+      if (!e.taken && Math.hypot(e.x - lx, e.y - ly) < R + 12) { e.taken = true; fuel = Math.min(1, fuel + 0.22); }
+    }
+    rows = rows.filter((r) => r.y < H + 40);
+    embers = embers.filter((e) => e.y < H + 40 && !e.taken);
+    while (rows.length < 6) addRow(rows[rows.length - 1].y - 220);
+  }
+
+  function text(s, x, y, size, color) {
+    g.font = `700 ${size}px system-ui, -apple-system, Segoe UI, sans-serif`;
+    g.fillStyle = color; g.textAlign = "center";
+    g.fillText(s, x, y);
+  }
+
+  function draw() {
+    const bg = g.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#0a0d1c"); bg.addColorStop(1, "#1a1530");
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+
+    const ly = H * 0.72;
+    // Lantern light pool scales with the flame
+    const lightR = 120 + fuel * 220;
+    const light = g.createRadialGradient(lx, ly, 10, lx, ly, lightR);
+    light.addColorStop(0, `rgba(255, 180, 90, ${0.25 + fuel * 0.2})`);
+    light.addColorStop(1, "rgba(255, 180, 90, 0)");
+    g.fillStyle = light; g.fillRect(0, 0, W, H);
+
+    for (const r of rows) {
+      const gx = gapX(r);
+      g.fillStyle = "#2b2236";
+      g.fillRect(0, r.y - 7, gx, 14);
+      g.fillRect(gx + r.gapW, r.y - 7, W - gx - r.gapW, 14);
+      g.fillStyle = "#3f6b4a";
+      for (let x = 8; x < W; x += 26) {
+        if (x > gx - 4 && x < gx + r.gapW + 4) continue;
+        g.beginPath(); g.ellipse(x, r.y - 9, 7, 4, -0.5, 0, Math.PI * 2); g.fill();
+      }
+    }
+
+    for (const e of embers) {
+      g.fillStyle = "rgba(255, 140, 40, 0.35)";
+      g.beginPath(); g.arc(e.x, e.y, 12, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "#ffcf7a";
+      g.beginPath(); g.arc(e.x, e.y, 5, 0, Math.PI * 2); g.fill();
+    }
+
+    // Lantern
+    g.fillStyle = "#e85d3a";
+    g.beginPath(); g.ellipse(lx, ly, R, R * 1.25, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = `rgba(255, 230, 150, ${0.4 + fuel * 0.6})`;
+    g.beginPath(); g.ellipse(lx, ly + 3, R * 0.45, R * 0.6 * (0.4 + fuel * 0.6), 0, 0, Math.PI * 2); g.fill();
+
+    // HUD
+    text(String(Math.floor(dist / 10)) + " m", W / 2, 50, 30, "#ffffff");
+    text("BEST " + best + " m", W / 2, 72, 12, "rgba(255,255,255,0.5)");
+    g.fillStyle = "rgba(255,255,255,0.15)"; g.fillRect(W / 2 - 60, 84, 120, 6);
+    g.fillStyle = fuel > 0.3 ? "#ffb347" : "#ff5a3c"; g.fillRect(W / 2 - 60, 84, 120 * fuel, 6);
+
+    if (state === "ready") {
+      text("LANTERN DRIFT", W / 2, H * 0.36, 32, "#ffcf7a");
+      text("Drag, or hold ← →, to steer through the gaps", W / 2, H * 0.36 + 32, 14, "rgba(255,255,255,0.75)");
+      text("Catch embers to keep your flame alive", W / 2, H * 0.36 + 52, 14, "rgba(255,255,255,0.75)");
+    } else if (state === "over") {
+      text(overReason, W / 2, H * 0.4, 24, "#ffffff");
+      text(Math.floor(dist / 10) + " m", W / 2, H * 0.4 + 30, 18, "#ffcf7a");
+      text("Tap to try again", W / 2, H * 0.4 + 56, 14, "rgba(255,255,255,0.7)");
+    }
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    update(dt); draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

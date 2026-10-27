@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AISlop Arcade</title>
+<style>
+  :root {
+    --bg: #0b0d14;
+    --panel: #141824;
+    --panel-2: #1b2030;
+    --line: #262d40;
+    --text: #eef1f8;
+    --muted: #8b93a7;
+    --keep: #34d399;
+    --trash: #f87171;
+    --accent: #fbbf24;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { min-height: 100vh; }
+  header { position: sticky; top: 0; z-index: 5; background: rgba(11, 13, 20, 0.92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .bar { max-width: 1040px; margin: 0 auto; padding: 14px 16px 0; }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+  .brand h1 span { color: var(--accent); }
+  .brand small { color: var(--muted); font-size: 12px; }
+  nav { display: flex; gap: 4px; margin-top: 12px; overflow-x: auto; }
+  nav button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 14px; font-weight: 600; padding: 10px 12px; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+  nav button.on { color: var(--text); border-bottom-color: var(--accent); }
+  nav .count { display: inline-block; min-width: 18px; padding: 1px 6px; margin-left: 4px; border-radius: 9px; background: var(--panel-2); font-size: 11px; color: var(--text); }
+  main { max-width: 1040px; margin: 0 auto; padding: 18px 16px 60px; }
+  .intro { color: var(--muted); font-size: 14px; margin: 0 0 16px; line-height: 1.5; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; }
+  .thumb { height: 110px; position: relative; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 44px; font-weight: 900; color: rgba(255,255,255,0.9); text-shadow: 0 2px 18px rgba(0,0,0,0.4); }
+  .thumb .chip { position: absolute; top: 8px; left: 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; padding: 3px 7px; border-radius: 6px; background: rgba(0,0,0,0.45); color: #fff; }
+  .body { padding: 12px 12px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .body h3 { margin: 0; font-size: 16px; }
+  .body p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; flex: 1; }
+  .prompt { font-size: 12px; color: #a9b1c6; background: var(--panel-2); border-radius: 8px; padding: 6px 8px; }
+  .actions { display: flex; gap: 6px; }
+  .btn { flex: 1; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: 13px; font-weight: 700; padding: 9px 8px; border-radius: 9px; cursor: pointer; }
+  .btn:hover { border-color: #3a4359; }
+  .btn.play { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn.keep { color: var(--keep); }
+  .btn.trash { color: var(--trash); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .hint { font-size: 11px; color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; padding: 30px 0; text-align: center; }
+  .gen { max-width: 620px; display: flex; flex-direction: column; gap: 12px; }
+  .gen textarea { width: 100%; min-height: 120px; resize: vertical; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 12px; font: inherit; font-size: 15px; }
+  .gen ol { color: var(--muted); font-size: 13px; line-height: 1.6; margin: 0; padding-left: 18px; }
+  .gen .btn { flex: none; align-self: flex-start; padding: 11px 18px; background: var(--accent); color: #1b1400; border-color: var(--accent); }
+  #player { position: fixed; inset: 0; z-index: 20; background: #000; display: none; flex-direction: column; }
+  #player.open { display: flex; }
+  #player .top { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  #player .top strong { flex: 1; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #player .top .btn { flex: none; padding: 7px 12px; }
+  #player iframe { flex: 1; width: 100%; border: 0; background: #000; }
+  footer { max-width: 1040px; margin: 0 auto; padding: 0 16px 30px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand"><h1>AI<span>Slop</span> Arcade</h1><small>generated games · community kept</small></div>
+    <nav id="tabs">
+      <button data-tab="arcade" class="on">Arcade <span class="count" id="n-arcade"></span></button>
+      <button data-tab="fresh">Fresh <span class="count" id="n-fresh"></span></button>
+      <button data-tab="slop">Slop Pile <span class="count" id="n-slop"></span></button>
+      <button data-tab="generate">+ Generate</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section data-panel="arcade">
+    <p class="intro">Games the community kept. Tap a card to play.</p>
+    <div class="grid" id="g-arcade"></div>
+  </section>
+  <section data-panel="fresh" hidden>
+    <p class="intro">Just generated and waiting on a verdict. Play each one, then <b style="color:var(--keep)">Keep</b> it for the Arcade or <b style="color:var(--trash)">Trash</b> it if it's broken or dull.</p>
+    <div class="grid" id="g-fresh"></div>
+  </section>
+  <section data-panel="slop" hidden>
+    <p class="intro">Trashed games. Still playable, in case the crowd got it wrong.</p>
+    <div class="grid" id="g-slop"></div>
+  </section>
+  <section data-panel="generate" hidden>
+    <div class="gen">
+      <p class="intro" style="margin:0">Describe a game. Keep it small: one screen, one or two controls, playable with a tap and with a keyboard.</p>
+      <textarea id="idea" placeholder="e.g. A moth that has to stay near a flickering lamp while gusts of wind push it around"></textarea>
+      <button class="btn" id="submitIdea">Request this game</button>
+      <ol>
+        <li>Your request is filed as a GitHub issue (trial; you'll need a GitHub account).</li>
+        <li>Claude builds it as a single self-contained HTML game.</li>
+        <li>It lands in <b>Fresh</b> for players to keep or trash.</li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer>Trial build: votes are saved in this browser only.</footer>
+
+<div id="player" role="dialog" aria-modal="true">
+  <div class="top">
+    <strong id="pTitle"></strong>
+    <button class="btn keep" id="pKeep">Keep</button>
+    <button class="btn trash" id="pTrash">Trash</button>
+    <button class="btn" id="pClose">Close</button>
+  </div>
+  <!-- Generated games run sandboxed: scripts only, no access to this page or its storage -->
+  <iframe id="pFrame" sandbox="allow-scripts" allow="autoplay" title="Game"></iframe>
+</div>
+
+<script src="games/manifest.js"></script>
+<script>
+(() => {
+  "use strict";
+  const REPO = "kyleillgen/AISlop";
+  const STORE = "aislop.arcade.v1";
+  const games = window.AISLOP_GAMES || [];
+
+  // { votes: {id: "keep"|"trash"}, played: {id: true} }
+  let saved = { votes: {}, played: {} };
+  try { saved = Object.assign(saved, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) {}
+  function persist() {
+    try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (e) {}
+  }
+
+  // Where a game shows up: house games always in the Arcade; fresh ones move on your vote
+  function shelf(g) {
+    if (g.status === "house") return "arcade";
+    const v = saved.votes[g.id];
+    return v === "keep" ? "arcade" : v === "trash" ? "slop" : "fresh";
+  }
+
+  function el(tag, cls, text) {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  function card(g) {
+    const where = shelf(g);
+    const c = el("article", "card");
+    const thumb = el("div", "thumb", g.title.charAt(0));
+    thumb.style.background = `linear-gradient(135deg, hsl(${g.hue} 70% 42%), hsl(${(g.hue + 50) % 360} 60% 22%))`;
+    const chipText = g.status === "house" ? "HOUSE" : where === "arcade" ? "KEPT" : where === "slop" ? "TRASHED" : "FRESH";
+    thumb.appendChild(el("span", "chip", chipText));
+    thumb.addEventListener("click", () => openGame(g));
+    c.appendChild(thumb);
+
+    const b = el("div", "body");
+    b.appendChild(el("h3", "", g.title));
+    b.appendChild(el("p", "", g.blurb));
+    if (g.prompt) b.appendChild(el("div", "prompt", "Prompt: " + g.prompt));
+
+    const a = el("div", "actions");
+    const play = el("button", "btn play", "Play");
+    play.addEventListener("click", () => openGame(g));
+    a.appendChild(play);
+    if (where === "fresh") {
+      const keep = el("button", "btn keep", "Keep");
+      const trash = el("button", "btn trash", "Trash");
+      keep.disabled = trash.disabled = !saved.played[g.id];
+      keep.addEventListener("click", () => vote(g, "keep"));
+      trash.addEventListener("click", () => vote(g, "trash"));
+      a.appendChild(keep); a.appendChild(trash);
+    } else if (g.status !== "house") {
+      const undo = el("button", "btn", where === "slop" ? "Rescue" : "Reconsider");
+      undo.addEventListener("click", () => vote(g, null));
+      a.appendChild(undo);
+    }
+    b.appendChild(a);
+    if (where === "fresh" && !saved.played[g.id]) b.appendChild(el("div", "hint", "Play it first to vote"));
+    c.appendChild(b);
+    return c;
+  }
+
+  function render() {
+    const counts = { arcade: 0, fresh: 0, slop: 0 };
+    for (const id of ["arcade", "fresh", "slop"]) document.getElementById("g-" + id).replaceChildren();
+    for (const g of games) {
+      const where = shelf(g);
+      counts[where]++;
+      document.getElementById("g-" + where).appendChild(card(g));
+    }
+    for (const id of ["arcade", "fresh", "slop"]) {
+      document.getElementById("n-" + id).textContent = counts[id];
+      if (!counts[id]) {
+        const msg = id === "fresh" ? "Nothing waiting. Request a game under + Generate."
+          : id === "slop" ? "Nothing trashed yet." : "Nothing kept yet.";
+        document.getElementById("g-" + id).appendChild(el("div", "empty", msg));
+      }
+    }
+  }
+
+  function vote(g, v) {
+    if (v) saved.votes[g.id] = v; else delete saved.votes[g.id];
+    persist(); render(); syncPlayerButtons();
+  }
+
+  // Player overlay
+  const player = document.getElementById("player");
+  const frame = document.getElementById("pFrame");
+  let current = null;
+  function openGame(g) {
+    current = g;
+    saved.played[g.id] = true; persist();
+    document.getElementById("pTitle").textContent = g.title;
+    frame.src = g.path;
+    player.classList.add("open");
+    syncPlayerButtons();
+    frame.addEventListener("load", () => frame.focus(), { once: true });
+  }
+  function closeGame() {
+    player.classList.remove("open");
+    frame.src = "about:blank";
+    current = null;
+    render();
+  }
+  function syncPlayerButtons() {
+    const show = current && shelf(current) === "fresh";
+    document.getElementById("pKeep").hidden = !show;
+    document.getElementById("pTrash").hidden = !show;
+  }
+  document.getElementById("pClose").addEventListener("click", closeGame);
+  document.getElementById("pKeep").addEventListener("click", () => { vote(current, "keep"); closeGame(); });
+  document.getElementById("pTrash").addEventListener("click", () => { vote(current, "trash"); closeGame(); });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape" && current) closeGame(); });
+
+  // Tabs
+  const tabs = document.querySelectorAll("#tabs button");
+  function show(tab) {
+    tabs.forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
+    document.querySelectorAll("[data-panel]").forEach((p) => { p.hidden = p.dataset.panel !== tab; });
+  }
+  tabs.forEach((b) => b.addEventListener("click", () => show(b.dataset.tab)));
+
+  // Generate: trial files the request as a GitHub issue
+  document.getElementById("submitIdea").addEventListener("click", () => {
+    const idea = document.getElementById("idea").value.trim();
+    if (!idea) { document.getElementById("idea").focus(); return; }
+    const title = "Game request: " + idea.slice(0, 60) + (idea.length > 60 ? "…" : "");
+    const body = "**Prompt**\n\n" + idea + "\n\n---\nFiled from the AISlop Arcade trial.";
+    const url = `https://github.com/${REPO}/issues/new?labels=game-request&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
+    window.open(url, "_blank", "noopener");
+  });
+
+  render();
+  show(games.some((g) => shelf(g) === "fresh") ? "fresh" : "arcade");
+})();
+</script>
+</body>
+</html>
