@@ -11,6 +11,8 @@
   .strip .pb-btn { padding: 4px 8px !important; font-size: 10px !important; box-shadow: 2px 2px 0 #000; }
   .strip .pb-btn.on { background: #ffc400 !important; }
   .grow { flex: 1; }
+  .strip { cursor: grab; user-select: none; }
+  .strip .pb-btn.win { padding: 4px 7px !important; min-width: 22px; }
   .lamp { display: flex; align-items: center; gap: 6px; font: 600 10px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #f6e6c0; white-space: nowrap; }
   .lamp i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #000; background: #3a2418; }
   .lamp.working i { background: #ffc400; }
@@ -21,7 +23,7 @@
 </style>
 </head>
 <body>
-  <div class="strip">
+  <div class="strip" id="strip" title="Drag to move">
     <button class="pb-btn" data-game="flow-resonance.html" title="Flow // Resonance">Flow</button>
     <button class="pb-btn" data-game="word-rain.html" title="Word Rain">Rain</button>
     <button class="pb-btn" data-game="template.html" title="Drop Catch">Drop</button>
@@ -29,6 +31,8 @@
     <span class="lamp" id="lamp" title="What Claude is doing (needs the hook in pocket/README.md)"><i></i><span id="lampText">Claude</span></span>
     <button class="pb-btn" id="dock" title="Dock: right edge, corner or mini">Side</button>
     <button class="pb-btn" id="pin" title="Keep this window on top">Pin</button>
+    <button class="pb-btn win" id="minBtn" title="Minimise">&ndash;</button>
+    <button class="pb-btn win" id="closeBtn" title="Close">&times;</button>
   </div>
   <iframe id="game" title="Game" allow="autoplay"></iframe>
 
@@ -72,6 +76,16 @@
       frame.contentWindow.focus();
     });
     Neutralino.events.on("ready", () => setPinned(pinned));
+
+    // Borderless window: the strip is the title bar. Dragging starts on press, so the
+    // buttons and the lamp are carved out of the drag area or their clicks would be eaten.
+    Neutralino.events.on("ready", () => {
+      const strip = document.getElementById("strip");
+      const exclude = [...strip.querySelectorAll("button, .lamp")];
+      Neutralino.window.setDraggableRegion(strip, { exclude }).catch(() => {});
+    });
+    document.getElementById("minBtn").addEventListener("click", () => Neutralino.window.minimize().catch(() => {}));
+    document.getElementById("closeBtn").addEventListener("click", () => Neutralino.app.exit());
 
     // ---- Docking -------------------------------------------------------------------------
     // Claude Code games live right above the prompt, where your eyes already are. A separate

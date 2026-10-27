@@ -10,7 +10,7 @@
   "enableNativeAPI": true,
   "tokenSecurity": "one-time",
   "logging": { "enabled": false, "writeToLogFile": false },
-  "nativeAllowList": ["app.exit", "window.setAlwaysOnTop", "window.setSize", "window.getSize", "window.move", "window.getPosition", "window.show", "window.unminimize", "window.isMinimized", "filesystem.readFile", "filesystem.getStats", "os.getEnv"],
+  "nativeAllowList": ["app.exit", "window.setAlwaysOnTop", "window.setSize", "window.getSize", "window.move", "window.getPosition", "window.show", "window.unminimize", "window.isMinimized", "window.minimize", "window.beginDrag", "filesystem.readFile", "filesystem.getStats", "os.getEnv"],
   "modes": {
     "window": {
       "title": "Flow Pocket",
@@ -20,6 +20,7 @@
       "minHeight": 460,
       "center": false,
       "resizable": true,
+      "borderless": true,
       "alwaysOnTop": false,
       "icon": "/resources/icon.png",
       "enableInspector": false,
