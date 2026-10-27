@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Flow // Resonance</title>
+</head>
+<body>
+<script src="flow-engine.js"></script>
+<script src="pinball-skin.js"></script>
+<script src="flow-shell.js"></script>
+<script>
+// Flow // Resonance, the original game by Gemini, on the shared engine and shell.
+//
+// Tap a steady rhythm and the craft flies a ribbon through the pillars. The engine finds your
+// natural cadence, eases the tempo toward it and locks; pillars come every two beats along
+// smooth 8-pillar musical phrases; every tap plays in key. You never crash: a clip steps the
+// streak down a quarter (a charged Flow Shield absorbs one entirely), with a moment of slow
+// motion and a soft cushion chord. Gentle buoyancy toward the guide ribbon, magnetic pillar
+// lips and grazes that still count keep it effortless. Golden orbs give a hyper-glide; at
+// Deep resonance, slipstreams appear between pillars. The sky evolves every 500 of your best
+// streak, and turns Platinum at 1000. Nothing ever gets harder.
+//
+// Hold: keep holding and the craft hovers while a ring charges; let go and it boosts the way
+// it's heading (a full charge loops the loop first), flying through pillars untouched. Boosted
+// passes don't score. Fidget: the pillars bend their gaps to wherever you're flying, so you can
+// flap however you like, fast or slow.
+//
+// Everything else (tempo, music, autopilot, pause, keys, scoring, Fidget/Flow, intensity) is
+// the shell's and the engine's. This file is only the game: Gemini's physics, pillars and art.
+(() => {
+  "use strict";
+
+  const TOP = 102; // the playfield's ceiling line (the header sits above it)
+  const EPOCH_SPAN = 500;
+  const PLATINUM_AT = 1000;
+  const EPOCHS = [
+    { name: "Deep indigo", stops: null }, // 0-499: the tier skies
+    { name: "Emerald gel", stops: ["#04170f", "#0c3a1e", "#1d6a24"] },
+    { name: "Platinum", stops: ["#14161c", "#2c313c", "#59606f"] },
+    { name: "Solar flare", stops: ["#2a0a04", "#5c1a06", "#9a3a0a"] },
+    { name: "Cosmic prism", stops: ["#1a0530", "#4a0d5a", "#7a1550"] }
+  ];
+  const TIER_SKIES = [
+    ["#0d0930", "#241366", "#3f1d8a"],
+    ["#04170f", "#0a2d1c", "#134a1d"],
+    ["#1a0520", "#360a36", "#561034"],
+    ["#1f0806", "#3f1206", "#6a2508"]
+  ];
+  // 8-pillar musical phrase contours
+  const PHRASES = [
+    { getNormY: (s) => 0.5 + 0.28 * Math.sin((s / 8) * Math.PI * 2), orbChance: 0.45 }, // sine wave
+    { getNormY: (s) => 0.5 + 0.08 * Math.cos((s / 8) * Math.PI * 2), orbChance: 0.55 }, // plateau
+    { getNormY: (s) => 0.5 + 0.32 * Math.sin((s / 4) * Math.PI), orbChance: 0.85 } // slalom
+  ];
+  const BOOST_HOLD = 0.28;
+
+  // Milestone progress persists across short sessions (the same key the standalone game used),
+  // so leaving mid-epoch costs nothing
+  const PROGRESS_KEY = "flowResonanceProgress";
+  let runPeak = 0;
+  try {
+    runPeak = Math.max(0, parseInt(localStorage.getItem(PROGRESS_KEY) || "0", 10) || 0);
+  } catch (e) {}
+  let epochPos = Math.min(runPeak / EPOCH_SPAN, EPOCHS.length - 1);
+
+  const bird = { x: 95, homeX: 95, y: 300, vy: 0, radius: 14, gravity: 0.31, jumpImpulse: -6.4, ghost: 0, shake: 0, wash: 0, angle: 0, trail: [] };
+  const boost = { phase: null, t: 0, dur: 0, angle: 0, power: 0, cx: 0, cy: 0, offX: 0 };
+  let pipes = [];
+  let orbs = [];
+  let streams = [];
+  let stars = [];
+  let particles = [];
+  let rings = [];
+  let phraseIndex = 0;
+  let phraseStep = 0;
+  let spawned = 0;
+  let shieldCharge = 0;
+  let shieldReady = false;
+  let hyperGlide = 0;
+  let bulletTime = 0;
+  let timeScale = 1;
+  let kick = 0;
+  let sixteenth = 0;
+  let lockVis = 0;
+  let gridX = 0;
+  let streamTicks = 0;
+  let autoThisFrame = false;
+  let bgKey = "";
+  let bgGrad = null;
+  let W = 0, H = 0;
+
+  // Scroll speed follows the tempo, as in the original: pillars two beats apart
+  const vx = (api) => 2.85 + ((Math.max(96, Math.min(136, api.eng.bpm)) - 96) / 28) * 0.55;
+  const spacing = (api) => Math.max(240, Math.min(360, vx(api) * (3600 / Math.max(92, api.eng.bpm)) * 2));
+  const gapHeight = (api) => 175 + 26 * api.eng.assist; // the assist only ever widens, off-screen
+  function primary(api) {
+    if (hyperGlide > 0) return "#ffc21a";
+    if (runPeak >= PLATINUM_AT) return "#e5e7eb";
+    return api.color();
+  }
+  function mixHex(a, b, t) {
+    const pa = parseInt(a.slice(1), 16);
+    const pb = parseInt(b.slice(1), 16);
+    const ch = (s) => Math.round(((pa >> s) & 255) + (((pb >> s) & 255) - ((pa >> s) & 255)) * t);
+    return `rgb(${ch(16)}, ${ch(8)}, ${ch(0)})`;
+  }
+  const epochStops = (i, tier) => EPOCHS[Math.min(i, EPOCHS.length - 1)].stops || TIER_SKIES[tier - 1];
+
+  function ring(x, y, max, color) {
+    rings.push({ x, y, r: 16, max, a: 0.82, color });
+  }
+  function sparks(x, y, color, n, api) {
+    n = Math.min(api.reduced ? Math.ceil(n / 3) : n, 160 - particles.length);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = 1.2 + Math.random() * 4.4;
+      particles.push({ x, y, vx: Math.cos(a) * s - vx(api) * 0.2, vy: Math.sin(a) * s, r: 2 + Math.random() * 2.8, a: 1, color });
+    }
+  }
+
+  function spawnPipe(api, x) {
+    const top = 112, bottom = H - 38, gap = gapHeight(api);
+    const phrase = PHRASES[phraseIndex];
+    const minY = top + gap * 0.5 + 24, maxY = bottom - gap * 0.5 - 24;
+    const gapY = minY + phrase.getNormY(phraseStep) * (maxY - minY);
+    const prev = pipes[pipes.length - 1];
+    pipes.push({ x, width: 56, gapY, gapHeight: gap, passed: false, grazed: false });
+    spawned++;
+    if (++phraseStep >= 8) {
+      phraseStep = 0;
+      phraseIndex = (phraseIndex + 1) % PHRASES.length;
+    }
+    if (spawned >= 2 && Math.random() < phrase.orbChance) {
+      const oy = ((prev ? prev.gapY : gapY) + gapY) / 2;
+      orbs.push({ x: x - spacing(api) * 0.5, y: oy, baseY: oy, radius: 16, phase: Math.random() * Math.PI * 2 });
+    }
+    if (api.tier >= 3 && prev && spawned % 3 === 0) streams.push({ x0: prev.x + prev.width, x1: x, y0: prev.gapY, y1: gapY, h: 68, phase: 0 });
+  }
+
+  // The guide ribbon: a monotone cubic spline through the gap centres (Fritsch-Carlson), so a
+  // run of rising pillars is one smooth climb and it never overshoots. Autopilot follows it.
+  function slope(i) {
+    const p = pipes[i], prev = pipes[i - 1], next = pipes[i + 1];
+    const c = (q) => q.x + q.width * 0.5;
+    const dp = prev ? (p.gapY - prev.gapY) / Math.max(1, c(p) - c(prev)) : null;
+    const dn = next ? (next.gapY - p.gapY) / Math.max(1, c(next) - c(p)) : null;
+    if (dp === null) return dn || 0;
+    if (dn === null) return dp;
+    if (dp * dn <= 0) return 0;
+    return (2 * dp * dn) / (dp + dn);
+  }
+  function guideY(x) {
+    if (!pipes.length) return H * 0.52;
+    let i = -1;
+    for (let k = 0; k < pipes.length; k++) {
+      if (pipes[k].x + pipes[k].width * 0.5 <= x) i = k;
+      else break;
+    }
+    const end = (k) => Math.max(130, Math.min(H - 60, pipes[k].gapY + slope(k) * 0.5 * (x - (pipes[k].x + pipes[k].width * 0.5))));
+    if (i === -1) return end(0);
+    if (i === pipes.length - 1) return end(i);
+    const p0 = pipes[i], p1 = pipes[i + 1];
+    const x0 = p0.x + p0.width * 0.5, h = Math.max(1, p1.x + p1.width * 0.5 - x0);
+    const t = Math.max(0, Math.min(1, (x - x0) / h)), t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * p0.gapY + (t3 - 2 * t2 + t) * h * slope(i) + (-2 * t3 + 3 * t2) * p1.gapY + (t3 - t2) * h * slope(i + 1);
+  }
+
+  // A pass is judged against the baseline gap, so a gap the assist widened never widens "perfect"
+  function judgePass(api, p) {
+    const d = Math.abs(bird.y - p.gapY) / (175 * 0.5);
+    if (d < 0.28) {
+      api.score(2, "PERFECT", api.eng.beatSec * 2);
+      ring(bird.x, bird.y, 115, "#22d36b");
+      sparks(bird.x, bird.y, "#22d36b", 14, api);
+    } else if (d > 0.72 || p.grazed) {
+      api.score(2, "GRAZE", api.eng.beatSec * 2);
+      ring(bird.x, bird.y, 95, "#ff2d8a");
+      sparks(bird.x, bird.y, "#ff2d8a", 12, api);
+    } else {
+      api.score(1, "CLEAN", api.eng.beatSec * 2);
+      ring(bird.x, bird.y, 80, "#3d7bff");
+      sparks(bird.x, bird.y, "#3d7bff", 8, api);
+    }
+    if (api.tier >= 3) ring(p.x + p.width * 0.5, p.gapY, 240, "#b026ff");
+    if (!shieldReady) {
+      shieldCharge = Math.min(1, shieldCharge + (d < 0.28 || d > 0.72 ? 2 : 1) / 8);
+      if (shieldCharge >= 0.999) shieldReady = true;
+    }
+  }
+
+  // Never a crash: the shield absorbs a clip whole; otherwise the shell steps the streak down
+  // a quarter (or forgives it right after you take control back) and the craft is eased back
+  // toward the ribbon in a moment of slow motion
+  function clip(api, y) {
+    if (bird.ghost > 0) return;
+    bird.vy = (guideY(bird.x) - bird.y) * 0.08 - 2.2;
+    let felt = true;
+    if (shieldReady) {
+      shieldReady = false;
+      shieldCharge = 0;
+      api.eng.synth.triggerCushionCrossfade();
+      api.eng.synth.playGentleCushionChord();
+    } else felt = api.miss(); // false: forgiven (just took control back), so just glide through
+    if (!felt) {
+      bird.ghost = 0.5;
+      return;
+    }
+    bulletTime = 0.45;
+    bird.ghost = 1.15;
+    bird.shake = 0.12;
+    bird.wash = 0.32;
+    sparks(bird.x, y || bird.y, "#3d7bff", 16, api);
+  }
+
+  function startDash(api) {
+    boost.phase = "dash";
+    boost.t = 0;
+    boost.dur = 0.3 + 0.3 * boost.power;
+    sparks(bird.x, bird.y, "#ffd84d", 10 + Math.round(boost.power * 14), api);
+  }
+  function updateBoost(api, rawDt, fs) {
+    boost.t += rawDt;
+    if (boost.phase === "loop") {
+      const th = Math.min(1, boost.t / boost.dur) * Math.PI * 2;
+      bird.x = boost.cx + 38 * Math.sin(th);
+      bird.y = boost.cy + 38 * Math.cos(th);
+      boost.offX = bird.x - bird.homeX;
+      boost.angle = -th;
+      bird.vy = 0;
+      if (Math.random() < 0.6) sparks(bird.x, bird.y, "#ffc21a", 1, api);
+      if (boost.t >= boost.dur) {
+        boost.angle = 0;
+        startDash(api);
+      }
+      return;
+    }
+    const speed = 7 + 6 * boost.power;
+    bird.y += Math.sin(boost.angle) * speed * fs;
+    boost.offX = Math.min(W * 0.32, boost.offX + Math.cos(boost.angle) * speed * 0.55 * fs);
+    bird.x = bird.homeX + boost.offX;
+    bird.vy = Math.sin(boost.angle) * 3;
+    sparks(bird.x - 14, bird.y, primary(api), 1, api);
+    if (boost.t >= boost.dur) boost.phase = null;
+  }
+
+  function resetField(api) {
+    pipes = [];
+    orbs = [];
+    streams = [];
+    const s = spacing(api);
+    for (let i = 0; i < 4; i++) spawnPipe(api, W + 90 + s * i);
+  }
+
+  const api = FlowShell.mount({
+    key: "flow",
+    title: "Flow",
+    hint: "Tap or Space in a steady rhythm",
+    input: "tap",
+    tierNames: ["Finding your tempo", "Groove", "Deep resonance", "Transcendent"],
+    phrase: 8,
+    fidgetPoint: () => ({ x: bird.x, y: bird.y }),
+    engine: { perBeat: [0.5, 1, 2], pacing: { minBeats: 2, startBeats: 2 } },
+
+    setup(api) {
+      resetField(api);
+    },
+    resize(api) {
+      W = api.W;
+      H = api.H;
+      bird.homeX = bird.x = Math.min(Math.max(W * 0.24, 72), 155);
+      if (!api.started) bird.y = H * 0.52;
+      stars = Array.from({ length: 48 }, () => ({ x: Math.random() * W, y: 104 + Math.random() * (H - 134), size: 1 + Math.random() * 2.2, speed: 0.15 + Math.random() * 0.45, tw: Math.random() * Math.PI * 2 }));
+      bgKey = "";
+    },
+
+    onBeat() {
+      kick = 1;
+    },
+
+    // A tap is a flap
+    onAction(api) {
+      if (boost.phase) return api.eng.tap({ note: false });
+      bird.vy = bird.jumpImpulse * Math.max(0.92, Math.min(1.06, Math.sqrt(vx(api) / 3.1)));
+      api.eng.tap({ height: Math.max(0, Math.min(1, (bird.y - 108) / (H - 146))) });
+      sparks(bird.x - 10, bird.y + 6, primary(api), api.tier >= 4 ? 10 : 5, api);
+      if (api.tier >= 4) ring(bird.x, bird.y, 75, "#ff2d8a");
+    },
+
+    // Let go after a hold: a boost the way the craft is heading; a full charge loops the loop
+    onRelease(api, held) {
+      const c = api.chargeOf(held);
+      if (c <= 0 || boost.phase || api.eng.auto) return;
+      boost.angle = Math.max(-1, Math.min(1, bird.vy * 0.16));
+      boost.power = c;
+      if (c > 0.85) {
+        boost.phase = "loop";
+        boost.t = 0;
+        boost.dur = 0.55;
+        boost.cx = bird.x;
+        boost.cy = bird.y - 38;
+      } else startDash(api);
+      if (c > 0.5) api.eng.chime();
+      ring(bird.x, bird.y, 60 + 90 * c, c > 0.85 ? "#ffc21a" : primary(api));
+    },
+
+    // Autopilot (attract mode too): a smooth damped spring toward the ribbon slightly ahead
+    autopilot() {
+      autoThisFrame = true;
+    },
+
+    update(rawDt, api) {
+      const auto = autoThisFrame;
+      autoThisFrame = false;
+      kick = Math.max(0, kick - rawDt * 4.2);
+      const q = api.eng.beatPos() * 4;
+      sixteenth = Math.max(0, 1 - (q - Math.floor(q)) * 1.5); // a pulse on every 16th note
+      if (bulletTime > 0) {
+        bulletTime = Math.max(0, bulletTime - rawDt);
+        timeScale = 0.48;
+      } else timeScale += (1 - timeScale) * Math.min(1, rawDt * 5);
+      const dt = rawDt * timeScale;
+      const fs = dt * 60;
+      const v = vx(api);
+      if (hyperGlide > 0) hyperGlide = Math.max(0, hyperGlide - rawDt);
+      bird.ghost = Math.max(0, bird.ghost - rawDt);
+      bird.shake = Math.max(0, bird.shake - rawDt);
+      bird.wash = Math.max(0, bird.wash - rawDt * 1.4);
+
+      // Epochs and Platinum follow your best streak, and never roll back
+      if (api.eng.streak > runPeak) {
+        const prevEpoch = Math.floor(runPeak / EPOCH_SPAN);
+        const wasPlatinum = runPeak >= PLATINUM_AT;
+        runPeak = api.eng.streak;
+        try {
+          localStorage.setItem(PROGRESS_KEY, String(runPeak));
+        } catch (e) {}
+        if (!wasPlatinum && runPeak >= PLATINUM_AT) {
+          api.callout("Platinum", W / 2, H * 0.3, "#f1f5f9", 1.35);
+          ring(bird.x, bird.y, 320, "#e2e8f0");
+          sparks(bird.x, bird.y, "#f8fafc", 40, api);
+        } else if (Math.floor(runPeak / EPOCH_SPAN) > prevEpoch) {
+          api.callout(EPOCHS[Math.min(Math.floor(runPeak / EPOCH_SPAN), EPOCHS.length - 1)].name, W / 2, H * 0.3, "#ffe9c2", 1.2);
+          ring(bird.x, bird.y, 240, "#ffd27a");
+        }
+      }
+
+      const charging = api.charge > 0 && !auto;
+      if (!boost.phase && boost.offX) {
+        boost.offX *= Math.pow(0.3, rawDt);
+        if (Math.abs(boost.offX) < 0.5) boost.offX = 0;
+        bird.x = bird.homeX + boost.offX;
+      }
+      if (boost.phase) updateBoost(api, rawDt, fs);
+      else if (auto) {
+        const desired = (guideY(bird.x + 24) - bird.y) * 0.06;
+        bird.vy += (desired - bird.vy) * (1 - Math.pow(0.92, fs));
+        bird.y += bird.vy * fs;
+      } else {
+        // Gravity, with gentle buoyancy toward the ribbon near a gap (stronger while assisted)
+        const grav = hyperGlide > 0 ? 0.8 : api.tier >= 4 ? 0.9 : 1;
+        bird.vy += bird.gravity * grav * (charging ? 0.3 : 1) * fs;
+        if (charging) bird.vy *= Math.pow(0.9, fs); // hover while charging
+        bird.vy = Math.min(bird.vy, 8.2);
+        bird.y += bird.vy * fs;
+        const nearGap = pipes.some((p) => {
+          const d = p.x + p.width * 0.5 - bird.x;
+          return d > -20 && d < 140;
+        });
+        const pull = guideY(bird.x) - bird.y;
+        const fightsTap = api.held > 0 && api.held < 0.22 && Math.sign(pull) !== Math.sign(bird.vy);
+        const strength = (hyperGlide > 0 ? 0.075 : api.tier >= 4 ? 0.052 : api.eng.locked ? 0.036 : 0.022) * (1 + 1.2 * api.eng.assist);
+        if (nearGap && !fightsTap) bird.vy += pull * strength * dt;
+      }
+
+      // Slipstreams: wind tunnels that centre you and tick the streak up
+      for (const s of streams) {
+        s.x0 -= v * fs;
+        s.x1 -= v * fs;
+        s.phase += rawDt * 6;
+        if (bird.x >= s.x0 && bird.x <= s.x1) {
+          const sy = s.y0 + (s.y1 - s.y0) * ((bird.x - s.x0) / Math.max(1, s.x1 - s.x0));
+          if (Math.abs(bird.y - sy) < s.h * 0.65) {
+            bird.vy += (sy - bird.y) * 0.14 * fs;
+            bird.vy *= Math.pow(0.88, fs);
+            if (!auto && ++streamTicks % 14 === 0) {
+              api.score(1);
+              api.eng.synth.playSlipstreamTick(streamTicks);
+              sparks(bird.x, bird.y, "#ff4f9e", 4, api);
+            }
+          }
+        }
+      }
+      streams = streams.filter((s) => s.x1 > -60);
+
+      // Magnetic pillar lips soften a ball heading for the edge
+      for (const p of pipes) {
+        const d = p.x + p.width * 0.5 - bird.x;
+        if (d > -35 && d < 75) {
+          const top = p.gapY - p.gapHeight * 0.5, bot = p.gapY + p.gapHeight * 0.5;
+          if ((bird.y - top < p.gapHeight * 0.25 && bird.vy < 0) || (bot - bird.y < p.gapHeight * 0.25 && bird.vy > 0)) bird.vy *= Math.pow(0.8, fs);
+        }
+      }
+
+      // Pitch eases toward the velocity, so flaps tilt rather than snap
+      bird.angle += (Math.max(-0.46, Math.min(0.52, bird.vy * 0.07)) - bird.angle) * (1 - Math.pow(0.78, fs));
+      if (boost.phase) bird.angle = boost.angle;
+
+      bird.trail.unshift({ x: bird.x, y: bird.y, pulse: sixteenth });
+      if (runPeak >= PLATINUM_AT && Math.random() < 0.35) sparks(bird.x - 10, bird.y, "#f8fafc", 1, api);
+      bird.trail.length = Math.min(bird.trail.length, 24 + api.tier * 8);
+      for (let i = 1; i < bird.trail.length; i++) bird.trail[i].x -= v * fs;
+
+      // Soft ceiling and floor
+      if (bird.y - bird.radius < TOP + 2) {
+        bird.y = TOP + 2 + bird.radius;
+        bird.vy = Math.max(0.6, bird.vy * 0.25);
+      } else if (bird.y + bird.radius > H - 28) {
+        bird.y = H - 28 - bird.radius;
+        bird.vy = bird.jumpImpulse * 0.76;
+        sparks(bird.x, H - 28, "#3d7bff", 5, api);
+      }
+
+      gridX = (gridX + v * fs * 0.55) % 52;
+      for (const st of stars) {
+        st.x -= v * st.speed * fs;
+        st.tw += rawDt * 3;
+        if (st.x < 0) st.x += W;
+      }
+
+      // Golden orbs drift to you; one gives a hyper-glide
+      for (const o of orbs) {
+        o.x -= v * fs;
+        o.phase += dt * 4.2;
+        o.y = o.baseY + Math.sin(o.phase) * 8;
+        const dx = bird.x - o.x, dy = bird.y - o.y, d = Math.hypot(dx, dy);
+        if (!auto && d < 130) {
+          o.x += (dx / Math.max(d, 1)) * 3.2 * fs;
+          o.y += (dy / Math.max(d, 1)) * 3.2 * fs;
+        }
+        if (!auto && d < bird.radius + o.radius + 12) {
+          o.taken = true;
+          api.score(3);
+          hyperGlide = 4.5;
+          api.eng.chime();
+          ring(o.x, o.y, 135, "#ffc21a");
+          sparks(o.x, o.y, "#ffd84d", 22, api);
+        }
+      }
+      orbs = orbs.filter((o) => !o.taken && o.x > -50);
+
+      // Pillars: Fidget bends each coming gap toward you; grazes are caught; a hard hit is a clip
+      for (const p of pipes) {
+        p.x -= v * fs;
+        if (api.style === "fidget") {
+          const ahead = p.x + p.width * 0.5 - bird.x;
+          if (ahead > -10 && ahead < 300) p.gapY += (Math.max(TOP + 100, Math.min(H - 110, bird.y)) - p.gapY) * Math.min(1, rawDt * 4);
+        }
+        const top = p.gapY - p.gapHeight * 0.5, bot = p.gapY + p.gapHeight * 0.5;
+        const within = bird.x + bird.radius * 0.7 > p.x + 4 && bird.x - bird.radius * 0.7 < p.x + p.width - 4;
+        if (within && bird.ghost <= 0 && !auto && !boost.phase && api.started && api.style === "flow") {
+          const grace = 9;
+          const hardTop = bird.y - bird.radius + grace < top, hardBot = bird.y + bird.radius - grace > bot;
+          if (!hardTop && bird.y - bird.radius < top + 5) {
+            bird.y = top + bird.radius - grace + 2;
+            bird.vy = Math.max(0.5, bird.vy);
+            p.grazed = true;
+          } else if (!hardBot && bird.y + bird.radius > bot - 5) {
+            bird.y = bot - bird.radius + grace - 2;
+            bird.vy = Math.min(-0.6, bird.vy);
+            p.grazed = true;
+          } else if (hardTop || hardBot) {
+            p.passed = true;
+            clip(api, bird.y);
+          }
+        }
+        if (!p.passed && p.x + p.width * 0.5 < bird.x) {
+          p.passed = true;
+          if (!auto && bird.ghost <= 0 && !boost.phase && api.started) judgePass(api, p);
+        }
+      }
+      pipes = pipes.filter((p) => p.x + p.width > -320); // kept a while so the ribbon has a left neighbour
+      if (pipes.length && pipes[pipes.length - 1].x < W + 120) spawnPipe(api, pipes[pipes.length - 1].x + spacing(api));
+
+      for (const pt of particles) {
+        pt.x += pt.vx * fs;
+        pt.y += pt.vy * fs;
+        pt.a -= rawDt * 1.7;
+      }
+      particles = particles.filter((pt) => pt.a > 0);
+      for (const r of rings) {
+        r.x -= v * fs * 0.3;
+        r.r += (r.max - r.r) * rawDt * 5.8;
+        r.a -= rawDt * 1.4;
+      }
+      rings = rings.filter((r) => r.a > 0.02);
+    },
+
+    draw(ctx, api) {
+      const tier = api.tier;
+      const col = primary(api);
+      const now = performance.now() * 0.001;
+      ctx.save();
+      if (bird.shake > 0 && !api.reduced) ctx.translate((Math.random() - 0.5) * bird.shake * 6, (Math.random() - 0.5) * bird.shake * 6);
+
+      // The sky: tier gel, easing through the epochs of your best streak
+      epochPos += (Math.min(runPeak / EPOCH_SPAN, EPOCHS.length - 1) - epochPos) * 0.02;
+      let stops;
+      if (epochPos > 0.001) {
+        const base = Math.floor(epochPos), f = epochPos - base, t = f * f * (3 - 2 * f);
+        const a = epochStops(base, tier), b = epochStops(base + 1, tier);
+        stops = [[0, mixHex(a[0], b[0], t)], [0.55, mixHex(a[1], b[1], t)], [1, mixHex(a[2], b[2], t)]];
+      } else stops = TIER_SKIES[tier - 1].map((c, i) => [[0, 0.6, 1][i], c]);
+      const key = H + stops.join("|");
+      if (key !== bgKey) {
+        bgKey = key;
+        bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+        stops.forEach(([at, c]) => bgGrad.addColorStop(at, c));
+      }
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, W, H);
+
+      // Transcendent: two slow aurora bands
+      if (tier >= 4) {
+        for (let band = 0; band < 2; band++) {
+          const baseY = H * (0.32 + band * 0.25);
+          ctx.beginPath();
+          ctx.moveTo(0, baseY);
+          for (let x = 0; x <= W; x += 40) ctx.lineTo(x, baseY + Math.sin(x * 0.006 + now * 1.4 + band) * 38 + Math.cos(x * 0.012 - now * 0.9) * 20);
+          ctx.lineTo(W, H);
+          ctx.lineTo(0, H);
+          ctx.closePath();
+          ctx.globalAlpha = 0.14 + kick * 0.08;
+          ctx.fillStyle = band ? "#ff6a1a" : "#ff2d8a";
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+      // Groove and up: a twinkling parallax starfield
+      if (tier >= 2) {
+        ctx.fillStyle = "#e2e8f0";
+        for (const st of stars) {
+          ctx.globalAlpha = Math.max(0, (0.3 + Math.sin(st.tw) * 0.25) * Math.min(1, (tier - 1) * 0.45));
+          ctx.fillRect(st.x - st.size / 2, st.y - st.size / 2, st.size, st.size);
+        }
+        ctx.globalAlpha = 1;
+      }
+      // A beat-synced dot grid
+      ctx.globalAlpha = 0.16 + kick * 0.2 + (tier - 1) * 0.04;
+      ctx.fillStyle = tier >= 3 ? "#ff965a" : "#a096ff";
+      for (let x = -gridX; x < W; x += 52) for (let y = 130; y < H - 26; y += 52) ctx.fillRect(x - 1, y - 1, 2, 2);
+      ctx.globalAlpha = 1;
+
+      // The guide ribbon: thickens as you lock in
+      if (pipes.length) {
+        lockVis += ((api.eng.locked ? 1 : 0) - lockVis) * 0.05;
+        ctx.beginPath();
+        for (let x = 0; x <= W + 10; x += 10) (x ? ctx.lineTo : ctx.moveTo).call(ctx, x, guideY(x));
+        ctx.lineJoin = ctx.lineCap = "round";
+        ctx.globalAlpha = 0.55 + lockVis * (0.3 + kick * 0.15);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2.2 + lockVis * 1.6;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      // Slipstreams
+      for (const s of streams) {
+        ctx.globalAlpha = 0.22 + kick * 0.12;
+        ctx.strokeStyle = "#e879f9";
+        ctx.lineWidth = s.h;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(s.x0, s.y0);
+        ctx.lineTo(s.x1, s.y1);
+        ctx.stroke();
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = "#ff96c8";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([10, 14]);
+        ctx.lineDashOffset = -s.phase * 24;
+        ctx.beginPath();
+        ctx.moveTo(s.x0, s.y0 - 10);
+        ctx.lineTo(s.x1, s.y1 - 10);
+        ctx.moveTo(s.x0, s.y0 + 10);
+        ctx.lineTo(s.x1, s.y1 + 10);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+
+      // Pillars: dark silhouettes (brushed platinum after Platinum) with lit rubber lips
+      const ghost = bird.ghost > 0 ? 0.42 : 1;
+      const platinum = runPeak >= PLATINUM_AT;
+      for (const p of pipes) {
+        const top = p.gapY - p.gapHeight * 0.5, bot = p.gapY + p.gapHeight * 0.5;
+        ctx.globalAlpha = ghost;
+        if (platinum) {
+          const sheen = 0.5 + Math.sin(now * 1.3 + p.x * 0.01) * 0.3;
+          const g = ctx.createLinearGradient(p.x, 0, p.x + p.width, 0);
+          g.addColorStop(0, "#2a2f3a");
+          g.addColorStop(sheen, "#a8b0bd");
+          g.addColorStop(1, "#2a2f3a");
+          ctx.fillStyle = g;
+        } else ctx.fillStyle = "#0a0616";
+        const r = Math.min(12, p.width * 0.4);
+        ctx.beginPath();
+        if (ctx.roundRect) {
+          ctx.roundRect(p.x, TOP, p.width, Math.max(0, top - TOP), [0, 0, r, r]);
+          ctx.roundRect(p.x, bot, p.width, Math.max(0, H - 26 - bot), [r, r, 0, 0]);
+        } else {
+          ctx.rect(p.x, TOP, p.width, Math.max(0, top - TOP));
+          ctx.rect(p.x, bot, p.width, Math.max(0, H - 26 - bot));
+        }
+        ctx.fill();
+        ctx.lineCap = "round";
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 4 + kick * 1.5;
+        ctx.beginPath();
+        ctx.moveTo(p.x - 3, top - 2);
+        ctx.lineTo(p.x + p.width + 3, top - 2);
+        ctx.moveTo(p.x - 3, bot + 2);
+        ctx.lineTo(p.x + p.width + 3, bot + 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // Golden orbs (one cached glow sprite, drawn at a pulsing size)
+      const glow = api.cached("orbglow", () => {
+        const c = document.createElement("canvas");
+        c.width = c.height = 64;
+        const g = c.getContext("2d");
+        const gr = g.createRadialGradient(32, 32, 2, 32, 32, 32);
+        gr.addColorStop(0, "rgba(253,224,71,0.95)");
+        gr.addColorStop(0.5, "rgba(245,158,11,0.45)");
+        gr.addColorStop(1, "rgba(245,158,11,0)");
+        g.fillStyle = gr;
+        g.fillRect(0, 0, 64, 64);
+        return c;
+      });
+      for (const o of orbs) {
+        const pr = (o.radius + kick * 6) * 1.85;
+        ctx.drawImage(glow, o.x - pr, o.y - pr, pr * 2, pr * 2);
+        ctx.strokeStyle = "#ffe68a";
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.radius + Math.sin(o.phase * 2) * 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = "#fef9c3";
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      for (const r of rings) {
+        ctx.globalAlpha = Math.max(0, r.a);
+        ctx.strokeStyle = r.color;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // The silk trail, pulsing on the 16ths from Groove up
+      const bw = bird.radius * (0.85 + tier * 0.22 + kick * 0.35);
+      ctx.strokeStyle = col;
+      ctx.lineCap = "round";
+      for (let i = 0; i < bird.trail.length - 1; i++) {
+        const a = bird.trail[i], b = bird.trail[i + 1];
+        const k = 1 - i / bird.trail.length, gp = tier >= 2 ? a.pulse * 0.35 : 0;
+        ctx.globalAlpha = k * (0.65 + gp);
+        ctx.lineWidth = Math.max(1.5, bw * k * (1 + gp));
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      for (const pt of particles) {
+        ctx.globalAlpha = Math.max(0, pt.a);
+        ctx.fillStyle = pt.color;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // The craft, its halo, the shield and the charge arc
+      ctx.save();
+      ctx.translate(bird.x, bird.y);
+      if (api.charge > 0 && !api.eng.auto) {
+        ctx.strokeStyle = api.charge > 0.85 ? "#ffc21a" : col;
+        ctx.globalAlpha = 0.7;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, bird.radius + 10 + 8 * api.charge, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * api.charge);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      ctx.rotate(bird.angle);
+      const base = bird.ghost > 0 ? 0.6 + Math.sin(performance.now() * 0.03) * 0.22 : 1;
+      ctx.globalAlpha = base * 0.28;
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(0, 0, bird.radius + 6 + kick * 5 + tier * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = base;
+      if (shieldReady) {
+        ctx.strokeStyle = "rgba(61,123,255,0.88)";
+        ctx.lineWidth = 2.2;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.arc(0, 0, bird.radius + 6 + kick * 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      const R = bird.radius;
+      ctx.fillStyle = "#f8fafc";
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.6;
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(R * 1.3, 0);
+      ctx.quadraticCurveTo(0, -R * 1.05, -R * 1.1, -R * 0.65);
+      ctx.lineTo(-R * 0.65, 0);
+      ctx.lineTo(-R * 1.1, R * 0.65);
+      ctx.quadraticCurveTo(0, R * 1.05, R * 1.3, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(R * 0.35, -1.8, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Cushion lines top and bottom
+      ctx.globalAlpha = 0.16 + kick * 0.14;
+      ctx.strokeStyle = "#3d7bff";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, TOP);
+      ctx.lineTo(W, TOP);
+      ctx.moveTo(0, H - 26);
+      ctx.lineTo(W, H - 26);
+      ctx.stroke();
+      if (bird.wash > 0 && !api.reduced) {
+        ctx.globalAlpha = bird.wash * 0.24;
+        ctx.fillStyle = "#3d7bff";
+        ctx.fillRect(0, 0, W, H);
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+  });
+
+  // Read-only snapshot for automated play tests
+  window.flowState = () => ({
+    beatPos: +api.eng.beatPos().toFixed(3),
+    bpm: +api.eng.bpm.toFixed(1),
+    locked: api.eng.locked,
+    streak: api.eng.streak,
+    auto: api.eng.auto,
+    pipes: pipes.length,
+    birdY: Math.round(bird.y),
+    shield: shieldReady
+  });
+})();
+</script>
+</body>
+</html>

@@ -28,9 +28,11 @@ const GAMES = join(HERE, "..", "games");
 function syncGames() {
   const out = join(RES, "games");
   mkdirSync(out, { recursive: true });
-  for (const f of ["flow-engine.js", "pinball-skin.js", "flow-shell.js", "flow-resonance.html", "orbit.html", "flipper.html", "ricochet.html"]) {
+  for (const f of ["flow-engine.js", "pinball-skin.js", "flow-shell.js", "flow.html", "orbit.html", "flipper.html", "ricochet.html"]) {
     copyFileSync(join(GAMES, f), join(out, f));
   }
+  mkdirSync(join(out, "fonts"), { recursive: true });
+  for (const f of ["oswald-latin.woff2", "inter-latin.woff2", "README.md"]) copyFileSync(join(GAMES, "fonts", f), join(out, "fonts", f));
   console.log("games copied into pocket/resources/games");
   // Tell a running pocket to reload itself, so updated games show without restarting it
   try {

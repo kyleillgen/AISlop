@@ -79,15 +79,18 @@
   @media (max-width: 520px) { .pb-bar { gap: 6px; padding: 6px 7px; } .pb-window svg { width: auto; height: 18px; } .pb-lights { gap: 2px; } .pb-btn { padding: 5px 7px !important; } .pb-cap .pb-badge { display: none; } }
   .pb-hint { display: inline-block; padding: 6px 12px; background: rgba(246,230,192,.94); color: ${C.black}; border-radius: 999px; box-shadow: 0 4px 14px rgba(0,0,0,.35); font: 600 11px Oswald, Impact, sans-serif; letter-spacing: .1em; text-transform: uppercase; }`;
 
+  // The fonts ship beside this file (games/fonts, SIL Open Font License): no network on launch,
+  // and it works offline. Variable fonts, Latin subset: Oswald 400-700, Inter 400-600.
+  const here = document.currentScript && document.currentScript.src ? new URL("fonts/", document.currentScript.src).href : "fonts/";
+  const FONTS = `
+  @font-face { font-family: Oswald; font-weight: 400 700; font-display: swap; src: url(${here}oswald-latin.woff2) format("woff2"); }
+  @font-face { font-family: Inter; font-weight: 400 600; font-display: swap; src: url(${here}inter-latin.woff2) format("woff2"); }`;
+
   function install(options) {
     if (document.getElementById("pb-style")) return;
-    const link = document.createElement("link");
-    link.rel = "stylesheet";
-    link.href = "https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap";
-    document.head.appendChild(link);
     const style = document.createElement("style");
     style.id = "pb-style";
-    style.textContent = CSS;
+    style.textContent = FONTS + CSS;
     document.head.appendChild(style);
     if (options && options.vignette === false) return; // e.g. a launcher around a game frame
     const vignette = document.createElement("div");

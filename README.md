@@ -12,7 +12,7 @@ Four tracks (**MIDNIGHT**, **GOLDEN HOUR**, **DEEP SEA**, **RAIN ON GLASS**) in 
 
 Design follows a sourced research brief ([docs/flow-engine-research.md](docs/flow-engine-research.md)), and [docs/flow-engine-audit.md](docs/flow-engine-audit.md) maps each recommendation to the code. Session measurements stay on your device (`flowTelemetry()` in the console). Experiment switches: `?phase=frozen`, `?milestones=off`.
 
-Play at https://kyleillgen.github.io/AISlop/ or open `games/flow-resonance.html`.
+Play at https://kyleillgen.github.io/AISlop/ or open `games/flow.html` (the original standalone version is `games/flow-resonance.html`).
 
 ## The flow engine, and building on it
 

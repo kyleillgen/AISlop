@@ -40,7 +40,7 @@
       <button class="pb-btn win" id="closeBtn" title="Close">&times;</button>
     </div>
     <div class="row">
-    <button class="pb-btn" data-game="flow-resonance.html" title="Flow // Resonance">Flow</button>
+    <button class="pb-btn" data-game="flow.html" title="Flow // Resonance">Flow</button>
     <button class="pb-btn" data-game="orbit.html" title="Orbit: fling the ball from bumper to bumper">Orbit</button>
     <button class="pb-btn" data-game="flipper.html" title="Flipper: keep the ball up with the flippers">Flip</button>
     <button class="pb-btn" data-game="ricochet.html" title="Ricochet: kick off the walls and climb">Rico</button>
@@ -88,7 +88,7 @@
     frame.addEventListener("load", () => frame.contentWindow.focus());
     // A saved game that's since been retired (Leap, Rollover) falls back to Flow
     const saved = store("pocket.game");
-    open(document.querySelector(`[data-game="${saved}"]`) ? saved : "flow-resonance.html");
+    open(document.querySelector(`[data-game="${saved}"]`) ? saved : "flow.html");
 
     // Pinned (always on top) by default: the pocket is meant to sit over whatever you're working
     // in. Windows can drop a window's topmost flag (after minimising, or when another app raises

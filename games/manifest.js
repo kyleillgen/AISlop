@@ -6,7 +6,7 @@ window.AISLOP_GAMES = [
     id: "flow-resonance",
     title: "Flow // Resonance",
     blurb: "The original by Gemini. Tap to a rhythm: the engine finds your cadence, locks into your sweet spot, and every tap plays in key.",
-    path: "games/flow-resonance.html",
+    path: "games/flow.html",
     status: "house",
     hue: 168
   },
