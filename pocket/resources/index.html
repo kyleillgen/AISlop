@@ -92,8 +92,26 @@
       if (b) open(b.dataset.game);
     }
     window.addEventListener("message", (e) => e.data && e.data.type === "flow:game" && openNth(e.data.n));
-    window.addEventListener("keydown", (e) => /^[1-9]$/.test(e.key) && openNth(+e.key));
-    frame.addEventListener("load", () => frame.contentWindow.focus());
+    // The game should always have the keyboard. The strip's buttons never take focus (so Space
+    // can't press one), clicks anywhere on the strip hand focus straight back to the game, and any
+    // key pressed while the strip still has it is passed on to the game rather than lost.
+    document.querySelectorAll("button").forEach((b) => {
+      b.tabIndex = -1;
+      b.addEventListener("mousedown", (e) => e.preventDefault());
+    });
+    const giveFocus = () => frame.contentWindow && frame.contentWindow.focus();
+    document.getElementById("strip").addEventListener("pointerup", () => setTimeout(giveFocus, 0));
+    window.addEventListener("focus", () => setTimeout(giveFocus, 0));
+    const pass = (e, down) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (down && /^[1-9]$/.test(e.key)) return openNth(+e.key);
+      e.preventDefault();
+      frame.contentWindow.postMessage({ type: "flow:key", down, key: e.key, code: e.code, repeat: e.repeat, shiftKey: e.shiftKey }, "*");
+      giveFocus();
+    };
+    window.addEventListener("keydown", (e) => pass(e, true));
+    window.addEventListener("keyup", (e) => pass(e, false));
+    frame.addEventListener("load", giveFocus);
     // A saved game that's since been retired (Leap, Rollover) falls back to Flow
     const saved = store("pocket.game");
     open(document.querySelector(`[data-game="${saved}"]`) ? saved : "flow.html");

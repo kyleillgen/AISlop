@@ -208,7 +208,10 @@
     // modes, and the game plays itself only after you've left it alone for a few seconds.
     let playStyle = store(g.key + ".style") === "fidget" ? "fidget" : "flow";
     let lastInputAt = 0;
-    const HOLD_SEC = 0.28; // held longer than this, a press becomes a charge
+    // Held longer than this, a press becomes a charge. A thumb on a space bar stays down far
+    // longer than a finger on an arrow key (often 200-350 ms for an ordinary press), so this sits
+    // above that: an ordinary press is always just a press.
+    const HOLD_SEC = 0.45;
     const FIDGET_IDLE_MS = 4000; // slow pressing (one every 2-3 s) stays yours; autopilot waits
     const baseIdle = eng.ctrl.o.idleSec;
     // Fidget still travels: the table climbs through the tiers (colours, backglass, music) with
@@ -678,10 +681,11 @@
       window.addEventListener("pointerup", (e) => release({ x: e.clientX, y: e.clientY }));
       window.addEventListener("pointercancel", () => release({}));
     }
-    window.addEventListener("keyup", (e) => (e.code === "Space" || (!typing && e.code === "ArrowUp")) && release({}));
+    const onKeyUp = (e) => (e.code === "Space" || (!typing && e.code === "ArrowUp")) && release({});
+    window.addEventListener("keyup", onKeyUp);
     window.addEventListener("blur", () => release({}));
 
-    window.addEventListener("keydown", (e) => {
+    function onKeyDown(e) {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (keysShown() && e.key !== "?") {
         q("[data-keyscard]").classList.remove("show");
@@ -728,6 +732,16 @@
       }
       else return;
       hud();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    // A host page (the pocket) passes on keys pressed while it, not the game, has the keyboard,
+    // so a click on its toolbar never leaves the game deaf
+    window.addEventListener("message", (m) => {
+      const d = m.data;
+      if (!d || d.type !== "flow:key" || typeof d.code !== "string") return;
+      const e = { key: String(d.key || ""), code: d.code, repeat: !!d.repeat, ctrlKey: false, metaKey: false, altKey: false, shiftKey: !!d.shiftKey, preventDefault() {} };
+      if (d.down) onKeyDown(e);
+      else onKeyUp(e);
     });
     if (typer) {
       // Phone keyboards deliver text through the input, not reliable keydowns

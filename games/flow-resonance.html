@@ -1561,7 +1561,7 @@
             // level dashes ahead. A full charge loops the loop first. While boosting the craft flies
             // through pillars untouched, but boosted passes don't score: the rhythm is still the
             // game, the boost is for fun. Afterwards the craft drifts back to its usual spot.
-            const BOOST_HOLD = 0.28; // seconds held before it starts to charge
+            const BOOST_HOLD = 0.45; // seconds held before it starts to charge (above an ordinary thumb press on a space bar)
             const boost = { downAt: 0, charge: 0, power: 0, phase: null, t: 0, dur: 0, angle: 0, cx: 0, cy: 0, offX: 0 };
             function holdStart() {
                 if (gameStarted && !paused) boost.downAt = performance.now();
