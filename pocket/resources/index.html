@@ -251,6 +251,20 @@
     }
     setInterval(poll, 1500);
     poll();
+
+    // node pocket/setup.mjs --sync writes ~/.flow-pocket/reload after copying new games in; when
+    // it changes, the pocket reloads itself (the window, its place and the chosen game stay)
+    let reloadStamp = null;
+    setInterval(async () => {
+      try {
+        const home = await Neutralino.os.getEnv("USERPROFILE");
+        const stamp = (await Neutralino.filesystem.readFile(home + "/.flow-pocket/reload")).trim();
+        if (reloadStamp !== null && stamp !== reloadStamp) location.reload();
+        reloadStamp = stamp;
+      } catch (e) {
+        if (reloadStamp === null) reloadStamp = "";
+      }
+    }, 2000);
   </script>
 </body>
 </html>

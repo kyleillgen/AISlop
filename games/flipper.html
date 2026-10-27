@@ -56,13 +56,22 @@
   let cx = 0, fy = 0, pivL = [0, 0], pivR = [0, 0], FL = 64;
   const TOP = 88; // the table starts below the score header
   const Y = (f) => TOP + f * (fy - TOP); // 0 top of the table .. 1 the flippers
-  const strike = (side) => [cx + (side ? 36 : -36), fy - 4]; // where the ball meets a flipper
+  const DOWN = 0.5, UP = -0.42; // flipper angles (radians, left flipper; the right mirrors it)
+  // Where the ball sits on a flipper: on its top surface (not its middle line), a little past
+  // halfway along, for the flipper at angle a (down unless given)
+  function strike(side, a = DOWN) {
+    const d = (FL + 10) * 0.62;
+    const lift = 11 - 6 * 0.62 + 11 + 1; // bat half-thickness there + ball radius + a hair
+    const [px, py] = side ? pivR : pivL;
+    const m = side ? -1 : 1;
+    return [px + m * (Math.cos(a) * d + Math.sin(a) * lift), py + Math.sin(a) * d - Math.cos(a) * lift];
+  }
   const win = (api) => api.pick({ chill: 0.3, normal: 0.24, intense: 0.17 }) + 0.06 * api.eng.assist;
 
   function layout(api) {
     const { W, H } = api;
     cx = W / 2;
-    fy = Math.round(H * 0.84);
+    fy = Math.round(H * 0.9); // low on the table, like a real cabinet
     FL = Math.max(52, Math.min(70, W * 0.16));
     pivL = [cx - FL - 14, fy - 22];
     pivR = [cx + FL + 14, fy - 22];
@@ -90,7 +99,7 @@
     return [v * v * a.x + 2 * v * u * mx + u * u * b.x, v * v * a.y + 2 * v * u * my + u * u * b.y];
   }
   function ballAt(now) {
-    if (rest) return [rest.x, rest.y];
+    if (rest) return strike(rest.side, DOWN + (UP - DOWN) * flipAng);
     if (!path) return lastBall;
     const p = path.pts;
     if (now <= p[0].t) return [p[0].x, p[0].y];
@@ -310,7 +319,7 @@
       if (rest) {
         // Off the cradle: back into play, landing on a beat (not judged)
         api.eng.tap({ height: 0.5 });
-        return shot(api, rest.x, rest.y, now, Math.ceil(now + pace(api)), { ghost: true });
+        return shot(api, ...ballAt(now), now, Math.ceil(now + pace(api)), { ghost: true });
       }
       const T = arrivalT();
       if (T === null || path.whiffed) return api.eng.tap({ note: false });
@@ -354,7 +363,7 @@
       const now = api.eng.beatPos();
       if (rest) {
         flipT = 0.16;
-        return shot(api, rest.x, rest.y, now, Math.ceil(now + pace(api)), { ghost: true });
+        return shot(api, ...ballAt(now), now, Math.ceil(now + pace(api)), { ghost: true });
       }
       const T = arrivalT();
       if (T !== null && now >= T && !path.whiffed) {
@@ -575,9 +584,7 @@
       // Flippers: cream bats with red rubber, pivoting up together
       for (const s of [0, 1]) {
         const [px, py] = s ? pivR : pivL;
-        const down = 0.5;
-        const upA = -0.42;
-        const a = down + (upA - down) * flipAng;
+        const a = DOWN + (UP - DOWN) * flipAng;
         ctx.save();
         ctx.translate(px, py);
         ctx.scale(s ? -1 : 1, 1);

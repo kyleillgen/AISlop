@@ -12,6 +12,7 @@ import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -31,6 +32,13 @@ function syncGames() {
     copyFileSync(join(GAMES, f), join(out, f));
   }
   console.log("games copied into pocket/resources/games");
+  // Tell a running pocket to reload itself, so updated games show without restarting it
+  try {
+    const dir = join(homedir(), ".flow-pocket");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "reload"), String(Date.now()));
+    console.log("a running Flow Pocket will reload within a couple of seconds");
+  } catch (e) {}
 }
 
 async function download(url, to) {
