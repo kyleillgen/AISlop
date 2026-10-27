@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="flow-layer.js" data-mode="toy"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Zen Ripple Pond</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b2a33; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  "use strict";
+  // Zen Ripple Pond: the Ripple Pond toy with nothing at stake. Tap the water to ripple
+  // the leaves around; any leaf that settles on the lily blooms into a note. Leaves that
+  // drift off float back in, and left alone the pond gets the occasional raindrop.
+  const cv = document.getElementById("c");
+  const g = cv.getContext("2d");
+  let W = 0, H = 0;
+  function resize() {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W * d; cv.height = H * d;
+    g.setTransform(d, 0, 0, d, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const LILY_R = 40;
+  let leaves = [], ripples = [], blooms = [], lily, t = 0, home = 0, rainT = 3, lastInput = performance.now();
+
+  function pushR() { return Math.min(170, Math.max(110, Math.min(W, H) * 0.35)); }
+  function leafCount() { return Math.max(4, Math.min(7, Math.round((W * H) / 70000))); }
+
+  function placeLily() {
+    const m = LILY_R + 30;
+    lily = { x: m + Math.random() * Math.max(1, W - m * 2), y: m + Math.random() * Math.max(1, H - m * 2), pulse: 0 };
+  }
+
+  function addLeaf() {
+    const side = Math.floor(Math.random() * 4);
+    const x = side === 0 ? 10 : side === 1 ? W - 10 : 30 + Math.random() * (W - 60);
+    const y = side === 2 ? 10 : side === 3 ? H - 10 : 30 + Math.random() * (H - 60);
+    const a = Math.atan2(H / 2 - y, W / 2 - x);
+    leaves.push({ x, y, vx: Math.cos(a) * 26, vy: Math.sin(a) * 26, rot: Math.random() * 6, vr: (Math.random() - 0.5), hue: 80 + Math.random() * 50, fade: 0 });
+  }
+
+  placeLily();
+  for (let i = 0; i < leafCount(); i++) addLeaf();
+
+  function ripple(x, y, strength, quiet) {
+    ripples.push({ x, y, t: 0, small: strength < 1 });
+    const R = pushR() * (strength < 1 ? 0.6 : 1);
+    for (const l of leaves) {
+      const dx = l.x - x, dy = l.y - y, d = Math.hypot(dx, dy);
+      if (d < R && d > 0.01) {
+        const k = (1 - d / R) * 260 * strength;
+        l.vx += (dx / d) * k; l.vy += (dy / d) * k; l.vr += (Math.random() - 0.5) * 2 * strength;
+      }
+    }
+    // A low water note; where you tap picks it (higher up the pond, higher the note)
+    if (!quiet && window.Flow) Flow.note(Math.round((1 - y / H) * 6), { vol: 0.05, dur: 1.6, type: "sine" });
+  }
+
+  window.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    lastInput = performance.now();
+    ripple(e.clientX, e.clientY, 1);
+  }, { passive: false });
+  window.addEventListener("keydown", (e) => {
+    if (e.code !== "Space" || e.repeat) return;
+    e.preventDefault();
+    lastInput = performance.now();
+    ripple(W * (0.2 + Math.random() * 0.6), H * (0.2 + Math.random() * 0.6), 1);
+  });
+
+  function update(dt) {
+    t += dt;
+    lily.pulse += dt;
+    for (let i = ripples.length - 1; i >= 0; i--) { ripples[i].t += dt; if (ripples[i].t > 1.1) ripples.splice(i, 1); }
+    for (let i = blooms.length - 1; i >= 0; i--) { blooms[i].t += dt; if (blooms[i].t > 1.6) blooms.splice(i, 1); }
+
+    // Rain when you've been away a while: tiny ripples, silent, just enough to keep things moving
+    if (performance.now() - lastInput > 6000) {
+      rainT -= dt;
+      if (rainT <= 0) { ripple(Math.random() * W, Math.random() * H, 0.35, true); rainT = 1.8 + Math.random() * 3; }
+    }
+
+    for (let i = leaves.length - 1; i >= 0; i--) {
+      const l = leaves[i];
+      l.fade = Math.min(1, l.fade + dt);
+      l.vx += Math.sin(l.y * 0.012 + t * 0.35) * 14 * dt;
+      l.vy += Math.cos(l.x * 0.01 - t * 0.25) * 14 * dt;
+      const drag = Math.exp(-1.2 * dt);
+      l.vx *= drag; l.vy *= drag; l.vr *= drag;
+      l.x += l.vx * dt; l.y += l.vy * dt; l.rot += l.vr * dt;
+
+      if (Math.hypot(l.x - lily.x, l.y - lily.y) < LILY_R - 6) {
+        leaves.splice(i, 1); home++;
+        blooms.push({ x: lily.x, y: lily.y, t: 0, hue: 300 + Math.random() * 60 });
+        if (window.Flow) { Flow.note(7 + Math.floor(Math.random() * 7), { vol: 0.07, dur: 1.8, type: "sine" }); Flow.hit(lily.x, lily.y, true); Flow.score(home); }
+        placeLily();
+        addLeaf();
+        continue;
+      }
+      // Drifted off: it simply floats back in somewhere else
+      if (l.x < -30 || l.x > W + 30 || l.y < -30 || l.y > H + 30) { leaves.splice(i, 1); addLeaf(); }
+    }
+    while (leaves.length < leafCount()) addLeaf();
+  }
+
+  function draw() {
+    const bg = g.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "#0b2a33"); bg.addColorStop(1, "#103d3c");
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+
+    g.strokeStyle = "rgba(160, 230, 220, 0.05)"; g.lineWidth = 2;
+    for (let y = 30; y < H; y += 46) {
+      g.beginPath();
+      for (let x = 0; x <= W; x += 20) {
+        const yy = y + Math.sin(x * 0.02 + t * 0.6 + y) * 6;
+        if (x === 0) g.moveTo(x, yy); else g.lineTo(x, yy);
+      }
+      g.stroke();
+    }
+
+    const pr = LILY_R + Math.sin(lily.pulse * 2) * 3;
+    g.fillStyle = "rgba(255, 220, 120, 0.1)";
+    g.beginPath(); g.arc(lily.x, lily.y, pr + 14, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "#2f7d4f";
+    g.beginPath(); g.arc(lily.x, lily.y, pr, 0.25, Math.PI * 2 - 0.25); g.lineTo(lily.x, lily.y); g.fill();
+    g.fillStyle = "#ffd36e";
+    g.beginPath(); g.arc(lily.x, lily.y, 5, 0, Math.PI * 2); g.fill();
+
+    for (const b of blooms) {
+      const k = b.t / 1.6;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + b.t * 0.6;
+        g.fillStyle = `hsla(${b.hue}, 80%, 82%, ${1 - k})`;
+        g.beginPath(); g.ellipse(b.x + Math.cos(a) * (10 + k * 30), b.y + Math.sin(a) * (10 + k * 30), 10, 5, a, 0, Math.PI * 2); g.fill();
+      }
+    }
+
+    for (const r of ripples) {
+      const k = r.t / 1.1;
+      const R = pushR() * (r.small ? 0.6 : 1);
+      g.strokeStyle = `rgba(210, 250, 245, ${(r.small ? 0.3 : 0.6) * (1 - k)})`;
+      g.lineWidth = r.small ? 1.2 : 2;
+      for (let j = 0; j < 2; j++) {
+        g.beginPath(); g.arc(r.x, r.y, Math.max(1, R * k - j * 20), 0, Math.PI * 2); g.stroke();
+      }
+    }
+
+    for (const l of leaves) {
+      g.save(); g.translate(l.x, l.y); g.rotate(l.rot); g.globalAlpha = l.fade;
+      g.fillStyle = `hsl(${l.hue}, 55%, 45%)`;
+      g.beginPath(); g.ellipse(0, 0, 15, 8.5, 0, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = "rgba(255,255,255,0.35)"; g.lineWidth = 1.2;
+      g.beginPath(); g.moveTo(-13, 0); g.lineTo(13, 0); g.stroke();
+      g.restore();
+    }
+
+    if (home > 0) {
+      g.font = "600 12px system-ui, sans-serif"; g.fillStyle = "rgba(255,255,255,0.35)"; g.textAlign = "left";
+      g.fillText(home + (home === 1 ? " leaf home" : " leaves home"), 14, 24);
+    } else if (performance.now() - lastInput < 15000) {
+      g.font = "600 13px system-ui, sans-serif"; g.fillStyle = "rgba(255,255,255,0.4)"; g.textAlign = "center";
+      g.fillText("tap the water · nudge leaves onto the lily", W / 2, 32);
+    }
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    if (window.Flow && Flow.away && now - last < 100) { requestAnimationFrame(frame); return; }
+    const dt = Math.min(0.12, (now - last) / 1000);
+    last = now;
+    update(dt); draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

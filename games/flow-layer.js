@@ -16,10 +16,16 @@
   if (window.Flow) return;
 
   const cfg = (document.currentScript && document.currentScript.dataset) || {};
-  const BPM = Number(cfg.bpm) || 96;
+  // Toy mode (data-mode="toy") is for things you leave open while you work: sound starts
+  // muted and sits lower in the mix, there is no kick, the wash is softer, and drawing
+  // slows to ~10 fps whenever the window isn't focused.
+  const TOY = cfg.mode === "toy";
+  const BPM = Number(cfg.bpm) || (TOY ? 72 : 96);
   const BEAT = 60 / BPM;
-  const MUSIC = cfg.music || "on";
+  const MUSIC = cfg.music || (TOY ? "pad" : "on");
   const STEP = Number(cfg.step) || 10;
+  const LEVEL = TOY ? 0.32 : 0.5;
+  const MUTE_KEY = TOY ? "aislop.flow.muted.toy" : "aislop.flow.muted";
 
   const CHORDS = [
     { pad: [146.83, 174.61, 220.0, 261.63, 329.63], bass: 73.42, bell: [293.66, 349.23, 440.0, 523.25, 587.33, 698.46, 880.0] },
@@ -35,8 +41,11 @@
   let flow = 0.3;
   let dip = 0;
   let rings = [];
-  let muted = false;
-  try { muted = localStorage.getItem("aislop.flow.muted") === "1"; } catch (e) {}
+  let muted = TOY;
+  try {
+    const saved = localStorage.getItem(MUTE_KEY);
+    if (saved !== null) muted = saved === "1";
+  } catch (e) {}
 
   // ---- Visual wash (screen-blended overlay, never intercepts input) -------------------
   const cv = document.createElement("canvas");
@@ -77,7 +86,7 @@
     if (!AC) return;
     ac = new AC();
     master = ac.createGain();
-    master.gain.value = muted ? 0 : 0.5;
+    master.gain.value = muted ? 0 : LEVEL;
     lp = ac.createBiquadFilter();
     lp.type = "lowpass"; lp.frequency.value = 900; lp.Q.value = 0.7;
     lp.connect(master); master.connect(ac.destination);
@@ -93,8 +102,8 @@
   function toggleMute() {
     startAudio();
     muted = !muted;
-    try { localStorage.setItem("aislop.flow.muted", muted ? "1" : "0"); } catch (e) {}
-    if (master) master.gain.setTargetAtTime(muted ? 0 : 0.5, ac.currentTime, 0.05);
+    try { localStorage.setItem(MUTE_KEY, muted ? "1" : "0"); } catch (e) {}
+    if (master) master.gain.setTargetAtTime(muted ? 0 : LEVEL, ac.currentTime, 0.05);
     syncBtn();
   }
 
@@ -145,6 +154,26 @@
     voice(bell[idx] * 2, at, 0.35, 0.02, "triangle", master);
   }
 
+  // Scale degree in the current chord: 0–6 is the warm low octave, 7–13 the bell octave
+  function degreeFreq(d) {
+    const bell = chord().bell;
+    const n = Math.round(d);
+    return bell[((n % 7) + 7) % 7] * Math.pow(2, Math.floor(n / 7) - 1);
+  }
+
+  function pluck(freq, vol, dur, type) {
+    if (!ac || muted || MUSIC === "off") return;
+    const at = ac.currentTime + 0.005;
+    const o = ac.createOscillator(), v = ac.createGain();
+    o.type = type || "triangle";
+    o.frequency.setValueAtTime(freq, at);
+    v.gain.setValueAtTime(0.0001, at);
+    v.gain.linearRampToValueAtTime(vol, at + 0.006);
+    v.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(v); v.connect(master);
+    o.start(at); o.stop(at + dur + 0.05);
+  }
+
   // ---- Public API ----------------------------------------------------------------------
   window.Flow = {
     score(n) {
@@ -169,15 +198,24 @@
     reset() {
       score = 0; flow = 0.3; dip = 0; rings = [];
     },
-    get level() { return flow; }
+    // Play a scale degree right away (plucks, pops, doodles); always in key with the pad
+    note(degree, opts) {
+      const o = opts || {};
+      flow = Math.min(1, flow + 0.015);
+      pluck(degreeFreq(degree), o.vol || 0.08, o.dur || 1.1, o.type);
+    },
+    get level() { return flow; },
+    // True while the window isn't focused (you're in your editor): toys should slow down
+    get away() { return !document.hasFocus(); }
   };
 
   // ---- Frame loop ------------------------------------------------------------------------
   let last = performance.now();
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
-    last = now;
     schedule();
+    if (!document.hasFocus() && now - last < 100) { requestAnimationFrame(frame); return; }
+    const dt = Math.min(0.12, (now - last) / 1000);
+    last = now;
 
     flow += (0.3 - flow) * dt * 0.025;
     dip = Math.max(0, dip - dt * 0.8);
@@ -193,7 +231,7 @@
     const h1 = mixHue(pa[0], pb[0]), h2 = mixHue(pa[1], pb[1]);
 
     g.clearRect(0, 0, W, H);
-    const strength = (0.07 + flow * 0.1 + pulse * 0.035) * (1 - dip * 0.5);
+    const strength = (0.07 + flow * 0.1 + pulse * 0.035) * (1 - dip * 0.5) * (TOY ? 0.7 : 1);
     const t = now / 1000;
     const blobs = [
       [W * (0.25 + 0.1 * Math.sin(t * 0.07)), H * (0.3 + 0.08 * Math.cos(t * 0.05)), h1],

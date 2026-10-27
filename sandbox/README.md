@@ -9,6 +9,11 @@ Each player run gets **one random game and 3 moves**. A move is either:
 
 When the moves are spent (or earlier), you name it and **Submit to Fresh**, or let it go.
 
+There are two lanes, picked with **Roll a game** or **Roll a toy**:
+
+- **Games** (the Slop lab): random challenges with scores and fail states. Anything goes.
+- **Flow Toys**: calm fidgets with no score and no losing, meant to sit in a small pop-out window beside your editor. They use their own system prompt, a roller built from materials and gestures (sand, strings, ink, "stroking across it"...), the Flow layer's quiet toy mode (muted by default, ~10 fps while you're in another window), and land on the Flow Toys shelf when kept.
+
 ## Run it
 
 ```

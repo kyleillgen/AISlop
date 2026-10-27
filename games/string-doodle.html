@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="flow-layer.js" data-mode="toy"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>String Doodle</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0b1a; touch-action: none; user-select: none; -webkit-user-select: none; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #clear { position: fixed; left: 10px; bottom: 10px; z-index: 5; border: 1px solid rgba(255,255,255,0.2); background: rgba(10,10,24,0.5);
+           color: rgba(255,255,255,0.7); font: 600 12px system-ui, sans-serif; padding: 7px 11px; border-radius: 999px; cursor: pointer; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<button id="clear" type="button">clear</button>
+<script>
+(() => {
+  "use strict";
+  // String Doodle: drag to stretch a string; brush across strings to pluck them.
+  // Short strings ring high, long strings hum low, and everything stays in key.
+  // On desktop, just moving the mouse over a string plucks it. Nothing to win or lose.
+  const cv = document.getElementById("c");
+  const g = cv.getContext("2d");
+  let W = 0, H = 0;
+  function resize() {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    W = window.innerWidth; H = window.innerHeight;
+    cv.width = W * d; cv.height = H * d;
+    g.setTransform(d, 0, 0, d, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  const MAX_STRINGS = 22;
+  let strings = [];
+  let drawing = null;          // { x0, y0, x1, y1 } while dragging out a new string
+  let prev = null;             // last pointer position, for crossing tests
+  let lastInput = performance.now();
+  let breezeT = 0;
+  let sparks = [];
+
+  // A few strings to start with, so there's something to touch right away
+  function seed() {
+    strings = [];
+    const n = 4;
+    for (let i = 0; i < n; i++) {
+      const y = H * (0.3 + i * 0.13);
+      addString(W * 0.18, y + 20, W * (0.55 + i * 0.08), y - 20);
+    }
+  }
+
+  function degreeFor(len) {
+    const maxLen = Math.hypot(W, H) * 0.75;
+    return Math.round(13 - Math.min(1, len / maxLen) * 13);
+  }
+
+  function addString(x0, y0, x1, y1) {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    if (len < 28) return null;
+    const s = { x0, y0, x1, y1, len, deg: degreeFor(len), amp: 0, phase: 0, hue: 190 + (degreeFor(len) / 13) * 140 };
+    strings.push(s);
+    if (strings.length > MAX_STRINGS) strings.shift();
+    return s;
+  }
+
+  function pluck(s, strength) {
+    if (s.amp > 0.6) return; // let a ringing string finish before it re-triggers
+    s.amp = Math.min(1, 0.55 + strength * 0.5);
+    s.phase = 0;
+    if (window.Flow) Flow.note(s.deg, { vol: 0.05 + strength * 0.05, dur: 0.8 + (13 - s.deg) * 0.12 });
+    const mx = (s.x0 + s.x1) / 2, my = (s.y0 + s.y1) / 2;
+    for (let i = 0; i < 6; i++) {
+      const a = Math.random() * Math.PI * 2;
+      sparks.push({ x: mx, y: my, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40, life: 1, hue: s.hue });
+    }
+  }
+
+  // Does the pointer's last movement cross this string?
+  function crosses(ax, ay, bx, by, s) {
+    const d = (bx - ax) * (s.y1 - s.y0) - (by - ay) * (s.x1 - s.x0);
+    if (Math.abs(d) < 1e-6) return false;
+    const t = ((s.x0 - ax) * (s.y1 - s.y0) - (s.y0 - ay) * (s.x1 - s.x0)) / d;
+    const u = ((s.x0 - ax) * (by - ay) - (s.y0 - ay) * (bx - ax)) / d;
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+  }
+
+  function brush(x, y) {
+    if (prev) {
+      const speed = Math.min(1, Math.hypot(x - prev.x, y - prev.y) / 40);
+      for (const s of strings) if (crosses(prev.x, prev.y, x, y, s)) pluck(s, speed);
+    }
+    prev = { x, y };
+  }
+
+  window.addEventListener("pointerdown", (e) => {
+    if (e.target.id === "clear") return;
+    e.preventDefault();
+    lastInput = performance.now();
+    drawing = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY };
+    prev = { x: e.clientX, y: e.clientY };
+  }, { passive: false });
+  window.addEventListener("pointermove", (e) => {
+    lastInput = performance.now();
+    brush(e.clientX, e.clientY);
+    if (drawing) { drawing.x1 = e.clientX; drawing.y1 = e.clientY; }
+  });
+  window.addEventListener("pointerup", () => {
+    if (drawing) {
+      const s = addString(drawing.x0, drawing.y0, drawing.x1, drawing.y1);
+      if (s) pluck(s, 0.6);
+    }
+    drawing = null;
+    if (!matchMedia("(hover: hover)").matches) prev = null;
+  });
+  window.addEventListener("pointerleave", () => { prev = null; });
+
+  // Space strums every string top to bottom
+  window.addEventListener("keydown", (e) => {
+    if (e.code !== "Space" || e.repeat) return;
+    e.preventDefault();
+    lastInput = performance.now();
+    [...strings].sort((a, b) => Math.min(a.y0, a.y1) - Math.min(b.y0, b.y1))
+      .forEach((s, i) => setTimeout(() => pluck(s, 0.5), i * 70));
+  });
+
+  document.getElementById("clear").addEventListener("pointerdown", (e) => {
+    e.stopPropagation();
+    strings = [];
+  });
+
+  function update(dt) {
+    for (const s of strings) {
+      s.phase += dt;
+      s.amp *= Math.exp(-dt * (1.2 + s.deg * 0.12));
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i];
+      p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt * 1.5;
+      if (p.life <= 0) sparks.splice(i, 1);
+    }
+    // Left alone, a soft breeze plucks a string now and then
+    if (performance.now() - lastInput > 8000 && strings.length) {
+      breezeT -= dt;
+      if (breezeT <= 0) {
+        pluck(strings[Math.floor(Math.random() * strings.length)], 0.15);
+        breezeT = 2.5 + Math.random() * 3;
+      }
+    }
+  }
+
+  function drawString(s) {
+    const mx = (s.x0 + s.x1) / 2, my = (s.y0 + s.y1) / 2;
+    const nx = -(s.y1 - s.y0) / s.len, ny = (s.x1 - s.x0) / s.len;
+    const wobble = s.amp * Math.min(18, s.len * 0.06) * Math.sin(s.phase * (22 + s.deg * 4));
+    const cx = mx + nx * wobble * 2, cy = my + ny * wobble * 2;
+    g.lineCap = "round";
+    g.strokeStyle = `hsla(${s.hue}, 80%, 65%, ${0.18 + s.amp * 0.4})`;
+    g.lineWidth = 8 + s.amp * 6;
+    g.beginPath(); g.moveTo(s.x0, s.y0); g.quadraticCurveTo(cx, cy, s.x1, s.y1); g.stroke();
+    g.strokeStyle = `hsla(${s.hue}, 90%, ${72 + s.amp * 18}%, 0.95)`;
+    g.lineWidth = 2;
+    g.beginPath(); g.moveTo(s.x0, s.y0); g.quadraticCurveTo(cx, cy, s.x1, s.y1); g.stroke();
+    g.fillStyle = `hsl(${s.hue}, 70%, 80%)`;
+    g.beginPath(); g.arc(s.x0, s.y0, 3.5, 0, Math.PI * 2); g.arc(s.x1, s.y1, 3.5, 0, Math.PI * 2); g.fill();
+  }
+
+  function draw() {
+    const bg = g.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#0d0b1a"); bg.addColorStop(1, "#1b1533");
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+
+    for (const s of strings) drawString(s);
+    if (drawing) {
+      g.setLineDash([6, 8]);
+      g.strokeStyle = "rgba(255,255,255,0.45)"; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(drawing.x0, drawing.y0); g.lineTo(drawing.x1, drawing.y1); g.stroke();
+      g.setLineDash([]);
+    }
+    for (const p of sparks) {
+      g.fillStyle = `hsla(${p.hue}, 90%, 75%, ${p.life})`;
+      g.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    }
+    if (strings.length <= 4 && performance.now() - lastInput < 12000) {
+      g.font = "600 13px system-ui, sans-serif";
+      g.fillStyle = "rgba(255,255,255,0.4)"; g.textAlign = "center";
+      g.fillText("drag to stretch a string · brush across to pluck", W / 2, 40);
+    }
+  }
+
+  seed();
+  let last = performance.now();
+  function frame(now) {
+    // While you're working in another window, slow to ~10 fps
+    if (window.Flow && Flow.away && now - last < 100) { requestAnimationFrame(frame); return; }
+    const dt = Math.min(0.12, (now - last) / 1000);
+    last = now;
+    update(dt); draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -14,7 +14,9 @@ import { readFile, writeFile, mkdir, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SYSTEM_PROMPT, randomConcept, generatePrompt, fixPrompt } from "./prompts.mjs";
+import {
+  SYSTEM_PROMPT, TOY_SYSTEM_PROMPT, randomConcept, randomToyConcept, generatePrompt, generateToyPrompt, fixPrompt
+} from "./prompts.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = path.join(ROOT, "sandbox", "out");
@@ -31,7 +33,14 @@ const GAME_CSP =
   "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
   "img-src data: blob:; media-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'";
 
-const MOCK_POOL = ["orbit-hop", "lantern-drift", "pulse-garden", "two-tone", "ripple-pond"];
+// Two lanes share the loop: "game" (Slop) and "toy" (Flow Toys), each with its own
+// system prompt, concept roller, and mock pool
+const LANES = {
+  game: { system: SYSTEM_PROMPT, concept: randomConcept, prompt: generatePrompt,
+          mock: ["orbit-hop", "lantern-drift", "pulse-garden", "two-tone", "ripple-pond"] },
+  toy: { system: TOY_SYSTEM_PROMPT, concept: randomToyConcept, prompt: generateToyPrompt,
+         mock: ["string-doodle", "pop-field", "zen-ripple-pond"] }
+};
 
 let callsMade = 0;
 const sessions = new Map(); // sid -> { run: {id, concept, moves, history} | null }
@@ -73,7 +82,7 @@ function extractHtml(text) {
   return html;
 }
 
-async function callModel(userText) {
+async function callModel(userText, system) {
   if (callsMade >= MAX_CALLS) throw httpError(429, "This sandbox has used its call budget. Restart the server to reset it.");
   callsMade++;
   const stream = client.beta.messages.stream({
@@ -83,7 +92,7 @@ async function callModel(userText) {
     output_config: { effort: "medium" },
     betas: ["server-side-fallback-2026-07-01"],
     fallbacks: "default",
-    system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+    system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: userText }]
   });
   const message = await stream.finalMessage();
@@ -95,8 +104,9 @@ async function callModel(userText) {
   return html;
 }
 
-async function mockGenerate(concept) {
-  const pick = MOCK_POOL[Math.floor(Math.random() * MOCK_POOL.length)];
+async function mockGenerate(concept, lane) {
+  const pool = LANES[lane].mock;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
   const html = await readFile(path.join(ROOT, "games", pick + ".html"), "utf8");
   return html.replace("<body>", `<body>\n<!-- mock: stands in for "${concept.replace(/-->/g, "")}" -->`);
 }
@@ -130,6 +140,7 @@ async function produce(run, html) {
 function runView(run) {
   return {
     id: run.id,
+    lane: run.lane,
     concept: run.concept,
     movesLeft: run.moves,
     history: run.history,
@@ -137,19 +148,26 @@ function runView(run) {
   };
 }
 
-async function startRun(sess) {
-  const concept = randomConcept();
-  const run = { id: newRunId(), concept, moves: MOVES, history: [], version: 0 };
-  const html = LIVE ? await callModel(generatePrompt(concept)) : await mockGenerate(concept);
+function roll(lane) {
+  const L = LANES[lane];
+  const concept = L.concept();
+  return { concept, make: () => (LIVE ? callModel(L.prompt(concept), L.system) : mockGenerate(concept, lane)) };
+}
+
+async function startRun(sess, lane) {
+  if (!LANES[lane]) lane = "game";
+  const { concept, make } = roll(lane);
+  const run = { id: newRunId(), lane, concept, moves: MOVES, history: [], version: 0 };
+  const html = await make();
   sess.run = run;
-  await log({ event: "generate", id: run.id, concept });
+  await log({ event: "generate", id: run.id, lane, concept });
   return produce(run, html);
 }
 
 async function scrap(sess) {
   const run = requireMoves(sess);
-  const concept = randomConcept();
-  const html = LIVE ? await callModel(generatePrompt(concept)) : await mockGenerate(concept);
+  const { concept, make } = roll(run.lane);
+  const html = await make();
   run.moves--;
   run.concept = concept;
   run.history.push({ type: "scrap", concept });
@@ -163,7 +181,9 @@ async function fix(sess, text) {
   if (!instruction) throw httpError(400, "Say what to change.");
   if (instruction.length > FIX_MAX) throw httpError(400, `Keep it to ${FIX_MAX} characters.`);
   const current = await loadGame(run.id);
-  const html = LIVE ? await callModel(fixPrompt(run.concept, current, instruction)) : mockFix(current, instruction);
+  const html = LIVE
+    ? await callModel(fixPrompt(run.concept, current, instruction, run.lane), LANES[run.lane].system)
+    : mockFix(current, instruction);
   run.moves--;
   run.history.push({ type: "fix", text: instruction });
   await log({ event: "fix", id: run.id, instruction });
@@ -186,6 +206,7 @@ async function submit(sess, title) {
     prompt: run.history.filter((h) => h.type === "fix").map((h) => h.text).join(" · ") || null,
     path: `/out/${run.id}.html`,
     status: "fresh",
+    lane: run.lane,
     hue: Math.floor(Math.random() * 360),
     movesUsed: MOVES - run.moves,
     submittedAt: new Date().toISOString()
@@ -264,8 +285,8 @@ const routes = {
   }),
   "GET /api/fresh": async () => readFresh(),
   "POST /api/new": async (req, res, sess) => {
-    if (sess.run) throw httpError(409, "Finish this game first: submit it or let it go.");
-    return startRun(sess);
+    if (sess.run) throw httpError(409, "Finish this one first: submit it or let it go.");
+    return startRun(sess, (await body(req)).lane);
   },
   "POST /api/scrap": async (req, res, sess) => scrap(sess),
   "POST /api/fix": async (req, res, sess) => fix(sess, (await body(req)).text),

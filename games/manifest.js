@@ -10,6 +10,31 @@ window.AISLOP_GAMES = [
     status: "house",
     hue: 168
   },
+  // Flow Toys: hand-made fidgets with no score and no losing, for keeping beside your editor
+  {
+    id: "string-doodle",
+    title: "String Doodle",
+    blurb: "Drag to stretch glowing strings, then brush across them to pluck. Short ones chime, long ones hum, all in key.",
+    path: "games/string-doodle.html",
+    status: "toy",
+    hue: 265
+  },
+  {
+    id: "pop-field",
+    title: "Pop Field",
+    blurb: "An endless drift of soft bubbles. Tap or swipe through them; every pop is a note from the chord.",
+    path: "games/pop-field.html",
+    status: "toy",
+    hue: 195
+  },
+  {
+    id: "zen-ripple-pond",
+    title: "Zen Ripple Pond",
+    blurb: "Ripple leaves onto the lily at your own pace. Nothing drifts away for good, and rain keeps it moving when you don't.",
+    path: "games/zen-ripple-pond.html",
+    status: "toy",
+    hue: 170
+  },
   {
     id: "orbit-hop",
     title: "Orbit Hop",
