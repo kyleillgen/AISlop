@@ -939,7 +939,7 @@
                 canvas.height = height * dpr;
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-                bird.x = Math.min(Math.max(width * 0.24, 72), 155);
+                bird.homeX = bird.x = Math.min(Math.max(width * 0.24, 72), 155);
                 if (!gameStarted) {
                     bird.y = height * 0.52;
                 }
@@ -1550,6 +1550,73 @@
             let paused = false;
             let masterLevel = 0.8;
             let lastFlapMs = -1e9;
+
+            // ---- Boost: trick shots on a hold ----------------------------------------------
+            // A tap is a flap, as always (the rhythm). Keep holding and the craft hovers and charges;
+            // let go and it boosts along the way it's heading: climbing shoots it up, falling dives,
+            // level dashes ahead. A full charge loops the loop first. While boosting the craft flies
+            // through pillars untouched, but boosted passes don't score: the rhythm is still the
+            // game, the boost is for fun. Afterwards the craft drifts back to its usual spot.
+            const BOOST_HOLD = 0.28; // seconds held before it starts to charge
+            const boost = { downAt: 0, charge: 0, power: 0, phase: null, t: 0, dur: 0, angle: 0, cx: 0, cy: 0, offX: 0 };
+            function holdStart() {
+                if (gameStarted && !paused) boost.downAt = performance.now();
+            }
+            function holdEnd() {
+                if (!boost.downAt) return;
+                const held = (performance.now() - boost.downAt) / 1000;
+                boost.downAt = 0;
+                const charge = boost.charge;
+                boost.charge = 0;
+                if (held < BOOST_HOLD || !gameStarted || paused || autoMode || boost.phase) return;
+                idleSec = 0;
+                boost.angle = Math.max(-1.0, Math.min(1.0, bird.vy * 0.16));
+                boost.power = charge;
+                if (charge > 0.85) {
+                    // Loop the loop: round a circle above, then the dash
+                    boost.phase = "loop";
+                    boost.t = 0;
+                    boost.dur = 0.55;
+                    boost.cx = bird.x;
+                    boost.cy = bird.y - 38;
+                } else startDash();
+                const heightNorm = Math.max(0, Math.min(1, (bird.y - 108) / (height - 146)));
+                synth.queueQuantizedTap(heightNorm, flowCtrl.tier, true);
+                if (charge > 0.5) synth.playGoldenOrbShimmer();
+                spawnBeatRing(bird.x, bird.y, 60 + 90 * charge, charge > 0.85 ? "#ffc21a" : getTierPrimaryColor());
+                triggerHaptic([10, 20, 10]);
+            }
+            function startDash() {
+                boost.phase = "dash";
+                boost.t = 0;
+                boost.dur = 0.3 + 0.3 * boost.power;
+                spawnParticles(bird.x, bird.y, "#ffd84d", 10 + Math.round(boost.power * 14));
+            }
+            // Runs instead of the usual physics while a boost is on
+            function updateBoost(rawDt, frameScale) {
+                boost.t += rawDt;
+                if (boost.phase === "loop") {
+                    const th = Math.min(1, boost.t / boost.dur) * Math.PI * 2;
+                    bird.x = boost.cx + 38 * Math.sin(th);
+                    bird.y = boost.cy + 38 * Math.cos(th);
+                    boost.offX = bird.x - bird.homeX;
+                    boost.angle = -th;
+                    bird.vy = 0;
+                    if (Math.random() < 0.6) spawnParticles(bird.x, bird.y, "#ffc21a", 1);
+                    if (boost.t >= boost.dur) {
+                        boost.angle = 0;
+                        startDash();
+                    }
+                    return;
+                }
+                const speed = 7 + 6 * boost.power;
+                bird.y += Math.sin(boost.angle) * speed * frameScale;
+                boost.offX = Math.min(width * 0.32, boost.offX + Math.cos(boost.angle) * speed * 0.55 * frameScale);
+                bird.x = bird.homeX + boost.offX;
+                bird.vy = Math.sin(boost.angle) * 3;
+                spawnParticles(bird.x - 14, bird.y, getTierPrimaryColor(), 1);
+                if (boost.t >= boost.dur) boost.phase = null;
+            }
             let phrasePasses = 0;
             let phraseClean = true;
 
@@ -1754,9 +1821,14 @@
                     } else {
                         triggerFlap();
                     }
+                    holdStart();
                 },
                 { passive: false }
             );
+            window.addEventListener("pointerup", holdEnd);
+            window.addEventListener("pointercancel", () => (boost.downAt = 0));
+            window.addEventListener("blur", () => (boost.downAt = 0));
+            window.addEventListener("keyup", (e) => (e.code === "Space" || e.code === "ArrowUp") && holdEnd());
 
             canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 
@@ -1770,6 +1842,7 @@
                     } else {
                         triggerFlap();
                     }
+                    holdStart();
                     return;
                 }
                 if (e.repeat) return;
@@ -1962,7 +2035,18 @@
                 if (bird.shakeTimer > 0) bird.shakeTimer = Math.max(0, bird.shakeTimer - rawDt);
                 if (bird.washAlpha > 0) bird.washAlpha = Math.max(0, bird.washAlpha - rawDt * 1.4);
 
-                if (autoMode) {
+                if (boost.downAt && !autoMode && (performance.now() - boost.downAt) / 1000 > BOOST_HOLD) {
+                    boost.charge = Math.min(1, ((performance.now() - boost.downAt) / 1000 - BOOST_HOLD) / 0.7);
+                }
+                if (!boost.phase && boost.offX) {
+                    // Drift back to the usual spot after a boost
+                    boost.offX *= Math.pow(0.3, rawDt);
+                    if (Math.abs(boost.offX) < 0.5) boost.offX = 0;
+                    bird.x = bird.homeX + boost.offX;
+                }
+                if (boost.phase) {
+                    updateBoost(rawDt, frameScale);
+                } else if (autoMode) {
                     // Auto glide: a smooth damped spring toward the ribbon slightly ahead. No flaps,
                     // no snapping, no extra drawing; the ribbon itself threads every gap.
                     const target = getHarmonicGuideYAtX(bird.x + 24);
@@ -1972,7 +2056,8 @@
                 } else {
                     // Vertical kinematics with gentle buoyancy along the Harmonic Guide Ribbon
                     const gravScale = flowCtrl.hyperGlideTimer > 0 ? 0.80 : flowCtrl.tier >= 4 ? 0.90 : 1.0;
-                    bird.vy += bird.gravity * gravScale * frameScale;
+                    bird.vy += bird.gravity * gravScale * (boost.charge > 0 ? 0.3 : 1) * frameScale;
+                    if (boost.charge > 0) bird.vy *= Math.pow(0.9, frameScale); // hover while charging
                     bird.vy = Math.min(bird.vy, 8.2);
                     bird.y += bird.vy * frameScale;
 
@@ -2048,6 +2133,7 @@
                 // Pitch follows velocity through a short ease, so flaps tilt rather than snap
                 const pitchTarget = Math.max(-0.46, Math.min(0.52, bird.vy * 0.07));
                 bird.angle += (pitchTarget - bird.angle) * (1 - Math.pow(0.78, frameScale));
+                if (boost.phase) bird.angle = boost.angle;
 
                 // Silk Ribbon Trail (pulses on 16th-note grid in Tier 2+)
                 bird.trail.unshift({ x: bird.x, y: bird.y, pulse: sixteenthPulse });
@@ -2131,7 +2217,7 @@
                         bird.x + bird.radius * 0.7 > p.x + 4 &&
                         bird.x - bird.radius * 0.7 < p.x + p.width - 4;
 
-                    if (withinPipeX && bird.ghostTimer <= 0 && !autoMode) {
+                    if (withinPipeX && bird.ghostTimer <= 0 && !autoMode && !boost.phase) {
                         const graceMargin = 9.0;
                         const hardHitTop = bird.y - bird.radius + graceMargin < topLip;
                         const hardHitBottom = bird.y + bird.radius - graceMargin > bottomLip;
@@ -2164,7 +2250,7 @@
                         // Auto mode doesn't score
                         if (!autoMode) {
                             if (forgivePillars > 0) forgivePillars--;
-                            if (bird.ghostTimer <= 0) evaluatePipePass(p);
+                            if (bird.ghostTimer <= 0 && !boost.phase) evaluatePipePass(p);
                             phrasePasses++;
                             if (phrasePasses >= 8) {
                                 if (phraseClean) {
@@ -2511,6 +2597,17 @@
                 // 10. Player Avatar & Shield Halo
                 ctx.save();
                 ctx.translate(bird.x, bird.y);
+                if (boost.charge > 0) {
+                    // Charging: an arc closes round the craft; gold when a loop is ready
+                    ctx.save();
+                    ctx.strokeStyle = boost.charge > 0.85 ? "#ffc21a" : primaryColor;
+                    ctx.globalAlpha = 0.7;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, bird.radius + 10 + 8 * boost.charge, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * boost.charge);
+                    ctx.stroke();
+                    ctx.restore();
+                }
                 ctx.rotate(bird.angle);
 
                 if (isGhost) {
