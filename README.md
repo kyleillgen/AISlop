@@ -2,6 +2,8 @@
 
 Sloppy AI games, reborn.
 
+> **The flow engine, its games (Flow, Orbit, Flipper, Ricochet) and Flow Pocket now live in [kyleillgen/flow-engine](https://github.com/kyleillgen/flow-engine).** Changes go there, through pull requests. The copies on this branch are frozen and no longer updated.
+
 ## Flow // Resonance
 
 Built with Gemini to draw you into a flow state. You never die; a clip just steps your streak down (or uses your Flow Shield). The engine listens to your natural tapping cadence (half- and double-time tappers included), eases the tempo toward it in steps too small to notice, and locks once it has actually reached yours. While locked it follows your timing lightly, so the beat stays with you instead of you chasing it. Pipes arrive on the beat and every tap plays in key. It never gets harder over time; it gets deeper: tiers, golden orbs, slipstreams, epochs every 500 points, and **Platinum** at 1000.
