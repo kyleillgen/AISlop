@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Flipper</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<script src="flow-engine.js"></script>
+<script src="pinball-skin.js"></script>
+<script src="flow-shell.js"></script>
+<script>
+// Flipper: one button works both flippers. The ball comes down to a flipper on a beat; flip as
+// it gets there and it's sent up the table into a drop target, ricochets off the pop bumpers and
+// comes back down, landing on the beat again. Knock the whole bank of targets down and it pays.
+//
+// Flow: a ring closes on the flipper the ball is heading for, and the ball lands as it closes.
+// The clean window is about ±0.24 beat and "perfect" is ±0.08 (about ±45 ms). Flip well off the
+// mark and you whiff; miss it and the ball drops between the flippers, and the kickback in the
+// outlane fires it straight back into play. The ball is never lost.
+//
+// Hold: the flipper stays up, so a ball that arrives while you're holding is cradled on it. Let
+// go after a hold and the ball takes the orbit lane round the top of the table (a full charge
+// goes round twice) and comes back down to the other flipper, ready to flip. Just for fun.
+//
+// Fidget: every press flips the ball off wherever it is, so mashing keeps it pinging between the
+// targets and bumpers. A ball you leave alone rests on a flipper, and a hold-and-release fires the
+// orbit shot from anywhere.
+(() => {
+  "use strict";
+
+  const PERFECT = 0.08; // beats
+  const SKY = [["#0d0930", "#3f1d8a"], ["#04170f", "#134a1d"], ["#1a0520", "#561034"], ["#1f0806", "#6a2508"]];
+  const TAU = Math.PI * 2;
+  const NT = 5; // drop targets in the bank
+
+  let targets = []; // { x, y, up, drop, lit }
+  let pops = []; // pop bumpers { x, y, pop }
+  let path = null; // { pts: [{ x, y, t, hit }], next, kind, quality, ghost, scored, whiffed, side }
+  let rest = null; // a cradled / resting ball: { x, y, side }
+  let flipT = 0; // seconds the flippers stay up after a tap
+  let flipAng = 0; // 0 down .. 1 up (eased)
+  let spinner = 0;
+  let spinnerV = 0;
+  let kickFlash = [0, 0];
+  let bankResetAt = 0;
+  let kick = 0;
+  let trail = [];
+  let lastBall = [0, 0];
+
+  // Geometry, set on resize
+  let cx = 0, fy = 0, pivL = [0, 0], pivR = [0, 0], FL = 64;
+  const TOP = 88; // the table starts below the score header
+  const Y = (f) => TOP + f * (fy - TOP); // 0 top of the table .. 1 the flippers
+  const strike = (side) => [cx + (side ? 36 : -36), fy - 4]; // where the ball meets a flipper
+  const win = (api) => api.pick({ chill: 0.3, normal: 0.24, intense: 0.17 }) + 0.06 * api.eng.assist;
+
+  function layout(api) {
+    const { W, H } = api;
+    cx = W / 2;
+    fy = Math.round(H * 0.84);
+    FL = Math.max(52, Math.min(70, W * 0.16));
+    pivL = [cx - FL - 14, fy - 22];
+    pivR = [cx + FL + 14, fy - 22];
+    const ty = Math.round(Y(0.15));
+    const span = Math.min(W - 140, 260); // clear of the orbit lane at the sides
+    targets = Array.from({ length: NT }, (_, i) => {
+      const old = targets[i];
+      return { x: cx - span / 2 + (span * i) / (NT - 1), y: ty, up: old ? old.up : true, drop: old ? old.drop : 0, lit: old ? old.lit : false };
+    });
+    const by = Math.round(Y(0.42));
+    const bs = Math.min(W * 0.2, 80);
+    pops = [
+      { x: cx - bs, y: by, pop: 0 },
+      { x: cx + bs, y: by, pop: 0 },
+      { x: cx, y: by + bs * 0.75, pop: 0 }
+    ];
+  }
+
+  // ---- Paths: a ball's flight is a list of points with times (in beats); between them it
+  // follows a gentle arc, slowing as it climbs and speeding as it falls
+  function arcPoint(a, b, u) {
+    const mx = (a.x + b.x) / 2;
+    const my = Math.min(a.y, b.y) - 0.18 * Math.abs(b.x - a.x) - 18;
+    const v = 1 - u;
+    return [v * v * a.x + 2 * v * u * mx + u * u * b.x, v * v * a.y + 2 * v * u * my + u * u * b.y];
+  }
+  function ballAt(now) {
+    if (rest) return [rest.x, rest.y];
+    if (!path) return lastBall;
+    const p = path.pts;
+    if (now <= p[0].t) return [p[0].x, p[0].y];
+    for (let j = 0; j < p.length - 1; j++) {
+      if (now < p[j + 1].t) {
+        let u = (now - p[j].t) / Math.max(1e-6, p[j + 1].t - p[j].t);
+        const goingUp = p[j + 1].y < p[j].y - 20;
+        u = goingUp ? 1 - (1 - u) * (1 - u) : p[j + 1].y > p[j].y + 20 ? u * u : u;
+        return p[j].straight ? [p[j].x + (p[j + 1].x - p[j].x) * u, p[j].y + (p[j + 1].y - p[j].y) * u] : arcPoint(p[j], p[j + 1], u);
+      }
+    }
+    const e = p[p.length - 1];
+    return [e.x, e.y];
+  }
+
+  function pickTarget(api) {
+    const standing = targets.filter((t) => t.up);
+    if (!standing.length) return pops[Math.floor(Math.random() * pops.length)];
+    const lit = standing.find((t) => t.lit);
+    if (lit && Math.random() < 0.6) return lit;
+    return standing[Math.floor(Math.random() * standing.length)];
+  }
+
+  // A shot from (x, y) at t0, up into a target, off zero to two pop bumpers, down to a flipper at tEnd
+  function shot(api, x, y, t0, tEnd, opts) {
+    const first = pickTarget(api);
+    const side = Math.random() < 0.5 ? 0 : 1;
+    const span = tEnd - t0;
+    const extra = Math.max(0, Math.min(2, Math.round(span - 2)));
+    const up = Math.min(0.8, span * 0.4);
+    const pts = [{ x, y, t: t0 }, { x: first.x, y: first.y + (first.up !== undefined ? 22 : 0), t: t0 + up, hit: first }];
+    let prev = first;
+    for (let i = 0; i < extra; i++) {
+      const choices = pops.filter((p) => p !== prev);
+      const b = choices[Math.floor(Math.random() * choices.length)];
+      pts.push({ x: b.x, y: b.y, t: t0 + up + ((span - up) * (i + 1)) / (extra + 1.6), hit: b });
+      prev = b;
+    }
+    const [sx, sy] = strike(side);
+    pts.push({ x: sx, y: sy, t: tEnd });
+    path = Object.assign({ pts, next: 1, kind: "shot", side, scored: false, whiffed: false }, opts);
+    rest = null;
+  }
+
+  // The orbit lane: up one side, round the top arch, down the other side to the far flipper
+  function orbitShot(api, x, y, t0, tEnd, laps) {
+    const { W, H } = api;
+    const leftFirst = x > cx;
+    const L = [W * 0.09, Y(0.5)], TL = [W * 0.14, Y(0.06)], T = [cx, TOP - 2], TR = [W * 0.86, Y(0.06)], R = [W * 0.91, Y(0.5)];
+    let ring = leftFirst ? [L, TL, T, TR, R] : [R, TR, T, TL, L];
+    if (laps > 1) ring = ring.concat(ring.slice(0, -1).reverse().slice(1)).concat(ring.slice(1));
+    const side = leftFirst ? 1 : 0;
+    const [sx, sy] = strike(side);
+    const all = [[x, y]].concat(ring, [[sx, sy]]);
+    const n = all.length - 1;
+    const pts = all.map(([px, py], i) => ({ x: px, y: py, t: t0 + ((tEnd - t0) * i) / n, straight: true, orbit: i > 0 && i < n }));
+    path = { pts, next: 1, kind: "orbit", side, ghost: true, scored: false, whiffed: false };
+    rest = null;
+    api.ring(x, y, laps > 1 ? "#ffc400" : api.color(), 60 + 40 * laps);
+  }
+
+  // Missed: down between the flippers, then the outlane kickback fires it back up to a flipper
+  function drain(api, now) {
+    const { W, H } = api;
+    const side = Math.random() < 0.5 ? 0 : 1;
+    const kx = side ? W - 20 : 20;
+    const T = Math.ceil(now + 2.2);
+    const [sx, sy] = strike(side);
+    const pts = [
+      { x: lastBall[0], y: lastBall[1], t: now },
+      { x: cx, y: H + 40, t: now + 0.4 },
+      { x: kx, y: H + 40, t: now + 0.55, straight: true },
+      { x: kx, y: fy + 10, t: now + 0.7, kicker: side, straight: true },
+      { x: side ? W * 0.84 : W * 0.16, y: Y(0.5), t: now + 1.3 },
+      { x: sx, y: sy, t: T }
+    ];
+    path = { pts, next: 1, kind: "drain", side, ghost: true, scored: false, whiffed: false };
+  }
+
+  function hitThing(api, h, path) {
+    kick = 1;
+    if (h.up !== undefined) {
+      // A drop target
+      if (h.up) {
+        h.up = false;
+        h.drop = 1;
+        api.eng.pluck(0.2 + 0.6 * ((h.x - (cx - 150)) / 300), 0.4, 0.06);
+        api.burst(h.x, h.y, api.color(), 6, -1);
+        if (h.lit) {
+          h.lit = false;
+          api.bonus(500);
+          api.ring(h.x, h.y, "#ffc400", 50);
+          api.burst(h.x, h.y, "#ffc400", 10, -1);
+        }
+        if (targets.every((t) => !t.up)) {
+          api.bonus(1500, "Bank!");
+          api.ring(cx, h.y, "#ffc400", api.W * 0.45);
+          bankResetAt = performance.now() + 700;
+        }
+      }
+    } else {
+      h.pop = 1;
+      api.eng.pluck(0.5 + 0.3 * Math.random(), 0.25, 0.05);
+      api.burst(h.x, h.y, "#ffc400", 4, -1);
+    }
+    if (path && path.quality && !path.scored && !path.ghost) {
+      path.scored = true;
+      if (!api.eng.auto && api.style === "flow") {
+        api.score(1, path.quality, api.eng.beatSec * 0.5);
+        if (path.quality === "PERFECT") api.ring(h.x, h.y, api.color(), 46);
+      }
+    }
+  }
+
+  // Every flight (a shot, the orbit lane, the kickback) ends on a flipper at a beat, ready to flip
+  const arrivalT = () => (path ? path.pts[path.pts.length - 1].t : null);
+  const pace = (api) => Math.max(2, Math.round(api.eng.paceBeats()));
+
+  // Fidget shots run on seconds, quicker the faster you press
+  function fidgetShot(api, now) {
+    const [x, y] = ballAt(now);
+    const secs = (0.95 - 0.45 * api.rev) * (0.9 + Math.random() * 0.25);
+    shot(api, x, y, now, now + secs / api.eng.beatSec, { ghost: true, fidget: true });
+  }
+
+  const api = FlowShell.mount({
+    key: "flipper",
+    title: "Flipper",
+    hint: "Tap or Space to flip as the ball comes down",
+    input: "tap",
+    tierNames: ["Finding your rhythm", "Lit up", "Multiball", "Wizard mode"],
+    modes: ["Lit Target"],
+    fidgetPoint: (api) => {
+      const [x, y] = ballAt(api.eng.beatPos());
+      return { x, y };
+    },
+    engine: { perBeat: [0.25, 1 / 3, 0.5, 1], stableTol: 3, pacing: { minBeats: 2, startBeats: 3 } },
+
+    setup(api) {
+      layout(api);
+      const [sx, sy] = strike(0);
+      rest = null;
+      const now = api.eng.beatPos();
+      lastBall = [sx, sy];
+      shot(api, sx, sy, now, Math.ceil(now + 3), { ghost: true });
+    },
+    resize(api) {
+      layout(api);
+    },
+
+    onBeat(n, api) {
+      kick = 1;
+      if (api.mode === "Lit Target" && !targets.some((t) => t.lit)) {
+        const standing = targets.filter((t) => t.up);
+        if (standing.length) standing[Math.floor(Math.random() * standing.length)].lit = true;
+      }
+      if (!api.mode) for (const t of targets) t.lit = false;
+    },
+
+    onAction(api) {
+      const now = api.eng.beatPos();
+      flipT = 0.16;
+      if (api.style === "fidget") {
+        api.eng.tap({ note: false });
+        return fidgetShot(api, now);
+      }
+      if (rest) {
+        // Off the cradle: back into play, landing on a beat (not judged)
+        api.eng.tap({ height: 0.5 });
+        return shot(api, rest.x, rest.y, now, Math.ceil(now + pace(api)), { ghost: true });
+      }
+      const T = arrivalT();
+      if (T === null || path.whiffed) return api.eng.tap({ note: false });
+      const err = now - T;
+      if (Math.abs(err) <= win(api)) {
+        const [sx, sy] = strike(path.side);
+        api.eng.tap({ height: 0.3 + 0.4 * Math.random() });
+        return shot(api, sx, sy, now, T + pace(api), { quality: Math.abs(err) < PERFECT ? "PERFECT" : "CLEAN" });
+      }
+      api.eng.tap({ note: false });
+      if (Math.abs(err) > 0.55) return;
+      // A whiff: the flipper swings before (or after) the ball; it drops through
+      path.whiffed = true;
+      api.miss();
+      api.hint("timing", "Flip as the ring closes on the flipper");
+    },
+
+    // Let go after a hold: the orbit shot, from the cradle (or from anywhere in Fidget)
+    onRelease(api, held) {
+      const c = api.chargeOf(held);
+      if (c <= 0) return;
+      const now = api.eng.beatPos();
+      if (!rest && api.style !== "fidget") return;
+      if (path && path.kind === "orbit") return;
+      const [x, y] = ballAt(now);
+      const laps = c > 0.85 ? 2 : 1;
+      const secs = (1.0 + 0.5 * c) * laps;
+      const tEnd = now + secs / api.eng.beatSec;
+      orbitShot(api, x, y, now, api.style === "fidget" ? tEnd : Math.ceil(tEnd), laps);
+      spinnerV = 30 * laps;
+    },
+
+    // Autopilot flips exactly as the ball arrives, and picks up a resting ball; nothing scores
+    autopilot(dt, api) {
+      const now = api.eng.beatPos();
+      if (rest) {
+        flipT = 0.16;
+        return shot(api, rest.x, rest.y, now, Math.ceil(now + pace(api)), { ghost: true });
+      }
+      const T = arrivalT();
+      if (T !== null && now >= T && !path.whiffed) {
+        flipT = 0.16;
+        const [sx, sy] = strike(path.side);
+        shot(api, sx, sy, T, T + pace(api), { ghost: true });
+      }
+    },
+
+    update(dt, api) {
+      const now = api.eng.beatPos();
+      kick = Math.max(0, kick - dt * 4.2);
+      flipT = Math.max(0, flipT - dt);
+      const up = flipT > 0 || api.held > 0;
+      flipAng += ((up ? 1 : 0) - flipAng) * Math.min(1, dt * (up ? 40 : 14));
+      for (const p of pops) p.pop = Math.max(0, p.pop - dt * 3);
+      for (const t of targets) t.drop = Math.max(0, t.drop - dt * 4);
+      kickFlash = kickFlash.map((k) => Math.max(0, k - dt * 2));
+      spinner += spinnerV * dt;
+      spinnerV *= Math.pow(0.3, dt);
+      if (bankResetAt && performance.now() > bankResetAt) {
+        bankResetAt = 0;
+        for (const t of targets) {
+          t.up = true;
+          t.drop = 0;
+        }
+        api.burst(cx, targets[0].y, "#f6e6c0", 10, -1);
+      }
+
+      if (path) {
+        // Things the ball passes on its way
+        while (path.next < path.pts.length - 1 && now >= path.pts[path.next].t) {
+          const pt = path.pts[path.next++];
+          if (pt.hit) hitThing(api, pt.hit, path);
+          if (pt.kicker !== undefined) {
+            kickFlash[pt.kicker] = 1;
+            api.ring(pt.x, pt.y, "#e8231f", 40);
+            api.eng.pluck(0.9, 0.3, 0.08);
+          }
+          if (pt.orbit) {
+            spinnerV = Math.max(spinnerV, 18);
+            api.eng.pluck(0.85 - 0.6 * (pt.x / api.W), 0.2, 0.05);
+          }
+        }
+        // At the flipper with no flip: Fidget and a held flipper cradle it; Flow drops it
+        const T = arrivalT();
+        const late = now > T + (path.whiffed ? 0.02 : win(api));
+        if (late) {
+          const [sx, sy] = strike(path.side);
+          if (api.style === "fidget" || api.charge > 0 || !api.started) {
+            if (api.started) {
+              rest = { x: sx, y: sy, side: path.side };
+              path = null;
+            }
+          } else {
+            if (!path.whiffed && !api.eng.auto) {
+              api.miss();
+              api.hint("timing", "Flip as the ring closes on the flipper");
+            }
+            drain(api, now);
+          }
+        }
+      }
+
+      const b = ballAt(now);
+      lastBall = [b[0], b[1]];
+      trail.unshift([b[0], b[1]]);
+      if (trail.length > 9) trail.pop();
+    },
+
+    draw(ctx, api) {
+      const { W, H, tier } = api;
+      const now = api.eng.beatPos();
+      const col = api.color();
+
+      ctx.fillStyle = api.cached("sky" + tier + H, () => {
+        const g = ctx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, SKY[tier - 1][0]);
+        g.addColorStop(1, SKY[tier - 1][1]);
+        return g;
+      });
+      ctx.fillRect(0, 0, W, H);
+
+      // Insert arrows pointing up the table, the middle ones breathing with the kick
+      for (let i = 0; i < 4; i++) {
+        const y = H * (0.6 + i * 0.045);
+        ctx.globalAlpha = 0.14 + (i === 0 ? kick * 0.15 : 0);
+        ctx.fillStyle = i === 0 ? col : "#3a2418";
+        ctx.beginPath();
+        ctx.moveTo(cx, y - 12);
+        ctx.lineTo(cx + 11, y + 6);
+        ctx.lineTo(cx - 11, y + 6);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      // The cabinet rail: up both sides and round the top arch, with the orbit lane inside it
+      ctx.strokeStyle = "#f6e6c0";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(6, H);
+      ctx.lineTo(6, Y(0.12));
+      ctx.quadraticCurveTo(6, TOP - 14, cx, TOP - 14);
+      ctx.quadraticCurveTo(W - 6, TOP - 14, W - 6, Y(0.12));
+      ctx.lineTo(W - 6, H);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(246,230,192,0.25)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 9]);
+      ctx.beginPath();
+      ctx.moveTo(W * 0.09, Y(0.55));
+      ctx.lineTo(W * 0.09, Y(0.1));
+      ctx.quadraticCurveTo(W * 0.1, TOP - 2, cx, TOP - 2);
+      ctx.quadraticCurveTo(W * 0.9, TOP - 2, W * 0.91, Y(0.1));
+      ctx.lineTo(W * 0.91, Y(0.55));
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Spinner at the top of the orbit
+      ctx.save();
+      ctx.translate(cx, TOP - 2);
+      ctx.scale(Math.cos(spinner), 1);
+      ctx.fillStyle = spinnerV > 2 ? "#ffc400" : "#f6e6c0";
+      ctx.fillRect(-14, -5, 28, 10);
+      ctx.restore();
+
+      // Inlane guides and slingshots above the flippers
+      ctx.strokeStyle = "#f6e6c0";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(30, fy - 110);
+      ctx.lineTo(pivL[0], pivL[1]);
+      ctx.moveTo(W - 30, fy - 110);
+      ctx.lineTo(pivR[0], pivR[1]);
+      ctx.stroke();
+      for (const s of [0, 1]) {
+        const m = s ? -1 : 1;
+        const x0 = s ? W - 44 : 44;
+        ctx.fillStyle = "#140f0c";
+        ctx.strokeStyle = "#e8231f";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(x0, fy - 150);
+        ctx.lineTo(x0, fy - 80);
+        ctx.lineTo(x0 + m * 34, fy - 66);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Outlane kickback light
+        ctx.fillStyle = kickFlash[s] > 0 ? "#e8231f" : "#3a2418";
+        ctx.beginPath();
+        ctx.arc(s ? W - 20 : 20, fy + 20, 6 + kickFlash[s] * 4, 0, TAU);
+        ctx.fill();
+      }
+
+      // Drop targets: cream faces with red caps; down ones are just a slot
+      for (const t of targets) {
+        const h = t.up ? 34 : 6 + 28 * t.drop;
+        ctx.fillStyle = t.lit ? "#ffc400" : t.up ? "#f6e6c0" : "#3a2418";
+        ctx.strokeStyle = "#140f0c";
+        ctx.lineWidth = 3;
+        ctx.fillRect(t.x - 13, t.y - h / 2, 26, h);
+        ctx.strokeRect(t.x - 13, t.y - h / 2, 26, h);
+        if (t.up) {
+          ctx.fillStyle = "#e8231f";
+          ctx.fillRect(t.x - 13, t.y - h / 2, 26, 7);
+        }
+        // An insert light under each target, lit while it's down
+        ctx.fillStyle = t.up ? "#3a2418" : col;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y + 32, 5, 0, TAU);
+        ctx.fill();
+      }
+
+      // Pop bumpers
+      for (const b of pops) {
+        const r = 22 * (1 + b.pop * 0.18);
+        ctx.fillStyle = "#140f0c";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y + 3, r * 1.12, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "#f6e6c0";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, r, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "#e8231f";
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, r * 0.72, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = b.pop > 0.2 ? "#fff8e6" : col;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, r * 0.38, 0, TAU);
+        ctx.fill();
+      }
+
+      // The landing ring: closes on the flipper the ball is heading for, shut as it lands
+      const T = arrivalT();
+      if (T !== null && !path.whiffed && api.style === "flow") {
+        const left = T - now;
+        if (left < 1.5 && left > -0.3) {
+          const [sx, sy] = strike(path.side);
+          const k = Math.max(0, left) / 1.5;
+          ctx.strokeStyle = left < 0.12 ? "#ffc400" : col;
+          ctx.globalAlpha = 0.35 + 0.6 * (1 - k);
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 12 + 46 * k, 0, TAU);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // Flippers: cream bats with red rubber, pivoting up together
+      for (const s of [0, 1]) {
+        const [px, py] = s ? pivR : pivL;
+        const down = 0.5;
+        const upA = -0.42;
+        const a = down + (upA - down) * flipAng;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.scale(s ? -1 : 1, 1);
+        ctx.rotate(a);
+        ctx.fillStyle = "#f6e6c0";
+        ctx.strokeStyle = "#140f0c";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, 11, Math.PI / 2, -Math.PI / 2);
+        ctx.lineTo(FL + 10, -5);
+        ctx.arc(FL + 10, 0, 5, -Math.PI / 2, Math.PI / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = "#e8231f";
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // The ball: trail, then steel (finish from your lifetime rank), and the charge arc
+      const ball = api.cached("ball" + api.rankKey, () => {
+        const [a, b2, c] = api.ballStops();
+        const g = ctx.createRadialGradient(-4, -4, 1, 0, 0, 11);
+        g.addColorStop(0, a);
+        g.addColorStop(0.45, b2);
+        g.addColorStop(1, c);
+        return g;
+      });
+      for (let i = 2; i < trail.length; i++) {
+        ctx.globalAlpha = 0.2 * (1 - i / trail.length);
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.arc(trail[i][0], trail[i][1], 9 * (1 - i / trail.length) + 2, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      const [x, y] = ballAt(now);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = ball;
+      ctx.beginPath();
+      ctx.arc(0, 0, 11, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+      if (api.charge > 0) {
+        ctx.strokeStyle = api.charge > 0.85 ? "#ffc400" : col;
+        ctx.globalAlpha = 0.7;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(x, y, 19 + 7 * api.charge, -Math.PI / 2, -Math.PI / 2 + TAU * api.charge);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  });
+
+  // Read-only snapshot for automated play tests
+  window.flipperState = () => ({
+    beatPos: +api.eng.beatPos().toFixed(3),
+    arrival: arrivalT(),
+    kind: path ? path.kind : rest ? "rest" : null,
+    whiffed: path ? path.whiffed : false,
+    standing: targets.filter((t) => t.up).length,
+    streak: api.eng.streak,
+    bpm: +api.eng.bpm.toFixed(1),
+    auto: api.eng.auto
+  });
+})();
+</script>
+</body>
+</html>

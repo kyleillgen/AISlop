@@ -204,12 +204,45 @@
     const HOLD_SEC = 0.28; // held longer than this, a press becomes a charge
     const FIDGET_IDLE_MS = 4000; // slow pressing (one every 2-3 s) stays yours; autopilot waits
     const baseIdle = eng.ctrl.o.idleSec;
-    function applyStyle() {
+    // Fidget still travels: the table climbs through the tiers (colours, backglass, music) with
+    // your presses and, more slowly, with time, and the game's own events still pop in. Going
+    // back to Flow is a handover, not a cut: the tier you reached settles back one step every
+    // four bars (unless your streak holds it up), and the first three misses are forgiven.
+    let fidgetEnergy = 0;
+    let tierFloor = 1;
+    let floorBeats = 0;
+    function applyStyle(switching) {
       const fidget = playStyle === "fidget";
       eng.ctrl.o.idleSec = fidget ? Infinity : baseIdle;
       eng.quietLead = fidget; // Fidget plays its own immediate notes instead
       if (fidget && eng.auto) eng.setAuto(false);
-      if (fidget && mode) endMode(false);
+      if (mode) endMode(false);
+      if (switching && !fidget) {
+        tierFloor = eng.tier;
+        floorBeats = 0;
+        eng.ctrl.forgive = 3;
+      }
+    }
+    function tickTiers(dt) {
+      const ctrl = eng.ctrl;
+      const own = ctrl.computeTier(ctrl.streak);
+      if (playStyle === "fidget") {
+        if (started) fidgetEnergy += dt / eng.beatSec / 8; // one step every two bars, even idle
+        const t = Math.max(own, ctrl.computeTier(Math.floor(fidgetEnergy)));
+        if (t > ctrl.tier) {
+          api.callout(tierNames[t - 1], W / 2, H * 0.3, colors[t - 1], 1.2);
+          api.ring(W / 2, H * 0.45, colors[t - 1], Math.min(W, H) * 0.45);
+          bulbFlash = 1.2;
+          eng.chime();
+        }
+        ctrl.tier = t;
+      } else if (tierFloor > own) {
+        if ((floorBeats += dt / eng.beatSec) >= 16) {
+          floorBeats = 0;
+          tierFloor--;
+        }
+        ctrl.tier = Math.max(own, tierFloor);
+      }
     }
     // Fidget presses are an instrument for your pressing speed. Slow presses ring long with wide
     // rings of light; fast mashing climbs the scale in short staccato notes with sparks, and the
@@ -226,6 +259,7 @@
       const gap = lastPress ? now - lastPress : 1000;
       lastPress = now;
       pressRate += (1000 / Math.max(60, gap) - pressRate) * 0.35;
+      fidgetEnergy += 1;
       // Log scale, so the whole range shows: 1 a second lights a few inserts, 10 a second all of them
       rev = Math.max(rev, Math.min(1, Math.log2(1 + pressRate) / Math.log2(11)));
       climb = gap < 380 ? climb + 1 : Math.floor(Math.random() * 3); // quick runs climb the scale
@@ -246,8 +280,9 @@
     function toggleStyle() {
       playStyle = playStyle === "fidget" ? "flow" : "fidget";
       store(g.key + ".style", playStyle);
-      applyStyle();
+      applyStyle(true);
       api.callout(playStyle, W / 2, 130, "#ffc400", 1);
+      api.ring(W / 2, H * 0.5, playStyle === "fidget" ? "#ffc400" : api.color(), Math.min(W, H) * 0.5);
       hud();
     }
 
@@ -288,7 +323,7 @@
       // Award points directly (a star collected, a bonus); they ride the multiplier too
       bonus(n, label, x, y) {
         if (eng.auto || !started) return;
-        addPoints(n);
+        if (playStyle !== "fidget") addPoints(n); // Fidget: the moment, not the points
         if (label) api.callout(label, x === undefined ? W / 2 : x, y === undefined ? H * 0.38 : y, "#ffc400", 0.9);
       },
       // Things the player did well. quality "PERFECT" | "CLEAN" | "GRAZE" plays a harmony;
@@ -437,7 +472,12 @@
     }
 
     function startMode() {
-      const choices = MODES.filter((m) => m !== lastMode);
+      const pool = playStyle === "fidget" ? g.modes || [] : MODES;
+      const choices = pool.length > 1 ? pool.filter((m) => m !== lastMode) : pool;
+      if (!choices.length) {
+        modeClock = 0;
+        return;
+      }
       mode = choices[Math.floor(Math.random() * choices.length)];
       lastMode = mode;
       modeLeft = 20;
@@ -464,7 +504,7 @@
       nextModeAt = 45 + Math.random() * 30;
     }
     function tickModes(dt) {
-      if (!started || eng.paused || playStyle === "fidget") return;
+      if (!started || eng.paused) return;
       if (eng.auto) {
         autoSince += dt;
         // Back after a long break: a fresh run (scores reset, high scores and rank stay)
@@ -704,6 +744,7 @@
         const fidgetIdle = playStyle === "fidget" && !downAt && performance.now() - lastInputAt > FIDGET_IDLE_MS;
         if ((!started || eng.auto || fidgetIdle) && g.autopilot) g.autopilot(dt, api); // attract, autopilot, or Fidget filling in
         tickModes(dt);
+        tickTiers(dt);
         if (g.update) g.update(dt, api);
         flash = Math.max(0, flash - dt * 1.4);
         bulbFlash = Math.max(0, bulbFlash - dt);

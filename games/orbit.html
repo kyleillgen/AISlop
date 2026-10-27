@@ -173,6 +173,12 @@
     if (f.fidget) {
       api.ring(Y.x, Y.y - camY, f.power > 0.5 ? "#ffc400" : col, 40 + 60 * f.power);
       api.eng.pluck(0.75 - 0.55 * (Y.x / api.W), 0.3 + 0.6 * f.power, 0.07);
+      if (Y.star) {
+        // Star Lane still pops in while fidgeting: the star bursts, nothing is counted
+        api.ring(Y.x, Y.y - camY, "#ffc400", 70);
+        api.burst(Y.x, Y.y - camY, "#ffc400", 12, -1);
+        api.eng.chime();
+      }
     } else if (!f.ghost && !api.eng.auto) {
       api.score(1, f.perfect ? "PERFECT" : "CLEAN", api.eng.beatSec * FLY);
       if (f.perfect) api.ring(Y.x, Y.y - camY, col, 46);

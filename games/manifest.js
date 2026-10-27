@@ -19,6 +19,14 @@ window.AISLOP_GAMES = [
     hue: 30
   },
   {
+    id: "flipper",
+    title: "Flipper",
+    blurb: "One button, both flippers. Flip as the ball comes down to knock out the drop targets; hold to cradle it and let go for the orbit shot.",
+    path: "games/flipper.html",
+    status: "house",
+    hue: 350
+  },
+  {
     // First game on the shared flow engine (games/flow-engine.js)
     id: "word-rain",
     title: "Word Rain",
