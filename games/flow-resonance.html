@@ -105,10 +105,10 @@
                 <span class="text-[9px] font-mono-tech text-slate-400 uppercase">CADENCE</span>
                 <span id="bpmReadout" class="text-[11px] font-mono-tech font-bold text-emerald-300">108 BPM</span>
             </div>
-            <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
-                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">PHRASE</span>
-                <span id="phraseReadout" class="text-[11px] font-mono-tech font-bold text-cyan-300 truncate ml-1">SINE WAVE</span>
-            </div>
+            <button id="trackBtn" type="button" title="Switch track (T)" class="pointer-events-auto bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between active:scale-95 transition-transform">
+                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">TRACK</span>
+                <span id="phraseReadout" class="text-[11px] font-mono-tech font-bold text-cyan-300 truncate ml-1">MIDNIGHT</span>
+            </button>
             <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
                 <span class="text-[9px] font-mono-tech text-slate-400 uppercase">CHORD</span>
                 <span id="chordReadout" class="text-[11px] font-mono-tech font-bold text-fuchsia-300">Dmin9</span>
@@ -123,7 +123,7 @@
     <!-- Bottom Subtle Guidance Banner -->
     <div id="touchHint" class="absolute bottom-4 left-0 right-0 z-10 pointer-events-none flex justify-center transition-opacity duration-700 opacity-85 px-4">
         <div class="px-4 py-1.5 rounded-full bg-slate-950/80 border border-slate-800/90 text-[10px] sm:text-[11px] font-mono-tech text-slate-300 tracking-wider uppercase text-center shadow-lg">
-            If It's Flow, It's Go • Physics Lock To Your Rhythm • Follow The Harmonic Guide Ribbon
+            If It's Flow, It's Go • Tap / Space to fly • A auto-glide • T track • V voice
         </div>
     </div>
 
@@ -204,6 +204,64 @@
             ];
 
             const GROOVE_VOICES = ["LO-FI RHODES", "SYNTHWAVE PULSE", "AMBIENT DRIFT"];
+
+            // Music selections: four tracks (chord progressions with matching basslines and
+            // melody scales), each playable in any of the three groove voices. Track 0 is the
+            // original Dm9 → BbMaj9 → Gm9 → A7sus4; the others are built the same way.
+            const m2f = (m) => 440 * Math.pow(2, (m - 69) / 12);
+            function makeChord(name, root, pad, scaleRoot, scaleSteps) {
+                const bassSteps = [0, null, 0, 7, 12, null, 7, pad[3]];
+                return {
+                    name,
+                    bass: bassSteps.map((s) => (s === null ? 0 : m2f(root + s))),
+                    pad: pad.map((s) => m2f(root + 12 + s)),
+                    scale: scaleSteps.map((s) => m2f(scaleRoot + s))
+                };
+            }
+            const MAJ9 = [0, 4, 7, 11, 14];
+            const MIN9 = [0, 3, 7, 10, 14];
+            const SIX9 = [0, 4, 7, 9, 14];
+            const SUS4 = [0, 5, 7, 10, 14];
+            const MAJ_PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];
+            const MIN_PENTA = [0, 3, 5, 7, 10, 12, 15, 17, 19, 22];
+            const IONIAN = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16];
+            const TRACKS = [
+                { name: "MIDNIGHT", chords: CHORD_PROGRESSION.slice() },
+                {
+                    name: "GOLDEN HOUR",
+                    chords: [
+                        makeChord("Cmaj9", 36, MAJ9, 60, MAJ_PENTA),
+                        makeChord("Am9", 45, MIN9, 60, MAJ_PENTA),
+                        makeChord("Fmaj9", 41, MAJ9, 60, MAJ_PENTA),
+                        makeChord("G6/9", 43, SIX9, 60, MAJ_PENTA)
+                    ]
+                },
+                {
+                    name: "DEEP SEA",
+                    chords: [
+                        makeChord("Ebm9", 39, MIN9, 63, MIN_PENTA),
+                        makeChord("Bmaj9", 35, MAJ9, 63, MIN_PENTA),
+                        makeChord("Abm9", 44, MIN9, 63, MIN_PENTA),
+                        makeChord("Bb7sus4", 46, SUS4, 63, MIN_PENTA)
+                    ]
+                },
+                {
+                    name: "RAIN ON GLASS",
+                    chords: [
+                        makeChord("Fmaj9", 41, MAJ9, 60, IONIAN),
+                        makeChord("Em9", 40, MIN9, 60, IONIAN),
+                        makeChord("Dm9", 38, MIN9, 60, IONIAN),
+                        makeChord("Cmaj9", 36, MAJ9, 60, IONIAN)
+                    ]
+                }
+            ];
+            let trackIndex = 0;
+            // The synth reads CHORD_PROGRESSION live, so swapping its contents changes the music
+            // from the next note on
+            function setTrack(i) {
+                trackIndex = ((i % TRACKS.length) + TRACKS.length) % TRACKS.length;
+                CHORD_PROGRESSION.splice(0, CHORD_PROGRESSION.length, ...TRACKS[trackIndex].chords);
+            }
 
             class CoCreationResonanceSynth {
                 constructor() {
@@ -755,8 +813,10 @@
                 tapCount: 0,
                 recentCadenceBpm: 108,
                 driftTimer: 0,
-                clipTimes: [],
-                easeTimer: 0,
+                // "Nailing it" assist: 0 = Gemini's baseline, 1 = most help. Rises when you
+                // struggle, sinks back while you're cruising; applied at a rate too slow to notice
+                assist: 0,
+                assistApplied: 0,
                 savedTempo: false
             };
 
@@ -974,12 +1034,8 @@
                     spawnCallout("SOFT CUSHION • KEEP GROOVING", bird.x + 28, bird.y - 28, "#a78bfa", 1.05);
                 }
 
-                // Two clips within 12 seconds means the challenge is outpacing the player right now:
-                // ease the gaps for the next stretch so the rhythm can come back
-                const nowSec = performance.now() / 1000;
-                flowCtrl.clipTimes = flowCtrl.clipTimes.filter((t) => nowSec - t < 12);
-                flowCtrl.clipTimes.push(nowSec);
-                if (flowCtrl.clipTimes.length >= 2) flowCtrl.easeTimer = 15;
+                // A clip means the challenge is outpacing the player right now: raise the assist
+                flowCtrl.assist = Math.min(1, flowCtrl.assist + 0.35);
 
                 flowCtrl.bulletTimeTimer = 0.45;
                 bird.ghostTimer = 1.15;
@@ -1054,13 +1110,14 @@
                     flowCtrl.vx += (matchedVx - flowCtrl.vx) * Math.min(1.0, dt * 1.2);
                 }
 
-                // Gap stays wide and generous at 175px; after clips cluster it eases up to 199px
-                // for a while and then glides back. Changes stay under ~2% a second so they're felt,
-                // not noticed, and the gap never gets narrower than the original.
-                if (flowCtrl.easeTimer > 0) flowCtrl.easeTimer = Math.max(0, flowCtrl.easeTimer - dt);
-                const targetGap = 175 + (flowCtrl.easeTimer > 0 ? 24 : 0);
-                const maxStep = 3.5 * dt;
-                flowCtrl.gapHeight += Math.max(-maxStep, Math.min(maxStep, targetGap - flowCtrl.gapHeight));
+                // "Nailing it" assist. It sinks slowly back to Gemini's baseline while you cruise,
+                // and the applied level moves at most 8% of its range per second so changes are
+                // felt, not noticed. It only ever helps: gaps widen from 175px (never narrower),
+                // buoyancy toward the ribbon strengthens, and the "perfect" window grows a little.
+                flowCtrl.assist = Math.max(0, flowCtrl.assist - dt * 0.012);
+                const assistStep = 0.08 * dt;
+                flowCtrl.assistApplied += Math.max(-assistStep, Math.min(assistStep, flowCtrl.assist - flowCtrl.assistApplied));
+                flowCtrl.gapHeight = 175 + 26 * flowCtrl.assistApplied;
 
                 synth.updateSynesthesia(flowCtrl.flowIndex, flowCtrl.tier, flowCtrl.bpm, dt);
             }
@@ -1169,7 +1226,17 @@
                 const halfGap = pipe.gapHeight * 0.5;
                 const normDist = deltaY / Math.max(halfGap, 45);
 
-                if (normDist < 0.28) {
+                // Each pass tells the assist how it's going: centred passes let it back off,
+                // edge grazes ask for a little more help
+                if (normDist < 0.28 + 0.12 * flowCtrl.assistApplied) {
+                    flowCtrl.assist = Math.max(0, flowCtrl.assist - 0.04);
+                } else if (normDist > 0.72 || pipe.wasGrazed) {
+                    flowCtrl.assist = Math.min(1, flowCtrl.assist + 0.06);
+                } else {
+                    flowCtrl.assist = Math.max(0, flowCtrl.assist - 0.01);
+                }
+
+                if (normDist < 0.28 + 0.12 * flowCtrl.assistApplied) {
                     incrementStreak(2);
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.055);
                     synth.playPipeHarmony(streak, "PERFECT");
@@ -1223,13 +1290,35 @@
             // ============================================================================
             // 5. INPUTS & HUD CONTROLS
             // ============================================================================
+            // ============================================================================
+            // AUTO MODE: look away (window loses focus) or press A and the craft glides itself
+            // along the Harmonic Guide Ribbon with the music still playing. Nothing scores and
+            // nothing is lost. Any tap takes control back, with the next two pillars forgiven.
+            // ============================================================================
+            let autoMode = false;
+            let forgivePillars = 0;
+
+            function enterAuto() {
+                if (!gameStarted || autoMode) return;
+                autoMode = true;
+                updateHudDisplays();
+            }
+
+            function exitAuto() {
+                if (!autoMode) return;
+                autoMode = false;
+                forgivePillars = 2;
+                updateHudDisplays();
+            }
+
+            window.addEventListener("blur", enterAuto);
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "hidden") enterAuto();
+            });
+
             function triggerFlap() {
                 if (!gameStarted) return;
-                // While paused, a tap or Space starts the count-in instead of flapping
-                if (pauseState) {
-                    if (pauseState === "paused") beginCountIn();
-                    return;
-                }
+                if (autoMode) exitAuto(); // the tap that takes control back is also a flap
 
                 const nowMs = performance.now();
                 recordTapAndEntrainCadence(nowMs);
@@ -1257,6 +1346,8 @@
                     e.stopPropagation();
                 }
                 synth.init();
+                // A saved "muted" preference applies as soon as audio starts
+                if (synth.isMuted && synth.masterGain) synth.masterGain.gain.value = 0.0001;
                 if (!gameStarted) {
                     gameStarted = true;
                     startOverlay.style.opacity = "0";
@@ -1294,29 +1385,76 @@
 
             canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 
+            // Keys: Space / ↑ flap, A auto glide, T track, V voice, L cadence lock, M mute
             window.addEventListener("keydown", (e) => {
                 if (e.code === "Space" || e.code === "ArrowUp") {
                     e.preventDefault();
+                    if (e.repeat) return;
                     if (!gameStarted) {
                         startGame(e);
                     } else {
                         triggerFlap();
                     }
+                    return;
                 }
+                if (e.repeat) return;
+                if (e.code === "KeyA" && gameStarted) {
+                    if (autoMode) exitAuto();
+                    else enterAuto();
+                } else if (e.code === "KeyT") cycleTrack();
+                else if (e.code === "KeyV") cycleVoice();
+                else if (e.code === "KeyL") toggleCadenceLock();
+                else if (e.code === "KeyM") toggleMute();
             });
 
+            // Preferences that carry over between sessions: voice, track, mute
+            const PREFS_KEY = "flowResonancePrefs";
+            function savePrefs() {
+                try {
+                    localStorage.setItem(PREFS_KEY, JSON.stringify({ voice: synth.voiceIndex, track: trackIndex, muted: synth.isMuted }));
+                } catch (e) {}
+            }
+            try {
+                const prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}");
+                if (Number.isInteger(prefs.voice)) synth.voiceIndex = ((prefs.voice % GROOVE_VOICES.length) + GROOVE_VOICES.length) % GROOVE_VOICES.length;
+                if (Number.isInteger(prefs.track)) setTrack(prefs.track);
+                if (prefs.muted) synth.isMuted = true;
+            } catch (e) {}
+            voiceBtn.textContent = synth.getCurrentVoiceName();
+            speakerOnIcon.classList.toggle("hidden", synth.isMuted);
+            speakerOffIcon.classList.toggle("hidden", !synth.isMuted);
+
             // Groove Voice Selector (`LO-FI RHODES`, `SYNTHWAVE PULSE`, `AMBIENT DRIFT`)
-            voiceBtn.addEventListener("pointerdown", (e) => {
-                e.stopPropagation();
+            function cycleVoice() {
                 synth.init();
                 const voiceName = synth.cycleVoice();
                 voiceBtn.textContent = voiceName;
                 spawnCallout(`VOICE • ${voiceName}`, width * 0.5, 138, "#38bdf8", 1.0);
+                savePrefs();
+            }
+            voiceBtn.addEventListener("pointerdown", (e) => {
+                e.stopPropagation();
+                cycleVoice();
+            });
+
+            // Track Selector
+            function cycleTrack() {
+                setTrack(trackIndex + 1);
+                spawnCallout(`TRACK • ${TRACKS[trackIndex].name}`, width * 0.5, 138, "#22d3ee", 1.0);
+                updateHudDisplays();
+                savePrefs();
+            }
+            document.getElementById("trackBtn").addEventListener("pointerdown", (e) => {
+                e.stopPropagation();
+                cycleTrack();
             });
 
             // Lock Current Cadence Toggle Pill
             lockCadenceBtn.addEventListener("pointerdown", (e) => {
                 e.stopPropagation();
+                toggleCadenceLock();
+            });
+            function toggleCadenceLock() {
                 synth.init();
                 flowCtrl.manualLock = !flowCtrl.manualLock;
                 flowCtrl.resonanceLocked = flowCtrl.manualLock || flowCtrl.flowIndex >= 0.75;
@@ -1328,14 +1466,18 @@
                     flowCtrl.manualLock ? "#34d399" : "#cbd5e1",
                     1.0
                 );
-            });
+            }
 
-            muteBtn.addEventListener("pointerdown", (e) => {
-                e.stopPropagation();
+            function toggleMute() {
                 synth.init();
                 const muted = synth.toggleMute();
                 speakerOnIcon.classList.toggle("hidden", muted);
                 speakerOffIcon.classList.toggle("hidden", !muted);
+                savePrefs();
+            }
+            muteBtn.addEventListener("pointerdown", (e) => {
+                e.stopPropagation();
+                toggleMute();
             });
 
             function getTierPrimaryColor() {
@@ -1355,7 +1497,7 @@
 
                 const lockSuffix = flowCtrl.resonanceLocked ? " 🔒" : "";
                 bpmReadout.textContent = Math.round(flowCtrl.bpm) + " BPM" + lockSuffix;
-                phraseReadout.textContent = HARMONIC_PHRASES[flowCtrl.phraseIndex].id;
+                phraseReadout.textContent = TRACKS[trackIndex].name;
                 chordReadout.textContent = synth.getCurrentChordName();
                 tierReadout.textContent = `TIER ${flowCtrl.tier} / 4`;
 
@@ -1402,6 +1544,12 @@
                         : "T1 • CALIBRATING";
                     stateLabel.className = "font-bold tracking-wider uppercase text-cyan-300 truncate";
                 }
+
+                // Auto mode reuses the state label rather than drawing anything new
+                if (autoMode) {
+                    stateLabel.textContent = "AUTO • TAP TO FLY";
+                    stateLabel.className = "font-bold tracking-wider uppercase text-amber-300 truncate";
+                }
             }
 
             // ============================================================================
@@ -1444,23 +1592,34 @@
                 if (bird.shakeTimer > 0) bird.shakeTimer = Math.max(0, bird.shakeTimer - rawDt);
                 if (bird.washAlpha > 0) bird.washAlpha = Math.max(0, bird.washAlpha - rawDt * 1.4);
 
-                // Vertical kinematics with gentle buoyancy along the Harmonic Guide Ribbon
-                const gravScale = flowCtrl.hyperGlideTimer > 0 ? 0.80 : flowCtrl.tier >= 4 ? 0.90 : 1.0;
-                bird.vy += bird.gravity * gravScale * frameScale;
-                bird.vy = Math.min(bird.vy, 8.2);
-                bird.y += bird.vy * frameScale;
+                if (autoMode) {
+                    // Auto glide: a smooth damped spring toward the ribbon slightly ahead. No flaps,
+                    // no snapping, no extra drawing; the ribbon itself threads every gap.
+                    const target = getHarmonicGuideYAtX(bird.x + 24);
+                    const desiredVy = (target - bird.y) * 0.06;
+                    bird.vy += (desiredVy - bird.vy) * (1 - Math.pow(0.88, frameScale));
+                    bird.y += bird.vy * frameScale;
+                } else {
+                    // Vertical kinematics with gentle buoyancy along the Harmonic Guide Ribbon
+                    const gravScale = flowCtrl.hyperGlideTimer > 0 ? 0.80 : flowCtrl.tier >= 4 ? 0.90 : 1.0;
+                    bird.vy += bird.gravity * gravScale * frameScale;
+                    bird.vy = Math.min(bird.vy, 8.2);
+                    bird.y += bird.vy * frameScale;
 
-                // Subtle Resonant Buoyancy toward the Harmonic Guide Ribbon (effortless cruising)
-                const idealGuideY = getHarmonicGuideYAtX(bird.x);
-                const buoyancyStrength =
-                    flowCtrl.hyperGlideTimer > 0
-                        ? 0.075
-                        : flowCtrl.tier >= 4
-                        ? 0.052
-                        : flowCtrl.resonanceLocked
-                        ? 0.036
-                        : 0.022;
-                bird.vy += (idealGuideY - bird.y) * buoyancyStrength * dt;
+                    // Subtle Resonant Buoyancy toward the Harmonic Guide Ribbon (effortless cruising),
+                    // a little stronger while the assist controller is helping
+                    const idealGuideY = getHarmonicGuideYAtX(bird.x);
+                    const buoyancyStrength =
+                        (flowCtrl.hyperGlideTimer > 0
+                            ? 0.075
+                            : flowCtrl.tier >= 4
+                            ? 0.052
+                            : flowCtrl.resonanceLocked
+                            ? 0.036
+                            : 0.022) *
+                        (1 + 1.2 * flowCtrl.assistApplied);
+                    bird.vy += (idealGuideY - bird.y) * buoyancyStrength * dt;
+                }
 
                 // Update & Check Tier 3+ Harmonic Slipstreams (Glowing wind tunnels between pipes)
                 for (let i = slipstreams.length - 1; i >= 0; i--) {
@@ -1479,7 +1638,7 @@
                             flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + rawDt * 0.18);
 
                             slipstreamTickCounter++;
-                            if (slipstreamTickCounter % 14 === 0) {
+                            if (!autoMode && slipstreamTickCounter % 14 === 0) {
                                 incrementStreak(1);
                                 synth.playSlipstreamTick(slipstreamTickCounter);
                                 spawnParticles(bird.x, bird.y, "#c084fc", 4);
@@ -1552,12 +1711,13 @@
                     const dx = bird.x - orb.x;
                     const dy = bird.y - orb.y;
                     const dist = Math.hypot(dx, dy);
-                    if (dist < 130 && !orb.collected) {
+                    // In auto mode orbs drift past untouched; they're for the player to catch
+                    if (!autoMode && dist < 130 && !orb.collected) {
                         orb.x += (dx / Math.max(dist, 1)) * 3.2 * frameScale;
                         orb.y += (dy / Math.max(dist, 1)) * 3.2 * frameScale;
                     }
 
-                    if (!orb.collected && dist < bird.radius + orb.radius + 12) {
+                    if (!autoMode && !orb.collected && dist < bird.radius + orb.radius + 12) {
                         orb.collected = true;
                         incrementStreak(3);
                         flowCtrl.hyperGlideTimer = 4.5;
@@ -1589,7 +1749,7 @@
                         bird.x + bird.radius * 0.7 > p.x + 4 &&
                         bird.x - bird.radius * 0.7 < p.x + p.width - 4;
 
-                    if (withinPipeX && bird.ghostTimer <= 0) {
+                    if (withinPipeX && bird.ghostTimer <= 0 && !autoMode) {
                         const graceMargin = 9.0;
                         const hardHitTop = bird.y - bird.radius + graceMargin < topLip;
                         const hardHitBottom = bird.y + bird.radius - graceMargin > bottomLip;
@@ -1607,14 +1767,22 @@
                             p.wasGrazed = true;
                         } else if (hardHitTop || hardHitBottom) {
                             p.passed = true;
-                            handleGentleClipRecovery(bird.y);
+                            if (forgivePillars > 0) {
+                                // Forgiven right after taking control back: glide through, no penalty
+                                forgivePillars--;
+                                bird.ghostTimer = 0.5;
+                            } else {
+                                handleGentleClipRecovery(bird.y);
+                            }
                         }
                     }
 
                     if (!p.passed && p.x + p.width * 0.5 < bird.x) {
                         p.passed = true;
-                        if (bird.ghostTimer <= 0) {
-                            evaluatePipePass(p);
+                        // Auto mode doesn't score
+                        if (!autoMode) {
+                            if (forgivePillars > 0) forgivePillars--;
+                            if (bird.ghostTimer <= 0) evaluatePipePass(p);
                         }
                     }
 
@@ -2019,79 +2187,9 @@
                 ctx.restore();
             }
 
-            // ============================================================================
-            // 8. QUICK-SESSION PAUSE: glance away (window loses focus) and the game pauses and
-            //    goes quiet; tap or Space to come back, and a one-bar count-in on the groove
-            //    brings you back in on the beat instead of mid-air
-            // ============================================================================
-            let pauseState = null; // null | "paused" | "countin"
-            let countBeats = 0;
-            const pauseOverlay = document.createElement("div");
-            pauseOverlay.style.cssText =
-                "position:absolute;inset:0;z-index:25;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;" +
-                "background:rgba(5,7,14,0.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);pointer-events:none;" +
-                "font-family:'JetBrains Mono',monospace;text-align:center";
-            const pauseBig = document.createElement("div");
-            pauseBig.style.cssText = "font-size:48px;font-weight:800;color:#34d399;min-height:58px";
-            const pauseSmall = document.createElement("div");
-            pauseSmall.style.cssText = "font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8";
-            pauseOverlay.appendChild(pauseBig);
-            pauseOverlay.appendChild(pauseSmall);
-            document.body.appendChild(pauseOverlay);
-
-            function pauseGame() {
-                if (!gameStarted || pauseState) return;
-                pauseState = "paused";
-                pauseBig.textContent = "❚❚";
-                pauseSmall.textContent = "paused · tap or space to flow back in";
-                pauseOverlay.style.display = "flex";
-                if (synth.ctx && synth.ctx.state === "running") synth.ctx.suspend();
-            }
-
-            function beginCountIn() {
-                pauseState = "countin";
-                countBeats = 4;
-                pauseBig.textContent = "4";
-                pauseSmall.textContent = "back in on the beat";
-                if (synth.ctx && synth.ctx.state !== "running") synth.ctx.resume();
-            }
-
-            function resumePlay() {
-                pauseState = null;
-                pauseOverlay.style.display = "none";
-                bird.ghostTimer = Math.max(bird.ghostTimer, 0.6); // a moment of grace on re-entry
-                lastFrameTime = performance.now();
-            }
-
-            window.addEventListener("blur", pauseGame);
-            document.addEventListener("visibilitychange", () => {
-                if (document.visibilityState === "hidden") pauseGame();
-            });
-
             function gameLoop(now) {
                 const rawDt = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000));
                 lastFrameTime = now;
-
-                // Paused: no updates and no drawing, so it costs next to nothing while you work
-                if (pauseState === "paused") {
-                    requestAnimationFrame(gameLoop);
-                    return;
-                }
-                // Count-in: the world holds still while the groove counts you back in, 4-3-2-1
-                if (pauseState === "countin") {
-                    synth.updateScheduler(flowCtrl.bpm, flowCtrl.flowIndex, flowCtrl.tier, {
-                        onQuarterBeat: () => {
-                            kickPulse = 1.0;
-                            countBeats--;
-                            if (countBeats > 0) pauseBig.textContent = String(countBeats);
-                            else resumePlay();
-                        }
-                    });
-                    kickPulse = Math.max(0, kickPulse - rawDt * 4.2);
-                    renderScene();
-                    requestAnimationFrame(gameLoop);
-                    return;
-                }
 
                 updatePhysics(rawDt);
                 renderScene();
