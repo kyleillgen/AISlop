@@ -5,8 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <link rel="icon" href="data:,">
     <title>Flow // Resonance</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
     <style>
         * {
             box-sizing: border-box;
@@ -25,9 +24,6 @@
             font-family: 'Inter', sans-serif;
             color: #f8fafc;
         }
-        .font-mono-tech {
-            font-family: 'JetBrains Mono', monospace;
-        }
         canvas {
             display: block;
             width: 100%;
@@ -40,19 +36,28 @@
         .start-btn-glow {
             animation: pulseGlow 3.2s infinite ease-in-out;
         }
-        .kbd {
-            display: inline-block;
-            min-width: 1.6em;
-            padding: 0 0.4em;
-            border: 1px solid #334155;
-            border-bottom-width: 2px;
-            border-radius: 5px;
-            color: #e2e8f0;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            line-height: 1.6;
-            text-align: center;
-        }
+        /* The reset and utility classes this page uses (it used to load Tailwind's in-browser
+           compiler for these; written out, they cost nothing at load) */
+        *, ::before, ::after { border: 0 solid; }
+        h1, h2, h3, p, figure { margin: 0; }
+        button { font: inherit; color: inherit; background: none; margin: 0; padding: 0; line-height: inherit; cursor: pointer; }
+        svg { display: block; }
+        html { line-height: 1.5; }
+        .absolute { position: absolute; } .relative { position: relative; }
+        .inset-0 { inset: 0; } .top-0 { top: 0; } .left-0 { left: 0; } .right-0 { right: 0; } .bottom-7 { bottom: 1.75rem; }
+        .z-0 { z-index: 0; } .z-10 { z-index: 10; } .z-20 { z-index: 20; } .z-30 { z-index: 30; } .z-40 { z-index: 40; }
+        .flex { display: flex; } .hidden { display: none; } .flex-1 { flex: 1 1 0%; } .min-w-0 { min-width: 0; }
+        .items-center { align-items: center; } .justify-center { justify-content: center; }
+        .gap-\[7px\] { gap: 7px; } .gap-\[10px\] { gap: 10px; }
+        .w-full { width: 100%; } .h-full { height: 100%; } .max-w-2xl { max-width: 42rem; } .max-w-\[220px\] { max-width: 220px; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .p-2 { padding: .5rem; } .p-4 { padding: 1rem; } .px-4 { padding-left: 1rem; padding-right: 1rem; } .pt-4 { padding-top: 1rem; }
+        .overflow-hidden { overflow: hidden; } .select-none { user-select: none; } .text-center { text-align: center; }
+        .pointer-events-none { pointer-events: none; } .pointer-events-auto { pointer-events: auto; }
+        .bg-\[\#140f0c\] { background-color: #140f0c; } .text-\[\#7aa2ff\] { color: #7aa2ff; }
+        .transition-opacity { transition-property: opacity; transition-timing-function: cubic-bezier(.4,0,.2,1); transition-duration: .15s; }
+        .duration-500 { transition-duration: .5s; } .duration-700 { transition-duration: .7s; }
+        @media (min-width: 640px) { .sm\:inline { display: inline; } .sm\:inline-block { display: inline-block; } .sm\:p-3 { padding: .75rem; } }
     </style>
 </head>
 <body class="relative w-full h-full select-none overflow-hidden bg-[#140f0c]">
@@ -1961,27 +1966,25 @@
                 const shieldPct = Math.round(flowCtrl.shieldCharge * 100);
                 if (flowCtrl.shieldReady) {
                     shieldBadge.textContent = "shield ready";
-                    shieldBadge.className = "pb-badge ready"; void
-                        "whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold tracking-wide bg-[#14204d] text-[#9db8ff] border border-[#3d7bff]/70";
+                    shieldBadge.className = "pb-badge ready";
                 } else {
                     shieldBadge.textContent = `shield ${shieldPct}%`;
-                    shieldBadge.className = "pb-badge"; void
-                        "whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold tracking-wide bg-slate-900 text-slate-400 border border-slate-700/70";
+                    shieldBadge.className = "pb-badge";
                 }
 
                 // State label
                 const states = [
                     null,
-                    flowCtrl.resonanceLocked ? ["In sync", "text-[#7aa2ff]"] : ["Finding your tempo", "text-[#7aa2ff]"],
-                    ["Groove", "text-[#3ee07f]"],
-                    ["Deep resonance", "text-[#ff4f9e]"],
-                    ["Transcendent", "text-[#ff8a3d]"]
+                    flowCtrl.resonanceLocked ? ["In sync", "#7aa2ff"] : ["Finding your tempo", "#7aa2ff"],
+                    ["Groove", "#3ee07f"],
+                    ["Deep resonance", "#ff4f9e"],
+                    ["Transcendent", "#ff8a3d"]
                 ];
                 let [label, color] = states[flowCtrl.tier];
-                if (paused) [label, color] = ["Paused", "text-slate-400"];
-                else if (autoMode) [label, color] = ["Autopilot · tap to fly", "text-[#ffc21a]"];
-                stateLabel.textContent = label;
-                stateLabel.className = "pb-label " + color;
+                if (paused) [label, color] = ["Paused", "#94a3b8"];
+                else if (autoMode) [label, color] = ["Autopilot · tap to fly", "#ffc21a"];
+                if (stateLabel.textContent !== label) stateLabel.textContent = label;
+                stateLabel.style.color = color;
             }
 
             // ============================================================================
