@@ -27,47 +27,25 @@
   "use strict";
   if (window.FlowShell) return;
 
+  // Layout only; the look comes from pinball-skin.js (load it before this file)
   const CSS = `
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #050a14; color: #e2e8f0; font-family: Inter, system-ui, sans-serif; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #140f0c; color: #f6e6c0; font-family: Inter, system-ui, sans-serif; }
   #fs-canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; }
-  .fs button { font: inherit; color: inherit; cursor: pointer; }
-  .fs .kbd { display: inline-block; min-width: 1.6em; padding: 0 .4em; border: 1px solid #334155; border-bottom-width: 2px; border-radius: 5px; color: #e2e8f0; font: 500 10px/1.6 'JetBrains Mono', monospace; text-align: center; }
-  .fs-head { position: fixed; top: 0; left: 0; right: 0; z-index: 20; padding: 8px; max-width: 42rem; margin: 0 auto; pointer-events: none; }
-  .fs-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(2,6,23,.9); border: 1px solid rgba(30,41,59,.9); border-radius: 16px; padding: 8px 12px; }
-  .fs-streak small { display: block; font-size: 10px; color: #94a3b8; }
-  .fs-streak b { font: 700 26px/1 'JetBrains Mono', monospace; color: #ffc21a; }
-  .fs-streak span { font-size: 10px; color: #64748b; margin-left: 6px; }
+  .fs button { font: inherit; }
+  .fs-head { position: fixed; top: 0; left: 0; right: 0; z-index: 20; padding: 8px 10px; max-width: 42rem; margin: 0 auto; pointer-events: none; }
   .fs-state { flex: 1; min-width: 0; max-width: 220px; }
-  .fs-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
-  .fs-label { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .fs-pct { font: 600 10px 'JetBrains Mono', monospace; color: #ffc21a; margin-left: 6px; }
-  .fs-meter { height: 4px; background: rgba(30,41,59,.8); border-radius: 99px; overflow: hidden; }
-  .fs-fill { height: 100%; width: 45%; border-radius: 99px; background: #3d7bff; transition: width .5s ease-out, background .8s; }
-  .fs-controls { display: flex; gap: 6px; pointer-events: auto; }
-  .fs .fs-chip { white-space: nowrap; padding: 6px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; background: rgba(15,23,42,.9); border: 1px solid rgba(51,65,85,.7); }
-  .fs-chip:active { transform: scale(.95); }
-  .fs .fs-icon { padding: 6px 8px; display: flex; align-items: center; }
-  .fs-icon svg { width: 16px; height: 16px; }
-  @media (max-width: 520px) { .fs-voice, .fs-streak span { display: none; } }
-  .fs-over { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(2,6,23,.7); }
+  .fs-controls { display: flex; gap: 7px; pointer-events: auto; }
+  @media (max-width: 520px) { .fs-voice, .pb-best { display: none; } }
+  .fs-over { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(20,15,12,.72); }
   .fs-over.show { display: flex; }
-  .fs-card { max-width: 24rem; width: 100%; background: rgba(15,23,42,.96); border: 1px solid #1e293b; border-radius: 24px; padding: 24px; }
-  .fs-kicker { font: 600 10px 'JetBrains Mono', monospace; letter-spacing: .3em; text-transform: uppercase; color: #ffc21a; }
-  .fs-card h1 { margin: 8px 0; font: 400 29px/1.15 Righteous, Inter, sans-serif; letter-spacing: .01em; line-height: 1.15; color: #fff; }
-  .fs-card p { margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: #94a3b8; }
-  .fs-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 12px; color: #94a3b8; margin-bottom: 18px; }
-  .fs .fs-start { width: 100%; padding: 13px; border: 0; border-radius: 16px; font-size: 16px; font-weight: 600; color: #1a0a00; background: #ff6a1a; }
-  .fs-or { margin-top: 10px; text-align: center; font-size: 12px; color: #64748b; }
-  .fs-rows div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: #cbd5e1; margin: 6px 0; }
-  .fs-note { margin-top: 10px; font-size: 12px; color: #64748b; }
-  .fs-hint { position: fixed; bottom: 14px; left: 0; right: 0; z-index: 10; text-align: center; pointer-events: none; transition: opacity .7s; }
-  .fs-hint div { display: inline-block; padding: 6px 14px; border-radius: 99px; font-size: 11px; color: #cbd5e1; background: rgba(2,6,23,.8); border: 1px solid rgba(30,41,59,.9); }
+  .fs-hint { position: fixed; bottom: 26px; left: 0; right: 0; z-index: 10; text-align: center; pointer-events: none; transition: opacity .7s; }
   #fs-typer { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; }`;
 
-  // Hot colours, 70s sci-fi rather than neon: blue, green, pink, orange
-  const DEFAULT_COLORS = ["#3d7bff", "#22d36b", "#ff2d8a", "#ff6a1a"];
-  const kbd = (k) => `<span class="kbd">${k}</span>`;
+  const Skin = window.PinballSkin;
+  if (!Skin) throw new Error("flow-shell.js needs pinball-skin.js loaded first");
+  const DEFAULT_COLORS = Skin.tiers;
+  const kbd = (k) => `<span class="pb-kbd">${k}</span>`;
 
   function mount(g) {
     const typing = g.input === "type";
@@ -76,6 +54,7 @@
     const actionKeys = typing ? [["a–z", "type"]] : [["Space", "play"]];
     const extraKeys = g.keys || [];
 
+    Skin.install();
     const style = document.createElement("style");
     style.textContent = CSS;
     document.head.appendChild(style);
@@ -83,34 +62,34 @@
     root.className = "fs";
     root.innerHTML = `
       <canvas id="fs-canvas"></canvas>
-      <header class="fs-head"><div class="fs-bar">
-        <div class="fs-streak"><small>Streak</small><b data-streak>0</b><span>best <strong data-best>0</strong></span></div>
-        <div class="fs-state"><div class="fs-row"><span class="fs-label" data-label></span><span class="fs-pct" data-pct>45%</span></div><div class="fs-meter"><div class="fs-fill" data-fill></div></div></div>
+      <header class="fs-head"><div class="pb-bar">
+        <div><span class="pb-cap">Streak</span><span class="pb-window" data-streak></span><span class="pb-best">best <b data-best>0</b></span></div>
+        <div class="fs-state"><span class="pb-label" data-label></span><div class="pb-lights" data-lights></div></div>
         <div class="fs-controls">
-          <button class="fs-chip" data-track style="color:#ffc21a" title="Switch track (Tab)"></button>
-          <button class="fs-chip fs-voice" data-voice style="color:#ff4f9e" title="Switch voice (Shift+Tab)"></button>
-          <button class="fs-chip fs-icon" data-pause title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg></button>
-          <button class="fs-chip fs-icon" data-mute title="Mute (0)" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.6l4.7-4.7c.6-.6 1.7-.2 1.7.7v14c0 .9-1.1 1.3-1.7.7z"/><path data-waves d="M15.5 8.5a5 5 0 010 7M18.4 5.6a9 9 0 010 12.8"/><path data-cross d="M17 10l4 4m0-4l-4 4" style="display:none"/></svg></button>
+          <button class="pb-btn" data-track title="Switch track (Tab)"></button>
+          <button class="pb-btn fs-voice" data-voice title="Switch voice (Shift+Tab)"></button>
+          <button class="pb-btn pb-icon" data-pause title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+          <button class="pb-btn pb-icon" data-mute title="Mute (0)" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.6l4.7-4.7c.6-.6 1.7-.2 1.7.7v14c0 .9-1.1 1.3-1.7.7z"/><path data-waves d="M15.5 8.5a5 5 0 010 7M18.4 5.6a9 9 0 010 12.8"/><path data-cross d="M17 10l4 4m0-4l-4 4" style="display:none"/></svg></button>
         </div></div></header>
-      <div class="fs-hint" data-hint><div>${g.hint || (typing ? "Start typing" : "Tap or Space in a steady rhythm")} &middot; ${kbd("?")} keys</div></div>
+      <div class="fs-hint" data-hint><span class="pb-hint">${g.hint || (typing ? "Start typing" : "Tap or Space in a steady rhythm")} &middot; ${kbd("?")} keys</span></div>
       ${typing ? '<input id="fs-typer" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Type here">' : ""}
-      <div class="fs-over show" data-startcard><div class="fs-card">
-        <div class="fs-kicker">${g.title}</div>
-        <h1>${g.tagline || g.title}</h1>
+      <div class="fs-over show pb-backglass" data-startcard><div class="pb-card">
+        <div class="pb-kicker">${g.title}</div>
+        <h1 class="pb-title">${g.tagline || g.title}</h1>
         <p>${g.about || ""}</p>
-        <div class="fs-keys">${actionKeys.concat(extraKeys.slice(0, 1), [["Esc", "pause"], ["Enter", "autopilot"]]).slice(0, 4).map(([k, d]) => `<span>${kbd(k)} ${d}</span>`).join("")}</div>
-        <button class="fs-start" data-start>Start</button>
-        <div class="fs-or">${typing ? "or just start typing" : "or just tap"}</div>
+        <div class="pb-keys">${actionKeys.concat(extraKeys.slice(0, 1), [["Esc", "pause"], ["Enter", "autopilot"]]).slice(0, 4).map(([k, d]) => `<span>${kbd(k)} ${d}</span>`).join("")}</div>
+        <button class="pb-start" data-start>Start</button>
+        <div class="pb-or">${typing ? "or just start typing" : "or just tap"}</div>
       </div></div>
       <div class="fs-over" data-pausecard><div style="text-align:center">
-        <div style="font-size:24px;font-weight:600;color:#fff">Paused</div>
-        <div style="font-size:14px;color:#94a3b8;margin-top:6px">Tap or ${kbd("Esc")} to resume</div>
-        <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
-          <button class="fs-chip" data-ptrack style="color:#ffc21a"></button><button class="fs-chip" data-pvoice style="color:#ff4f9e"></button>
+        <div class="pb-paused">Paused</div>
+        <div class="pb-sub">Tap or ${kbd("Esc")} to resume</div>
+        <div style="display:flex;gap:10px;justify-content:center;margin-top:16px">
+          <button class="pb-btn" data-ptrack></button><button class="pb-btn" data-pvoice></button>
         </div></div></div>
-      <div class="fs-over" data-keyscard><div class="fs-card" style="max-width:20rem;padding:20px">
-        <div style="font-weight:600;color:#fff;margin-bottom:6px">Keys</div>
-        <div class="fs-rows">
+      <div class="fs-over" data-keyscard><div class="pb-card" style="max-width:20rem;transform:none">
+        <div class="pb-kicker">Keys</div>
+        <div class="pb-rows">
           ${actionKeys.concat(extraKeys).map(([k, d]) => `<div><span>${d}</span>${kbd(k)}</div>`).join("")}
           <div><span>Pause</span>${kbd("Esc")}</div>
           <div><span>Autopilot</span>${kbd("Enter")}</div>
@@ -118,7 +97,7 @@
           <div><span>Volume / mute</span><span>${kbd("-")} ${kbd("=")} ${kbd("0")}</span></div>
           <div><span>Audio offset</span><span>${kbd("[")} ${kbd("]")}</span></div>
         </div>
-        <div class="fs-note">Stop for a few seconds and it plays itself, without scoring. Any input takes over again, and the next two misses are forgiven.</div>
+        <div class="pb-note">Stop for a few seconds and it plays itself, without scoring. Any input takes over again, and the next two misses are forgiven.</div>
       </div></div>`;
     document.body.appendChild(root);
     const q = (sel) => root.querySelector(sel);
@@ -130,7 +109,7 @@
     const typer = q("#fs-typer");
     const reduced = !!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 
-    let W = 0, H = 0, started = false, flash = 0;
+    let W = 0, H = 0, started = false, flash = 0, bulbFlash = 0;
     const particles = [];
     const callouts = [];
     const cache = new Map();
@@ -154,11 +133,15 @@
         const prev = eng.tier;
         if (eng.auto) return false;
         eng.score(n, quality, handleSec);
-        if (eng.tier > prev && eng.milestones) api.callout(tierNames[eng.tier - 1], W / 2, H * 0.3, api.color(), 1.2);
+        if (eng.tier > prev && eng.milestones) {
+          api.callout(tierNames[eng.tier - 1], W / 2, H * 0.3, api.color(), 1.2);
+          bulbFlash = 1.2;
+        }
         // Celebrate at phrase boundaries, not every action (research brief)
         if (++phrase >= (g.phrase || 8)) {
           if (phraseClean) {
             eng.chime();
+            bulbFlash = 0.8; // the whole bulb row blinks, like a pinball bonus
             if (g.onPhrase) g.onPhrase(api);
           }
           phrase = 0;
@@ -223,7 +206,7 @@
     eng.on("beat", (n) => {
       if (started && !eng.paused && g.onBeat) g.onBeat(n, api);
     });
-    eng.on("lock", () => api.callout("In sync", W / 2, H * 0.3, "#ffc21a", 1.05));
+    eng.on("lock", () => api.callout("In sync", W / 2, H * 0.3, "#ffc400", 1.05));
     eng.on("auto", hud);
     eng.on("manual", hud);
     eng.on("pause", (why) => {
@@ -232,24 +215,21 @@
     });
 
     function hud() {
-      q("[data-streak]").textContent = eng.streak;
+      Skin.score(q("[data-streak]"), eng.streak);
       if (eng.ctrl.best > best) {
         best = eng.ctrl.best;
         try { localStorage.setItem(BEST_KEY, String(best)); } catch (e) {}
       }
       q("[data-best]").textContent = best;
-      const pct = Math.round(eng.flowIndex * 100);
-      q("[data-pct]").textContent = pct + "%";
-      q("[data-fill]").style.width = pct + "%";
-      q("[data-fill]").style.background = api.color();
+      Skin.lights(q("[data-lights]"), eng.flowIndex * 100, api.color());
       let label = eng.tier === 1 ? (eng.locked ? "In sync" : tierNames[0]) : tierNames[eng.tier - 1];
       let c = api.color();
-      if (eng.paused) [label, c] = ["Paused", "#94a3b8"];
-      else if (eng.auto && started) [label, c] = [g.autoLabel || "Autopilot · " + (typing ? "type" : "tap") + " to take over", "#ffc21a"];
+      if (eng.paused) [label, c] = ["Paused", "#f6e6c0"];
+      else if (eng.auto && started) [label, c] = [g.autoLabel || "Autopilot · " + (typing ? "type" : "tap") + " to take over", "#ffc400"];
       q("[data-label]").textContent = label;
       q("[data-label]").style.color = c;
-      q("[data-track]").textContent = q("[data-ptrack]").textContent = eng.trackName.toLowerCase();
-      q("[data-voice]").textContent = q("[data-pvoice]").textContent = eng.voiceName.toLowerCase();
+      q("[data-track]").textContent = q("[data-ptrack]").textContent = eng.trackName;
+      q("[data-voice]").textContent = q("[data-pvoice]").textContent = eng.voiceName;
       q("[data-waves]").style.display = eng.muted ? "none" : "";
       q("[data-cross]").style.display = eng.muted ? "" : "none";
     }
@@ -270,8 +250,8 @@
         hud();
       });
     const note = (text, color) => api.callout(text, W / 2, 130, color || "#94a3b8", 0.95);
-    press("[data-track]", () => note(eng.cycleTrack().toLowerCase(), "#ffc21a"));
-    press("[data-voice]", () => note(eng.cycleVoice().toLowerCase(), "#ff4f9e"));
+    press("[data-track]", () => note(eng.cycleTrack().toLowerCase(), "#ffc400"));
+    press("[data-voice]", () => note(eng.cycleVoice().toLowerCase(), "#ff1f8a"));
     press("[data-ptrack]", () => eng.cycleTrack());
     press("[data-pvoice]", () => eng.cycleVoice());
     press("[data-pause]", () => setPaused(!eng.paused));
@@ -330,7 +310,7 @@
       else if (e.key === "Enter" && started) eng.setAuto(!eng.auto);
       else if (e.key === "Tab") {
         e.preventDefault();
-        note((e.shiftKey ? eng.cycleVoice() : eng.cycleTrack()).toLowerCase(), e.shiftKey ? "#ff4f9e" : "#ffc21a");
+        note((e.shiftKey ? eng.cycleVoice() : eng.cycleTrack()).toLowerCase(), e.shiftKey ? "#ff1f8a" : "#ffc400");
       } else if (e.key === "-") note(`Volume ${Math.round(eng.changeVolume(-0.1) * 100)}%`);
       else if (e.key === "=" || e.key === "+") note(`Volume ${Math.round(eng.changeVolume(0.1) * 100)}%`);
       else if (e.key === "0") eng.toggleMute();
@@ -363,6 +343,7 @@
         if (started && eng.auto && g.autopilot) g.autopilot(dt, api);
         if (g.update) g.update(dt, api);
         flash = Math.max(0, flash - dt * 1.4);
+        bulbFlash = Math.max(0, bulbFlash - dt);
         for (let i = particles.length - 1; i >= 0; i--) {
           const p = particles[i];
           p.x += p.vx * dt;
@@ -385,16 +366,11 @@
           ctx.fillStyle = p.color;
           ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
         }
-        ctx.textAlign = "center";
-        for (const c of callouts) {
-          ctx.font = `${Math.round(16 * c.scale)}px Righteous, Inter, sans-serif`;
-          ctx.globalAlpha = Math.max(0, Math.min(1, (1 - c.a) * 8, c.a));
-          ctx.fillStyle = c.color;
-          ctx.fillText(c.text, c.x, c.y);
-        }
-        ctx.globalAlpha = 1;
+        for (const c of callouts) Skin.callout(ctx, c.text, c.x, c.y, c.color, 20 * c.scale, Math.max(0, Math.min(1, (1 - c.a) * 8, c.a)));
+        // Chaser bulbs along the bottom edge run on the eighth notes and blink on big moments
+        if (g.bulbs !== false) Skin.bulbs(ctx, W, H - 9, eng.beatPos(), bulbFlash > 0 && Math.floor(bulbFlash * 10) % 2 === 0 ? 1 : 0);
         if (flash > 0) {
-          ctx.fillStyle = `rgba(255, 45, 138, ${flash * 0.16})`;
+          ctx.fillStyle = `rgba(232, 35, 31, ${flash * 0.16})`;
           ctx.fillRect(0, 0, W, H);
         }
       }

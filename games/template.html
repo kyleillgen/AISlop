@@ -5,10 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <link rel="icon" href="data:,">
 <title>Drop Catch</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&family=Righteous&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 <script src="flow-engine.js"></script>
+<script src="pinball-skin.js"></script>
 <script src="flow-shell.js"></script>
 <script>
 // TEMPLATE: the smallest complete game on the flow engine. Copy this file to start a new one.
@@ -85,19 +86,40 @@
     const top = 110;
     const now = api.eng.beatPos();
     const pulse = 1 - (now % 1); // 1 on each beat, fading to 0
-    ctx.strokeStyle = api.color();
-    ctx.globalAlpha = 0.4 + 0.4 * pulse;
+    // The pad is a pop bumper: black skirt, tier-colour body, yellow cap that jumps on the beat
+    ctx.fillStyle = "#140f0c";
+    ctx.beginPath();
+    ctx.arc(x, padY, 34, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = api.color();
+    ctx.beginPath();
+    ctx.arc(x, padY, 28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ffc400";
+    ctx.strokeStyle = "#140f0c";
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(x, padY, 26 + 4 * pulse, 0, Math.PI * 2);
+    ctx.arc(x, padY - 3 * pulse, 15, 0, Math.PI * 2);
+    ctx.fill();
     ctx.stroke();
+    // Drops are silver balls (one cached gradient, moved into place)
+    const ball = api.cached("ball", () => {
+      const g = ctx.createRadialGradient(-3, -3, 1, 0, 0, 10);
+      g.addColorStop(0, "#ffffff");
+      g.addColorStop(0.45, "#c9c4bd");
+      g.addColorStop(1, "#5d5750");
+      return g;
+    });
     for (const d of drops) {
       const p = Math.min(1, 1 - (d.landsAt - now) / 4);
-      ctx.globalAlpha = d.fade;
-      ctx.fillStyle = d.state === "missed" ? "#475569" : d.ghost ? "#94a3b8" : api.color();
+      ctx.save();
+      ctx.globalAlpha = d.fade * (d.state === "missed" ? 0.35 : d.ghost ? 0.6 : 1);
+      ctx.translate(x, top + p * (padY - top));
+      ctx.fillStyle = ball;
       ctx.beginPath();
-      ctx.arc(x, top + p * (padY - top), 9, 0, Math.PI * 2);
+      ctx.arc(0, 0, 10, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
   }
@@ -109,7 +131,7 @@
     about: "Drops fall onto the pad on the beat. Tap as each one lands. The music settles into your tapping, and missing one only steps your streak down a little.",
     input: "tap",
     engine: {}, // defaults suit taps: one action a beat, half or double time allowed
-    resize: (api) => (padY = api.H - 120),
+    resize: (api) => (padY = api.H - 130),
     onBeat,
     onAction,
     autopilot,

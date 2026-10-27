@@ -9,13 +9,14 @@ You bring one idea: a thing that happens on the beat and one action the player r
 
 All of that comes with pause, settings, keyboard and touch input, and measurement on the device.
 
-A whole game is one HTML file that loads two scripts and fills in a few functions. [`games/template.html`](../games/template.html) (Drop Catch) is the smallest complete example at about 100 lines; [`games/word-rain.html`](../games/word-rain.html) is a fuller one.
+A whole game is one HTML file that loads three scripts and fills in a few functions. [`games/template.html`](../games/template.html) (Drop Catch) is the smallest complete example at about 100 lines; [`games/word-rain.html`](../games/word-rain.html) is a fuller one.
 
 ## The three layers
 
 | Layer | File | What it owns | You touch it? |
 |---|---|---|---|
 | **Engine** | `games/flow-engine.js` | Rhythm and music: tempo matching, lock and re-sync, Flow's synth, notes on the grid, timing calibration, streak and tiers, assist, pacing, autopilot, wind-down, measurement | No |
+| **Skin** | `games/pinball-skin.js` | The shared look: 70s pinball. Black backbox with a 7-segment score, insert-light flow meter, cream buttons with hard shadows, sunburst backglass start screen, Shrikhand and Oswald type, outlined callouts, chaser bulbs on the beat | No |
 | **Shell** | `games/flow-shell.js` | Everything around a game: header, start, pause and keys screens, standard keys, phone keyboard, canvas and frame loop, callouts, particles, phrase celebrations | No |
 | **Game** | `games/your-game.html` | What appears, how it moves, what the player does, what counts, how it looks | Yes, only this |
 
@@ -52,8 +53,11 @@ Build a new game for the AISlop flow engine. Copy games/template.html and change
 the game section. Do not edit flow-engine.js or flow-shell.js.
 
 Rules:
-- One HTML file in games/, loading flow-engine.js then flow-shell.js, then calling
-  FlowShell.mount({ ... }) like the template.
+- One HTML file in games/, loading flow-engine.js, pinball-skin.js, then flow-shell.js,
+  then calling FlowShell.mount({ ... }) like the template.
+- Look: 70s pinball, not neon. Flat hot colours (api.color() gives the tier's insert
+  colour), black outlines, cream (#f6e6c0) and black (#140f0c); no glows or shadowBlur.
+  Think playfield parts: drop targets, bumpers, rollovers, rubber bands, silver balls.
 - Spawn things in onBeat(n, api) when api.eng.paceBeats() beats have passed since the
   last spawn. Things arrive or land on a whole beat (n + k).
 - Move things only as a function of api.eng.beatPos(), never with timers.
