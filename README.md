@@ -1,11 +1,9 @@
 # AISlop
 
-Whimsical mini-game
+Sloppy AI games, reborn.
 
-## Playing
+## Flow // Resonance
 
-Open `index.html` in a web browser to play **Cat vs Cucumber**. Guide the cat with the arrow keys to eat kibble for points while avoiding the pursuing cucumber. The game ends if the cucumber catches the cat.
+A flappy-style rhythm game: the engine learns your natural tapping cadence and locks physics to it, every tap plays a note in key, and the world evolves across four tiers as your streak climbs.
 
-### Game
-
-- Cat vs Cucumber
+Play: open `index.html` in a browser (or the GitHub Pages site). Tap, click, or press Space / Up Arrow to flap.

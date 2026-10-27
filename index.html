@@ -1,27 +1,1892 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8" />
-  <title>AISlop Arcade</title>
-  <style>
-    body { font-family: sans-serif; text-align: center; margin: 0; }
-    #gameFrame { width: 100%; height: 80vh; border: none; }
-    button { margin: 5px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>FLOW // RESONANCE - Cadence Entrainment Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: none;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100dvh;
+            overflow: hidden;
+            background-color: #05070e;
+            font-family: 'Inter', sans-serif;
+            color: #f8fafc;
+        }
+        .font-mono-tech {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 22px rgba(16, 185, 129, 0.4), inset 0 0 15px rgba(16, 185, 129, 0.2); }
+            50% { box-shadow: 0 0 38px rgba(6, 182, 212, 0.7), inset 0 0 25px rgba(6, 182, 212, 0.3); }
+        }
+        .start-btn-glow {
+            animation: pulseGlow 2.4s infinite ease-in-out;
+        }
+    </style>
 </head>
-<body>
-  <h1 id="title">Cat vs Cucumber</h1>
-  <div>
-    <button onclick="loadGame('games/cat-cucumber.html','Cat vs Cucumber')">Cat vs Cucumber</button>
-    <button onclick="loadGame('games/sprite-sorter.html','Sprite Sorter')">Sprite Sorter</button>
-  </div>
-  <iframe id="gameFrame" src="games/cat-cucumber.html" title="Game frame"></iframe>
-  <script>
-    function loadGame(src, title) {
-      document.getElementById('gameFrame').src = src;
-      document.getElementById('title').textContent = title;
-    }
-    window.loadGame = loadGame;
-  </script>
+<body class="relative w-full h-full select-none overflow-hidden bg-[#05070e]">
+
+    <!-- Full-Viewport Interactive Canvas -->
+    <canvas id="gameCanvas" class="absolute inset-0 z-0"></canvas>
+
+    <!-- Top Cybernetic Telemetry & Synesthesia HUD -->
+    <header id="hudHeader" class="absolute top-0 left-0 right-0 z-20 p-2 sm:p-3 pointer-events-none flex flex-col gap-1.5 max-w-2xl mx-auto">
+        
+        <!-- Primary Card: Streak, Tier/Shield, Resonance Meter, and Live Controls -->
+        <div class="flex items-center justify-between gap-2 bg-slate-950/85 backdrop-blur-xl border border-slate-800/90 rounded-2xl px-3 py-2 shadow-2xl">
+            
+            <!-- Left: Streak & Rechargeable Shield Indicator -->
+            <div class="flex items-center gap-2.5">
+                <div class="flex flex-col">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[9px] font-mono-tech uppercase tracking-widest text-slate-400">Streak</span>
+                        <span id="shieldBadge" class="px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold uppercase tracking-wider bg-slate-800/90 text-slate-400 border border-slate-700/60 transition-all duration-300">
+                            SHIELD 0%
+                        </span>
+                    </div>
+                    <div class="flex items-baseline gap-2 mt-0.5">
+                        <span id="streakDisplay" class="text-2xl sm:text-3xl font-black font-mono-tech text-emerald-400 tracking-tight leading-none">0</span>
+                        <span class="text-[10px] font-mono-tech text-slate-500">BEST <strong id="bestStreakDisplay" class="text-slate-300">0</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center: Continuous Flow Resonance % & 4-Tier Evolution Label -->
+            <div class="flex flex-col items-center flex-1 max-w-[165px] sm:max-w-[230px] px-1">
+                <div class="w-full flex items-center justify-between text-[9px] sm:text-[10px] font-mono-tech mb-1">
+                    <span id="stateLabel" class="font-bold tracking-wider uppercase text-cyan-300 truncate">T1 • CALIBRATING</span>
+                    <span id="flowPctDisplay" class="font-bold text-emerald-300 ml-1">45%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                    <div id="flowBarFill" class="h-full rounded-full bg-gradient-to-r from-cyan-500 via-emerald-400 to-fuchsia-400 transition-all duration-200" style="width: 45%"></div>
+                </div>
+            </div>
+
+            <!-- Right: Groove Voice Selector, Cadence Lock & Audio Mute (Pointer Events Enabled) -->
+            <div class="flex items-center gap-1 sm:gap-1.5 pointer-events-auto">
+                <button id="voiceBtn" type="button" title="Switch Musical Groove Voice" class="px-2 sm:px-2.5 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-indigo-950/90 text-indigo-300 border-indigo-500/50 shadow-[0_0_12px_rgba(99,102,241,0.25)]">
+                    LO-FI RHODES
+                </button>
+                <button id="lockCadenceBtn" type="button" title="Freeze Current Speed & Cadence" class="px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-slate-900/90 text-slate-300 border-slate-700/70">
+                    AUTO SYNC
+                </button>
+                <button id="muteBtn" type="button" aria-label="Toggle Audio" class="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/70 transition-all active:scale-95">
+                    <svg id="speakerOnIcon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    </svg>
+                    <svg id="speakerOffIcon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Secondary Row: Resonance & Phrase Telemetry Pills -->
+        <div class="grid grid-cols-4 gap-1.5">
+            <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
+                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">CADENCE</span>
+                <span id="bpmReadout" class="text-[11px] font-mono-tech font-bold text-emerald-300">108 BPM</span>
+            </div>
+            <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
+                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">PHRASE</span>
+                <span id="phraseReadout" class="text-[11px] font-mono-tech font-bold text-cyan-300 truncate ml-1">SINE WAVE</span>
+            </div>
+            <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
+                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">CHORD</span>
+                <span id="chordReadout" class="text-[11px] font-mono-tech font-bold text-fuchsia-300">Dmin9</span>
+            </div>
+            <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
+                <span class="text-[9px] font-mono-tech text-slate-400 uppercase">TIER</span>
+                <span id="tierReadout" class="text-[11px] font-mono-tech font-bold text-amber-300">TIER 1 / 4</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Bottom Subtle Guidance Banner -->
+    <div id="touchHint" class="absolute bottom-4 left-0 right-0 z-10 pointer-events-none flex justify-center transition-opacity duration-700 opacity-85 px-4">
+        <div class="px-4 py-1.5 rounded-full bg-slate-950/80 border border-slate-800/90 text-[10px] sm:text-[11px] font-mono-tech text-slate-300 tracking-wider uppercase text-center shadow-lg">
+            If It's Flow, It's Go • Physics Lock To Your Rhythm • Follow The Harmonic Guide Ribbon
+        </div>
+    </div>
+
+    <!-- Start & Web Audio Unlock Overlay -->
+    <div id="startOverlay" class="absolute inset-0 z-30 flex items-center justify-center p-4 sm:p-5 bg-slate-950/90 backdrop-blur-xl transition-opacity duration-300">
+        <div class="max-w-md w-full bg-slate-900/95 border border-slate-800 rounded-3xl p-6 sm:p-7 text-center shadow-2xl flex flex-col items-center gap-4">
+            <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                </svg>
+            </div>
+
+            <div class="space-y-1.5">
+                <div class="text-[10px] font-mono-tech uppercase tracking-widest text-emerald-400 font-semibold">Resonance &amp; Cadence Synchronization Engine</div>
+                <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-white">IF IT'S FLOW, IT'S GO</h1>
+                <p class="text-xs sm:text-sm text-slate-400 leading-relaxed">
+                    Zero punitive speed scaling. The engine detects your natural tapping cadence and <span class="text-emerald-300 font-semibold">locks into your sweet spot</span>. As your streak rises, physics stay effortless while the audio-visual world evolves across <span class="text-fuchsia-300 font-semibold">4 Synesthetic Tiers</span>.
+                </p>
+            </div>
+
+            <div class="w-full bg-slate-950/90 border border-slate-800/90 rounded-2xl p-3.5 text-left space-y-2 text-[11px] font-mono-tech">
+                <div class="flex items-center justify-between text-emerald-300">
+                    <span>• CADENCE LOCK-IN (&ge;75% FLOW)</span>
+                    <span>→ FREEZES SWEET SPOT</span>
+                </div>
+                <div class="flex items-center justify-between text-cyan-300">
+                    <span>• HARMONIC SINE CONTOURS</span>
+                    <span>→ ZERO JAGGED SPIKES</span>
+                </div>
+                <div class="flex items-center justify-between text-fuchsia-300">
+                    <span>• 4-TIER DEEP EVOLUTION</span>
+                    <span>→ SLIPSTREAMS &amp; AURORAS</span>
+                </div>
+                <div class="flex items-center justify-between text-amber-300">
+                    <span>• QUANTIZED CO-CREATION</span>
+                    <span>→ EVERY TAP PLAYS IN KEY</span>
+                </div>
+            </div>
+
+            <button id="startBtn" type="button" class="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 text-slate-950 font-black text-base tracking-wide uppercase start-btn-glow active:scale-98 transition-transform cursor-pointer">
+                Tap to Entrain Cadence
+            </button>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            "use strict";
+
+            // ============================================================================
+            // 1. MULTI-VOICE QUANTIZED CO-CREATION SYNTHESIZER (4-Bar Chord Progression)
+            // ============================================================================
+            const CHORD_PROGRESSION = [
+                {
+                    name: "Dmin9",
+                    bass: [73.42, 0, 73.42, 110.00, 146.83, 0, 110.00, 130.81],
+                    pad: [146.83, 174.61, 220.00, 261.63, 329.63],
+                    scale: [293.66, 329.63, 349.23, 392.00, 440.00, 523.25, 587.33, 659.25, 698.46, 880.00]
+                },
+                {
+                    name: "BbMaj9",
+                    bass: [58.27, 0, 58.27, 87.31, 116.54, 0, 87.31, 110.00],
+                    pad: [116.54, 146.83, 174.61, 220.00, 261.63],
+                    scale: [233.08, 261.63, 293.66, 349.23, 392.00, 440.00, 523.25, 587.33, 698.46, 783.99]
+                },
+                {
+                    name: "Gmin9",
+                    bass: [98.00, 0, 98.00, 146.83, 196.00, 0, 146.83, 174.61],
+                    pad: [196.00, 233.08, 293.66, 349.23, 440.00],
+                    scale: [293.66, 349.23, 392.00, 440.00, 466.16, 587.33, 698.46, 783.99, 880.00, 1046.50]
+                },
+                {
+                    name: "A7sus4",
+                    bass: [110.00, 0, 110.00, 146.83, 164.81, 0, 146.83, 196.00],
+                    pad: [110.00, 146.83, 164.81, 196.00, 246.94],
+                    scale: [293.66, 329.63, 392.00, 440.00, 493.88, 587.33, 659.25, 783.99, 880.00, 987.77]
+                }
+            ];
+
+            const GROOVE_VOICES = ["LO-FI RHODES", "SYNTHWAVE PULSE", "AMBIENT DRIFT"];
+
+            class CoCreationResonanceSynth {
+                constructor() {
+                    this.ctx = null;
+                    this.masterGain = null;
+                    this.bassFilter = null;
+                    this.padFilter = null;
+                    this.delayNode = null;
+                    this.delayFeedback = null;
+
+                    this.isMuted = false;
+                    this.isInitialized = false;
+                    this.voiceIndex = 0; // 0: LO-FI RHODES, 1: SYNTHWAVE PULSE, 2: AMBIENT DRIFT
+
+                    this.stepIndex = 0;
+                    this.barCount = 0;
+                    this.chordIndex = 0;
+                    this.nextStepTime = 0;
+
+                    this.currentCutoff = 900;
+                    this.cushionedFilterTimer = 0; // Smooth 2-second filter crossfade on gentle pipe clip
+                    this.queuedTapNotes = [];      // Quantized notes triggered by player taps
+                }
+
+                init() {
+                    if (this.isInitialized) {
+                        if (this.ctx && this.ctx.state === "suspended") {
+                            this.ctx.resume();
+                        }
+                        return;
+                    }
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (!AudioCtx) return;
+
+                    this.ctx = new AudioCtx();
+
+                    const compressor = this.ctx.createDynamicsCompressor();
+                    compressor.threshold.value = -15;
+                    compressor.knee.value = 20;
+                    compressor.ratio.value = 3.2;
+                    compressor.attack.value = 0.01;
+                    compressor.release.value = 0.22;
+
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.value = 0.80;
+
+                    this.bassFilter = this.ctx.createBiquadFilter();
+                    this.bassFilter.type = "lowpass";
+                    this.bassFilter.frequency.value = 720;
+                    this.bassFilter.Q.value = 2.0;
+
+                    this.padFilter = this.ctx.createBiquadFilter();
+                    this.padFilter.type = "lowpass";
+                    this.padFilter.frequency.value = 1800;
+                    this.padFilter.Q.value = 1.0;
+
+                    this.delayNode = this.ctx.createDelay(1.2);
+                    this.delayNode.delayTime.value = 0.28;
+                    this.delayFeedback = this.ctx.createGain();
+                    this.delayFeedback.gain.value = 0.36;
+
+                    const delayFilter = this.ctx.createBiquadFilter();
+                    delayFilter.type = "lowpass";
+                    delayFilter.frequency.value = 1900;
+
+                    this.delayNode.connect(delayFilter);
+                    delayFilter.connect(this.delayFeedback);
+                    this.delayFeedback.connect(this.delayNode);
+                    this.delayNode.connect(this.padFilter);
+
+                    this.bassFilter.connect(compressor);
+                    this.padFilter.connect(compressor);
+                    compressor.connect(this.masterGain);
+                    this.masterGain.connect(this.ctx.destination);
+
+                    this.nextStepTime = this.ctx.currentTime + 0.04;
+                    this.isInitialized = true;
+                }
+
+                cycleVoice() {
+                    this.voiceIndex = (this.voiceIndex + 1) % GROOVE_VOICES.length;
+                    return GROOVE_VOICES[this.voiceIndex];
+                }
+
+                getCurrentVoiceName() {
+                    return GROOVE_VOICES[this.voiceIndex];
+                }
+
+                getCurrentChordName() {
+                    return CHORD_PROGRESSION[this.chordIndex].name;
+                }
+
+                toggleMute() {
+                    this.isMuted = !this.isMuted;
+                    if (this.masterGain && this.ctx) {
+                        this.masterGain.gain.setTargetAtTime(
+                            this.isMuted ? 0.0001 : 0.80,
+                            this.ctx.currentTime,
+                            0.04
+                        );
+                    }
+                    return this.isMuted;
+                }
+
+                triggerCushionCrossfade() {
+                    this.cushionedFilterTimer = 2.0;
+                }
+
+                updateSynesthesia(flowIndex, tier, bpm, dt) {
+                    if (!this.isInitialized || !this.ctx) return;
+                    const now = this.ctx.currentTime;
+
+                    if (this.cushionedFilterTimer > 0) {
+                        this.cushionedFilterTimer = Math.max(0, this.cushionedFilterTimer - dt);
+                    }
+
+                    // Cross-fade filter gently during 2-second cushion window so flow never shatters
+                    const cushionDip = this.cushionedFilterTimer > 0 ? 0.48 : 1.0;
+                    const tierBoost = (tier - 1) * 320;
+                    const targetCutoff = (420 + flowIndex * 1150 + tierBoost) * cushionDip;
+
+                    this.currentCutoff += (targetCutoff - this.currentCutoff) * 0.12;
+                    this.bassFilter.frequency.setTargetAtTime(this.currentCutoff, now, 0.12);
+
+                    const padCutoff = (1100 + flowIndex * 2200 + tierBoost) * cushionDip;
+                    this.padFilter.frequency.setTargetAtTime(padCutoff, now, 0.14);
+
+                    // Ping-pong/dub delay feedback scales up in Tier 3 & Tier 4
+                    const targetFeedback = tier >= 3 ? 0.44 : 0.28;
+                    this.delayFeedback.gain.setTargetAtTime(targetFeedback, now, 0.15);
+
+                    const beatSec = 60 / Math.max(88, Math.min(136, bpm));
+                    this.delayNode.delayTime.setTargetAtTime(beatSec * 0.75, now, 0.1);
+                }
+
+                // Immediate warm tactile transient + queues a quantized lead note on the next 16th subdivision
+                queueQuantizedTap(heightNorm, tier) {
+                    if (!this.isInitialized || this.isMuted) return;
+                    const now = this.ctx.currentTime;
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
+                    const clampedH = Math.max(0, Math.min(1, 1 - heightNorm));
+
+                    // Queue for the 16th-note grid scheduler so it lands 100% in time and in key
+                    this.queuedTapNotes.push({
+                        heightNorm: clampedH,
+                        tier
+                    });
+                    if (this.queuedTapNotes.length > 2) {
+                        this.queuedTapNotes.shift();
+                    }
+
+                    // Immediate soft tactile body resonance (sub-octave warm air impulse)
+                    const idx = Math.min(chord.scale.length - 1, Math.floor(clampedH * chord.scale.length));
+                    const tactileFreq = chord.scale[idx] * 0.5;
+
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = "sine";
+                    osc.frequency.setValueAtTime(tactileFreq, now);
+                    osc.frequency.exponentialRampToValueAtTime(tactileFreq * 1.12, now + 0.065);
+
+                    gain.gain.setValueAtTime(0.065, now);
+                    gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.075);
+
+                    osc.connect(gain);
+                    gain.connect(this.padFilter);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                }
+
+                playPipeHarmony(streak, quality) {
+                    if (!this.isInitialized || this.isMuted) return;
+                    const now = this.ctx.currentTime;
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
+
+                    const indices =
+                        quality === "PERFECT"
+                            ? [0, 2, 4, 6, 8]
+                            : quality === "GRAZE"
+                            ? [1, 3, 5]
+                            : [0, 2, 4];
+
+                    indices.forEach((scalePos, i) => {
+                        const freq = chord.scale[(scalePos + (streak % 3)) % chord.scale.length];
+                        const start = now + i * 0.03;
+
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = this.voiceIndex === 1 ? "sawtooth" : "triangle";
+                        osc.frequency.setValueAtTime(freq, start);
+
+                        const amp = quality === "PERFECT" ? 0.11 : 0.08;
+                        gain.gain.setValueAtTime(0.001, start);
+                        gain.gain.linearRampToValueAtTime(amp, start + 0.015);
+                        gain.gain.exponentialRampToValueAtTime(0.0006, start + 0.45);
+
+                        osc.connect(gain);
+                        gain.connect(this.padFilter);
+                        gain.connect(this.delayNode);
+                        osc.start(start);
+                        osc.stop(start + 0.48);
+                    });
+                }
+
+                playGoldenOrbShimmer() {
+                    if (!this.isInitialized || this.isMuted) return;
+                    const now = this.ctx.currentTime;
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
+
+                    chord.scale.slice(3, 9).forEach((freq, idx) => {
+                        const start = now + idx * 0.036;
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+
+                        osc.type = "triangle";
+                        osc.frequency.setValueAtTime(freq * 1.5, start);
+
+                        gain.gain.setValueAtTime(0.001, start);
+                        gain.gain.linearRampToValueAtTime(0.11, start + 0.02);
+                        gain.gain.exponentialRampToValueAtTime(0.0005, start + 0.65);
+
+                        osc.connect(gain);
+                        gain.connect(this.padFilter);
+                        gain.connect(this.delayNode);
+                        osc.start(start);
+                        osc.stop(start + 0.68);
+                    });
+                }
+
+                playSlipstreamTick(stepCounter) {
+                    if (!this.isInitialized || this.isMuted) return;
+                    const now = this.ctx.currentTime;
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
+                    const freq = chord.scale[(stepCounter + 4) % chord.scale.length];
+
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = "sine";
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    gain.gain.setValueAtTime(0.001, now);
+                    gain.gain.linearRampToValueAtTime(0.075, now + 0.01);
+                    gain.gain.exponentialRampToValueAtTime(0.0006, now + 0.22);
+
+                    osc.connect(gain);
+                    gain.connect(this.delayNode);
+                    osc.start(now);
+                    osc.stop(now + 0.24);
+                }
+
+                playGentleCushionChord() {
+                    if (!this.isInitialized || this.isMuted) return;
+                    const now = this.ctx.currentTime;
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
+
+                    chord.pad.forEach((freq) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = "sine";
+                        osc.frequency.setValueAtTime(freq, now);
+                        osc.frequency.exponentialRampToValueAtTime(freq * 0.96, now + 0.55);
+
+                        gain.gain.setValueAtTime(0.09, now);
+                        gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.58);
+
+                        osc.connect(gain);
+                        gain.connect(this.bassFilter);
+                        osc.start(now);
+                        osc.stop(now + 0.6);
+                    });
+                }
+
+                updateScheduler(bpm, flowIndex, tier, callbacks) {
+                    if (!this.isInitialized || !this.ctx) return;
+                    const now = this.ctx.currentTime;
+                    const secondsPerBeat = 60.0 / Math.max(88, Math.min(136, bpm));
+                    const sixteenthDuration = secondsPerBeat / 4.0;
+
+                    if (this.nextStepTime < now - 0.2) {
+                        this.nextStepTime = now;
+                    }
+
+                    while (this.nextStepTime < now + 0.09) {
+                        this.scheduleStep(this.stepIndex, this.nextStepTime, flowIndex, tier, callbacks);
+                        this.stepIndex = (this.stepIndex + 1) % 16;
+                        if (this.stepIndex === 0) {
+                            this.barCount++;
+                            // Cycle through the 4-chord progression (faster cycling in Tier 4 for lush movement)
+                            const barsPerChord = tier >= 4 ? 1 : 2;
+                            if (this.barCount % barsPerChord === 0) {
+                                this.chordIndex = (this.chordIndex + 1) % CHORD_PROGRESSION.length;
+                            }
+                        }
+                        this.nextStepTime += sixteenthDuration;
+                    }
+                }
+
+                scheduleStep(step, time, flowIndex, tier, callbacks) {
+                    if (step % 4 === 0 && callbacks && callbacks.onQuarterBeat) {
+                        callbacks.onQuarterBeat(step / 4);
+                    }
+                    if (callbacks && callbacks.onSixteenth) {
+                        callbacks.onSixteenth(step);
+                    }
+
+                    if (this.isMuted) return;
+
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
+                    const voice = this.voiceIndex; // 0: LO-FI RHODES, 1: SYNTHWAVE PULSE, 2: AMBIENT DRIFT
+
+                    // 1. Warm Pad Swell on Step 0 of each bar
+                    if (step === 0) {
+                        chord.pad.forEach((freq, idx) => {
+                            if (tier === 1 && idx > 2) return; // Richer 9th extensions unlock in higher tiers
+                            const padOsc = this.ctx.createOscillator();
+                            const padGain = this.ctx.createGain();
+                            padOsc.type = voice === 0 ? "sine" : voice === 1 ? "sawtooth" : "triangle";
+                            padOsc.frequency.setValueAtTime(freq, time);
+
+                            const padAmp = voice === 2 ? 0.055 : 0.038;
+                            padGain.gain.setValueAtTime(0.001, time);
+                            padGain.gain.linearRampToValueAtTime(padAmp, time + 0.35);
+                            padGain.gain.exponentialRampToValueAtTime(0.0008, time + 1.9);
+
+                            padOsc.connect(padGain);
+                            padGain.connect(this.padFilter);
+                            padOsc.start(time);
+                            padOsc.stop(time + 1.95);
+                        });
+                    }
+
+                    // 2. Sub-Kick & Percussion Pocket (Adapted per Groove Voice)
+                    if (step % 4 === 0) {
+                        const kickOsc = this.ctx.createOscillator();
+                        const kickGain = this.ctx.createGain();
+                        kickOsc.type = "sine";
+                        const startPitch = voice === 1 ? 135 : 112;
+                        kickOsc.frequency.setValueAtTime(startPitch, time);
+                        kickOsc.frequency.exponentialRampToValueAtTime(42, time + 0.13);
+
+                        const kickAmp = voice === 2 ? 0.22 : 0.30;
+                        kickGain.gain.setValueAtTime(kickAmp, time);
+                        kickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+
+                        kickOsc.connect(kickGain);
+                        kickGain.connect(this.masterGain);
+                        kickOsc.start(time);
+                        kickOsc.stop(time + 0.17);
+                    }
+
+                    // Off-beat dusty shaker / hat
+                    if (voice !== 2 && (step % 4 === 2 || (tier >= 2 && (step === 7 || step === 15)))) {
+                        const hatOsc = this.ctx.createOscillator();
+                        const hatGain = this.ctx.createGain();
+                        hatOsc.type = "square";
+                        hatOsc.frequency.setValueAtTime(voice === 0 ? 4200 : 5600, time);
+
+                        const hatFilter = this.ctx.createBiquadFilter();
+                        hatFilter.type = "highpass";
+                        hatFilter.frequency.value = 3000;
+
+                        const amp = step % 4 === 2 ? 0.026 : 0.012;
+                        hatGain.gain.setValueAtTime(amp, time);
+                        hatGain.gain.exponentialRampToValueAtTime(0.0005, time + 0.04);
+
+                        hatOsc.connect(hatFilter);
+                        hatFilter.connect(hatGain);
+                        hatGain.connect(this.masterGain);
+                        hatOsc.start(time);
+                        hatOsc.stop(time + 0.045);
+                    }
+
+                    // 3. Tier 2+ Rolling Dorian/Chord Bassline
+                    if (tier >= 2 || step % 4 === 0) {
+                        const bassFreq = chord.bass[step % 8];
+                        if (bassFreq > 0) {
+                            const bassOsc = this.ctx.createOscillator();
+                            const bassGain = this.ctx.createGain();
+                            bassOsc.type = voice === 1 ? "sawtooth" : "triangle";
+                            bassOsc.frequency.setValueAtTime(bassFreq, time);
+
+                            const amp = 0.12 + Math.min(0.06, tier * 0.015);
+                            bassGain.gain.setValueAtTime(0.001, time);
+                            bassGain.gain.linearRampToValueAtTime(amp, time + 0.012);
+                            bassGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+
+                            bassOsc.connect(bassGain);
+                            bassGain.connect(this.bassFilter);
+                            bassOsc.start(time);
+                            bassOsc.stop(time + 0.16);
+                        }
+                    }
+
+                    // 4. Quantized Player Co-Creation Lead OR Tier 3+ Lush Auto-Arpeggiator
+                    const queuedTap = this.queuedTapNotes.shift();
+                    const shouldAutoArp = tier >= 3 && (step % 2 === 1);
+
+                    if (queuedTap || shouldAutoArp) {
+                        const normH = queuedTap ? queuedTap.heightNorm : ((step * 3) % 10) / 10;
+                        const scaleIdx = Math.min(
+                            chord.scale.length - 1,
+                            Math.floor(normH * chord.scale.length)
+                        );
+                        const noteFreq = chord.scale[scaleIdx];
+
+                        const leadOsc = this.ctx.createOscillator();
+                        const leadGain = this.ctx.createGain();
+
+                        // LO-FI RHODES uses warm bell-like sine+triangle FM feel; SYNTHWAVE uses rich saw/triangle
+                        leadOsc.type = voice === 0 ? "sine" : voice === 1 ? "sawtooth" : "triangle";
+                        leadOsc.frequency.setValueAtTime(noteFreq, time);
+
+                        const peak = queuedTap ? 0.135 : 0.065;
+                        const decay = voice === 2 ? 0.38 : 0.25;
+                        leadGain.gain.setValueAtTime(0.001, time);
+                        leadGain.gain.linearRampToValueAtTime(peak, time + 0.01);
+                        leadGain.gain.exponentialRampToValueAtTime(0.0007, time + decay);
+
+                        leadOsc.connect(leadGain);
+                        leadGain.connect(this.padFilter);
+                        leadGain.connect(this.delayNode);
+                        leadOsc.start(time);
+                        leadOsc.stop(time + decay + 0.02);
+                    }
+                }
+            }
+
+            // ============================================================================
+            // 2. HARMONIC WAVE PATTERNS & CADENCE SYNCHRONIZATION STATE
+            // ============================================================================
+            const canvas = document.getElementById("gameCanvas");
+            const ctx = canvas.getContext("2d");
+            const synth = new CoCreationResonanceSynth();
+
+            // DOM Elements
+            const startOverlay = document.getElementById("startOverlay");
+            const startBtn = document.getElementById("startBtn");
+            const streakDisplay = document.getElementById("streakDisplay");
+            const bestStreakDisplay = document.getElementById("bestStreakDisplay");
+            const shieldBadge = document.getElementById("shieldBadge");
+            const stateLabel = document.getElementById("stateLabel");
+            const flowPctDisplay = document.getElementById("flowPctDisplay");
+            const flowBarFill = document.getElementById("flowBarFill");
+            const voiceBtn = document.getElementById("voiceBtn");
+            const lockCadenceBtn = document.getElementById("lockCadenceBtn");
+            const muteBtn = document.getElementById("muteBtn");
+            const speakerOnIcon = document.getElementById("speakerOnIcon");
+            const speakerOffIcon = document.getElementById("speakerOffIcon");
+            const bpmReadout = document.getElementById("bpmReadout");
+            const phraseReadout = document.getElementById("phraseReadout");
+            const chordReadout = document.getElementById("chordReadout");
+            const tierReadout = document.getElementById("tierReadout");
+            const touchHint = document.getElementById("touchHint");
+
+            let width = window.innerWidth;
+            let height = window.innerHeight;
+            let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+            let gameStarted = false;
+            let streak = 0;
+            let bestStreak = 0;
+            try {
+                bestStreak = parseInt(localStorage.getItem("flowBirdResonanceBest") || "0", 10) || 0;
+                bestStreakDisplay.textContent = bestStreak;
+            } catch (e) {
+                bestStreak = 0;
+            }
+
+            // 8-Pipe Musical Phrase Contours (Replaces random jagged heights)
+            const HARMONIC_PHRASES = [
+                {
+                    id: "SINE WAVE",
+                    // Smooth rising and falling sine wave
+                    getNormY: (stepInBar) => 0.5 + 0.28 * Math.sin((stepInBar / 8) * Math.PI * 2),
+                    orbChance: 0.45
+                },
+                {
+                    id: "HARMONIC PLATEAU",
+                    // Effortless cruising equilibrium with gentle breath
+                    getNormY: (stepInBar) => 0.5 + 0.08 * Math.cos((stepInBar / 8) * Math.PI * 2),
+                    orbChance: 0.55
+                },
+                {
+                    id: "SLALOM GLIDE",
+                    // Sweeping wide curves paired with streams of Golden Flow Orbs
+                    getNormY: (stepInBar) => 0.5 + 0.32 * Math.sin((stepInBar / 4) * Math.PI),
+                    orbChance: 0.85
+                }
+            ];
+
+            // Cadence Discovery & Lock-In Controller ("If it's flow, it's go")
+            const flowCtrl = {
+                flowIndex: 0.45,          // 0.0 to 1.0; >= 0.75 locks physics into resonant sweet spot
+                tier: 1,                  // Tier 1 (0-7), Tier 2 (8-19), Tier 3 (20-39), Tier 4 (40+)
+                manualLock: false,        // Toggled by "LOCK CADENCE" button
+                resonanceLocked: false,   // Automatically true when flowIndex >= 0.75 or manualLock
+
+                vx: 3.10,                 // Horizontal scroll velocity (never escalates punitively)
+                bpm: 108,                 // Synced to player's natural inter-tap cadence (96 - 124 BPM)
+                detectedCadenceBpm: 108,
+                gapHeight: 174,           // Wide, generous, zero-narrowing gap
+
+                phraseIndex: 0,
+                phraseStep: 0,
+
+                shieldCharge: 0.0,
+                shieldReady: false,
+                tapTimes: [],
+                tapRhythmScore: 0.85,
+                bulletTimeTimer: 0,
+                timeScale: 1.0,
+                hyperGlideTimer: 0
+            };
+
+            const bird = {
+                x: 95,
+                y: 300,
+                vy: 0,
+                radius: 14,
+                gravity: 0.31,
+                jumpImpulse: -6.4,
+                ghostTimer: 0,
+                shakeTimer: 0,
+                washAlpha: 0,
+                washColor: "#22d3ee",
+                trail: []
+            };
+
+            let pipes = [];
+            let goldenOrbs = [];
+            let slipstreams = [];
+            let stars = [];
+            let particles = [];
+            let beatRings = [];
+            let callouts = [];
+            let pipeSpawnCounter = 0;
+            let kickPulse = 0;
+            let sixteenthPulse = 0;
+            let slipstreamTickCounter = 0;
+
+            function initStarfield() {
+                stars = [];
+                for (let i = 0; i < 48; i++) {
+                    stars.push({
+                        x: Math.random() * width,
+                        y: 104 + Math.random() * (height - 134),
+                        size: 1 + Math.random() * 2.2,
+                        speedFactor: 0.15 + Math.random() * 0.45,
+                        twinklePhase: Math.random() * Math.PI * 2
+                    });
+                }
+            }
+
+            function resizeCanvas() {
+                width = window.innerWidth;
+                height = window.innerHeight;
+                dpr = Math.min(window.devicePixelRatio || 1, 2);
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+                bird.x = Math.min(Math.max(width * 0.24, 72), 155);
+                if (!gameStarted) {
+                    bird.y = height * 0.52;
+                }
+                initStarfield();
+            }
+            window.addEventListener("resize", resizeCanvas);
+            resizeCanvas();
+
+            function triggerHaptic(pattern) {
+                try {
+                    if (navigator && typeof navigator.vibrate === "function") {
+                        navigator.vibrate(pattern);
+                    }
+                } catch (e) {}
+            }
+
+            function spawnCallout(text, x, y, color, scale = 1.0) {
+                callouts.push({
+                    text,
+                    x: Math.max(80, Math.min(width - 80, x)),
+                    y,
+                    vy: -1.25,
+                    alpha: 1.0,
+                    color,
+                    scale
+                });
+            }
+
+            function computeTierFromStreak(s) {
+                if (s >= 40) return 4;
+                if (s >= 20) return 3;
+                if (s >= 8) return 2;
+                return 1;
+            }
+
+            // ============================================================================
+            // 3. CADENCE DISCOVERY & ZERO-FRICTION STREAK PROTECTION
+            // ============================================================================
+            function recordTapAndEntrainCadence(nowMs) {
+                flowCtrl.tapTimes.push(nowMs);
+                if (flowCtrl.tapTimes.length > 8) {
+                    flowCtrl.tapTimes.shift();
+                }
+
+                if (flowCtrl.tapTimes.length >= 3) {
+                    const intervals = [];
+                    for (let i = 1; i < flowCtrl.tapTimes.length; i++) {
+                        const dtMs = flowCtrl.tapTimes[i] - flowCtrl.tapTimes[i - 1];
+                        if (dtMs > 180 && dtMs < 1400) {
+                            intervals.push(dtMs);
+                        }
+                    }
+
+                    if (intervals.length >= 2) {
+                        const meanMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+                        const variance =
+                            intervals.reduce((acc, val) => acc + Math.pow(val - meanMs, 2), 0) /
+                            intervals.length;
+                        const cv = Math.sqrt(variance) / Math.max(meanMs, 200);
+
+                        // Rhythm consistency score
+                        const consistency = Math.max(0.35, Math.min(1.0, 1.0 - (cv - 0.16) * 0.95));
+                        flowCtrl.tapRhythmScore = flowCtrl.tapRhythmScore * 0.75 + consistency * 0.25;
+
+                        // Convert player's natural inter-tap interval into a resonant BPM (clamped 96 - 124 BPM)
+                        const rawBpm = 60000 / meanMs;
+                        // Handle half-time taps smoothly
+                        const normalizedBpm = rawBpm < 88 ? rawBpm * 1.5 : rawBpm > 140 ? rawBpm * 0.75 : rawBpm;
+                        const clampedBpm = Math.max(96, Math.min(124, normalizedBpm));
+                        flowCtrl.detectedCadenceBpm =
+                            flowCtrl.detectedCadenceBpm * 0.82 + clampedBpm * 0.18;
+                    }
+                }
+            }
+
+            function incrementStreak(amount) {
+                const prevTier = flowCtrl.tier;
+                streak += amount;
+                if (streak > bestStreak) {
+                    bestStreak = streak;
+                    bestStreakDisplay.textContent = bestStreak;
+                    try {
+                        localStorage.setItem("flowBirdResonanceBest", String(bestStreak));
+                    } catch (e) {}
+                }
+                streakDisplay.textContent = streak;
+                flowCtrl.tier = computeTierFromStreak(streak);
+
+                if (flowCtrl.tier > prevTier) {
+                    const tierNames = [
+                        "",
+                        "TIER 1 • CALIBRATING",
+                        "TIER 2 • GROOVE LOCKED",
+                        "TIER 3 • DEEP RESONANCE",
+                        "TIER 4 • TRANSCENDENT FLOW"
+                    ];
+                    spawnCallout(tierNames[flowCtrl.tier], width * 0.5, height * 0.34, "#f472b6", 1.22);
+                    spawnBeatRing(bird.x, bird.y, 160, "#f472b6");
+                    triggerHaptic([15, 30, 20]);
+                }
+
+                // Recharge Flow Shield
+                if (!flowCtrl.shieldReady) {
+                    flowCtrl.shieldCharge = Math.min(1.0, flowCtrl.shieldCharge + amount / 8.0);
+                    if (flowCtrl.shieldCharge >= 0.999) {
+                        flowCtrl.shieldCharge = 1.0;
+                        flowCtrl.shieldReady = true;
+                        spawnCallout("FLOW SHIELD CHARGED", bird.x + 25, bird.y - 32, "#38bdf8", 1.08);
+                    }
+                }
+            }
+
+            // Gentle, non-shattering clip recovery: never resets streak to 0!
+            function handleGentleClipRecovery(impactY) {
+                if (bird.ghostTimer > 0) return;
+
+                // Nudge bird smoothly toward the harmonic guide line
+                const targetY = getHarmonicGuideYAtX(bird.x);
+                bird.vy = (targetY - bird.y) * 0.08 - 2.2;
+
+                if (flowCtrl.shieldReady) {
+                    // Shield absorbs the clip with zero streak loss!
+                    flowCtrl.shieldReady = false;
+                    flowCtrl.shieldCharge = 0.0;
+                    spawnCallout("SHIELD GLIDE • STREAK INTACT", bird.x + 28, bird.y - 28, "#38bdf8", 1.1);
+                } else {
+                    // Unshielded clip: gently step down 25% (or 1 tier step) instead of wiping to 0
+                    streak = Math.max(0, Math.floor(streak * 0.75));
+                    streakDisplay.textContent = streak;
+                    flowCtrl.tier = computeTierFromStreak(streak);
+                    spawnCallout("SOFT CUSHION • KEEP GROOVING", bird.x + 28, bird.y - 28, "#a78bfa", 1.05);
+                }
+
+                flowCtrl.bulletTimeTimer = 0.45;
+                bird.ghostTimer = 1.15;
+                bird.shakeTimer = 0.12;
+                bird.washAlpha = 0.32;
+                bird.washColor = "#38bdf8";
+
+                // Gently dip resonance slightly and cross-fade synth filter for 2s
+                flowCtrl.flowIndex = Math.max(0.45, flowCtrl.flowIndex - 0.12);
+                synth.triggerCushionCrossfade();
+                synth.playGentleCushionChord();
+                triggerHaptic([12, 25]);
+                spawnParticles(bird.x, impactY || bird.y, "#38bdf8", 16);
+                updateHudDisplays();
+            }
+
+            function updateCadenceSynchronizer(dt) {
+                if (flowCtrl.hyperGlideTimer > 0) {
+                    flowCtrl.hyperGlideTimer = Math.max(0, flowCtrl.hyperGlideTimer - dt);
+                    flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + dt * 0.14);
+                }
+
+                // Flow resonance rises smoothly with steady rhythm and streak
+                const targetFlow = Math.min(
+                    1.0,
+                    0.38 + flowCtrl.tapRhythmScore * 0.48 + Math.min(0.22, streak * 0.01)
+                );
+                flowCtrl.flowIndex += (targetFlow - flowCtrl.flowIndex) * Math.min(1.0, dt * 0.65);
+
+                const wasLocked = flowCtrl.resonanceLocked;
+                flowCtrl.resonanceLocked = flowCtrl.manualLock || flowCtrl.flowIndex >= 0.75;
+
+                if (flowCtrl.resonanceLocked && !wasLocked && !flowCtrl.manualLock) {
+                    spawnCallout("RESONANCE LOCKED • SWEET SPOT FROZEN", width * 0.5, height * 0.30, "#34d399", 1.12);
+                }
+
+                // When NOT locked yet, gently adapt BPM & horizontal speed to match player's natural cadence
+                // Once locked (Flow >= 75% or Manual Lock), physics FREEZE at that exact effortless sweet spot!
+                if (!flowCtrl.resonanceLocked) {
+                    flowCtrl.bpm += (flowCtrl.detectedCadenceBpm - flowCtrl.bpm) * Math.min(1.0, dt * 1.4);
+                    const matchedVx = 2.85 + ((flowCtrl.bpm - 96) / 28) * 0.55;
+                    flowCtrl.vx += (matchedVx - flowCtrl.vx) * Math.min(1.0, dt * 1.2);
+                    // Gap stays wide and generous (172 - 178px)
+                    flowCtrl.gapHeight = 175;
+                }
+
+                synth.updateSynesthesia(flowCtrl.flowIndex, flowCtrl.tier, flowCtrl.bpm, dt);
+            }
+
+            // ============================================================================
+            // 4. PROCEDURAL HARMONIC SINE CONTOURS, GUIDE RIBBON & SLIPSTREAMS
+            // ============================================================================
+            function getQuantizedPipeSpacing() {
+                const framesPerTwoBeats = (3600 / Math.max(92, flowCtrl.bpm)) * 2.0;
+                return Math.max(240, Math.min(360, flowCtrl.vx * framesPerTwoBeats));
+            }
+
+            function spawnNextHarmonicPipe(startX) {
+                const topBoundary = 112;
+                const bottomBoundary = height - 38;
+                const usableH = bottomBoundary - topBoundary;
+                const gap = flowCtrl.gapHeight;
+
+                const phrase = HARMONIC_PHRASES[flowCtrl.phraseIndex];
+                const normY = phrase.getNormY(flowCtrl.phraseStep);
+
+                const minCenterY = topBoundary + gap * 0.5 + 24;
+                const maxCenterY = bottomBoundary - gap * 0.5 - 24;
+                const centerY = minCenterY + normY * (maxCenterY - minCenterY);
+
+                const prevPipe = pipes.length > 0 ? pipes[pipes.length - 1] : null;
+                const prevCenterY = prevPipe ? prevPipe.gapY : centerY;
+
+                pipes.push({
+                    x: startX,
+                    width: 56,
+                    gapY: centerY,
+                    gapHeight: gap,
+                    passed: false,
+                    wasGrazed: false,
+                    phraseName: phrase.id
+                });
+
+                pipeSpawnCounter++;
+                flowCtrl.phraseStep++;
+                if (flowCtrl.phraseStep >= 8) {
+                    flowCtrl.phraseStep = 0;
+                    flowCtrl.phraseIndex = (flowCtrl.phraseIndex + 1) % HARMONIC_PHRASES.length;
+                }
+
+                const spacing = getQuantizedPipeSpacing();
+
+                // Spawn Golden Flow Orbs along the smooth harmonic contour
+                if (pipeSpawnCounter >= 2 && Math.random() < phrase.orbChance) {
+                    const orbX = startX - spacing * 0.5;
+                    const orbY = (prevCenterY + centerY) * 0.5;
+                    goldenOrbs.push({
+                        x: orbX,
+                        y: orbY,
+                        baseY: orbY,
+                        radius: 16,
+                        phase: Math.random() * Math.PI * 2,
+                        collected: false
+                    });
+                }
+
+                // Tier 3+ Spontaneous "Harmonic Slipstreams" (Glowing wind tunnels between pipes)
+                if (flowCtrl.tier >= 3 && prevPipe && pipeSpawnCounter % 3 === 0) {
+                    slipstreams.push({
+                        xStart: prevPipe.x + prevPipe.width,
+                        xEnd: startX,
+                        yStart: prevCenterY,
+                        yEnd: centerY,
+                        height: 68,
+                        phase: 0
+                    });
+                }
+            }
+
+            // Compute ideal Y along the smooth spline between pipes for the Harmonic Guide Ribbon & Buoyancy
+            function getHarmonicGuideYAtX(queryX) {
+                if (pipes.length === 0) return height * 0.52;
+
+                let leftPipe = null;
+                let rightPipe = null;
+
+                for (let i = 0; i < pipes.length; i++) {
+                    const pCenter = pipes[i].x + pipes[i].width * 0.5;
+                    if (pCenter <= queryX) {
+                        leftPipe = pipes[i];
+                    } else if (!rightPipe) {
+                        rightPipe = pipes[i];
+                        break;
+                    }
+                }
+
+                if (!leftPipe && rightPipe) return rightPipe.gapY;
+                if (leftPipe && !rightPipe) return leftPipe.gapY;
+                if (!leftPipe && !rightPipe) return height * 0.52;
+
+                const x0 = leftPipe.x + leftPipe.width * 0.5;
+                const x1 = rightPipe.x + rightPipe.width * 0.5;
+                const t = Math.max(0, Math.min(1, (queryX - x0) / Math.max(1, x1 - x0)));
+                // Cosine interpolation for a silky sine contour between pipe centers
+                const smoothT = (1 - Math.cos(t * Math.PI)) * 0.5;
+                return leftPipe.gapY + (rightPipe.gapY - leftPipe.gapY) * smoothT;
+            }
+
+            function evaluatePipePass(pipe) {
+                const deltaY = Math.abs(bird.y - pipe.gapY);
+                const halfGap = pipe.gapHeight * 0.5;
+                const normDist = deltaY / Math.max(halfGap, 45);
+
+                if (normDist < 0.28) {
+                    incrementStreak(2);
+                    flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.055);
+                    synth.playPipeHarmony(streak, "PERFECT");
+                    triggerHaptic(10);
+                    spawnCallout("HARMONIC LOCK +2", bird.x + 24, bird.y - 26, "#34d399", 1.08);
+                    spawnBeatRing(bird.x, bird.y, 115, "#10b981");
+                    spawnParticles(bird.x, bird.y, "#34d399", 14);
+                } else if (normDist > 0.72 || pipe.wasGrazed) {
+                    incrementStreak(2);
+                    flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.04);
+                    synth.playPipeHarmony(streak, "GRAZE");
+                    spawnCallout("VELVET GRAZE +2", bird.x + 24, bird.y - 26, "#f472b6", 1.05);
+                    spawnBeatRing(bird.x, bird.y, 95, "#ec4899");
+                    spawnParticles(bird.x, bird.y, "#f472b6", 12);
+                } else {
+                    incrementStreak(1);
+                    flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.035);
+                    synth.playPipeHarmony(streak, "CLEAN");
+                    spawnBeatRing(bird.x, bird.y, 80, "#22d3ee");
+                    spawnParticles(bird.x, bird.y, "#22d3ee", 8);
+                }
+
+                // Tier 3+ sends a big harmonic shockwave across the background grid on every pipe pass
+                if (flowCtrl.tier >= 3) {
+                    spawnBeatRing(pipe.x + pipe.width * 0.5, pipe.gapY, 240, "#a855f7");
+                }
+
+                updateHudDisplays();
+            }
+
+            function spawnBeatRing(x, y, maxRadius, color) {
+                beatRings.push({ x, y, radius: 16, maxRadius, alpha: 0.82, color });
+            }
+
+            function spawnParticles(x, y, color, count) {
+                for (let i = 0; i < count; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const speed = 1.2 + Math.random() * 4.4;
+                    particles.push({
+                        x,
+                        y,
+                        vx: Math.cos(angle) * speed - flowCtrl.vx * 0.2,
+                        vy: Math.sin(angle) * speed,
+                        radius: 2 + Math.random() * 2.8,
+                        alpha: 1.0,
+                        color
+                    });
+                }
+            }
+
+            // ============================================================================
+            // 5. INPUTS & HUD CONTROLS
+            // ============================================================================
+            function triggerFlap() {
+                if (!gameStarted) return;
+
+                const nowMs = performance.now();
+                recordTapAndEntrainCadence(nowMs);
+
+                const speedScale = Math.sqrt(flowCtrl.vx / 3.1);
+                bird.vy = bird.jumpImpulse * Math.max(0.92, Math.min(1.06, speedScale));
+
+                const heightNorm = Math.max(0, Math.min(1, (bird.y - 108) / (height - 146)));
+                synth.queueQuantizedTap(heightNorm, flowCtrl.tier);
+
+                const bloomCount = flowCtrl.tier >= 4 ? 10 : 5;
+                spawnParticles(bird.x - 10, bird.y + 6, getTierPrimaryColor(), bloomCount);
+                if (flowCtrl.tier >= 4) {
+                    spawnBeatRing(bird.x, bird.y, 75, "#f472b6");
+                }
+
+                if (touchHint) {
+                    touchHint.style.opacity = "0";
+                }
+            }
+
+            function startGame(e) {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                synth.init();
+                if (!gameStarted) {
+                    gameStarted = true;
+                    startOverlay.style.opacity = "0";
+                    setTimeout(() => {
+                        startOverlay.style.display = "none";
+                    }, 300);
+
+                    pipes = [];
+                    goldenOrbs = [];
+                    slipstreams = [];
+                    const spacing = getQuantizedPipeSpacing();
+                    spawnNextHarmonicPipe(width + 90);
+                    spawnNextHarmonicPipe(width + 90 + spacing);
+                    spawnNextHarmonicPipe(width + 90 + spacing * 2);
+                    spawnNextHarmonicPipe(width + 90 + spacing * 3);
+                }
+                triggerFlap();
+            }
+
+            startBtn.addEventListener("pointerdown", startGame, { passive: false });
+            startOverlay.addEventListener("pointerdown", startGame, { passive: false });
+
+            canvas.addEventListener(
+                "pointerdown",
+                (e) => {
+                    e.preventDefault();
+                    if (!gameStarted) {
+                        startGame(e);
+                    } else {
+                        triggerFlap();
+                    }
+                },
+                { passive: false }
+            );
+
+            canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
+
+            window.addEventListener("keydown", (e) => {
+                if (e.code === "Space" || e.code === "ArrowUp") {
+                    e.preventDefault();
+                    if (!gameStarted) {
+                        startGame(e);
+                    } else {
+                        triggerFlap();
+                    }
+                }
+            });
+
+            // Groove Voice Selector (`LO-FI RHODES`, `SYNTHWAVE PULSE`, `AMBIENT DRIFT`)
+            voiceBtn.addEventListener("pointerdown", (e) => {
+                e.stopPropagation();
+                synth.init();
+                const voiceName = synth.cycleVoice();
+                voiceBtn.textContent = voiceName;
+                spawnCallout(`VOICE • ${voiceName}`, width * 0.5, 138, "#38bdf8", 1.0);
+            });
+
+            // Lock Current Cadence Toggle Pill
+            lockCadenceBtn.addEventListener("pointerdown", (e) => {
+                e.stopPropagation();
+                synth.init();
+                flowCtrl.manualLock = !flowCtrl.manualLock;
+                flowCtrl.resonanceLocked = flowCtrl.manualLock || flowCtrl.flowIndex >= 0.75;
+                updateHudDisplays();
+                spawnCallout(
+                    flowCtrl.manualLock ? "CADENCE LOCKED" : "AUTO CADENCE SYNC",
+                    width * 0.5,
+                    138,
+                    flowCtrl.manualLock ? "#34d399" : "#cbd5e1",
+                    1.0
+                );
+            });
+
+            muteBtn.addEventListener("pointerdown", (e) => {
+                e.stopPropagation();
+                synth.init();
+                const muted = synth.toggleMute();
+                speakerOnIcon.classList.toggle("hidden", muted);
+                speakerOffIcon.classList.toggle("hidden", !muted);
+            });
+
+            function getTierPrimaryColor() {
+                if (flowCtrl.hyperGlideTimer > 0) return "#fbbf24";
+                if (flowCtrl.tier === 4) return "#f472b6";
+                if (flowCtrl.tier === 3) return "#c084fc";
+                if (flowCtrl.tier === 2) return "#10b981";
+                return "#38bdf8";
+            }
+
+            let lastHudTime = 0;
+            function updateHudDisplays() {
+                const pct = Math.round(flowCtrl.flowIndex * 100);
+                flowPctDisplay.textContent = pct + "%";
+                flowBarFill.style.width = pct + "%";
+
+                const lockSuffix = flowCtrl.resonanceLocked ? " 🔒" : "";
+                bpmReadout.textContent = Math.round(flowCtrl.bpm) + " BPM" + lockSuffix;
+                phraseReadout.textContent = HARMONIC_PHRASES[flowCtrl.phraseIndex].id;
+                chordReadout.textContent = synth.getCurrentChordName();
+                tierReadout.textContent = `TIER ${flowCtrl.tier} / 4`;
+
+                // Update Cadence Lock Button Appearance
+                if (flowCtrl.manualLock) {
+                    lockCadenceBtn.textContent = "LOCKED";
+                    lockCadenceBtn.className =
+                        "px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-emerald-950/90 text-emerald-300 border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.3)]";
+                } else if (flowCtrl.resonanceLocked) {
+                    lockCadenceBtn.textContent = "SYNCED";
+                    lockCadenceBtn.className =
+                        "px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-cyan-950/90 text-cyan-300 border-cyan-500/50";
+                } else {
+                    lockCadenceBtn.textContent = "AUTO SYNC";
+                    lockCadenceBtn.className =
+                        "px-2 py-1.5 rounded-xl font-mono-tech text-[9px] sm:text-[11px] font-bold uppercase tracking-wider border transition-all active:scale-95 bg-slate-900/90 text-slate-300 border-slate-700/70";
+                }
+
+                // Shield Badge
+                const shieldPct = Math.round(flowCtrl.shieldCharge * 100);
+                if (flowCtrl.shieldReady) {
+                    shieldBadge.textContent = "SHIELD READY";
+                    shieldBadge.className =
+                        "px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold uppercase tracking-wider bg-cyan-950 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.35)]";
+                } else {
+                    shieldBadge.textContent = `SHIELD ${shieldPct}%`;
+                    shieldBadge.className =
+                        "px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold uppercase tracking-wider bg-slate-900 text-slate-400 border border-slate-700/70";
+                }
+
+                // Tier & State Label
+                if (flowCtrl.tier === 4) {
+                    stateLabel.textContent = "T4 • TRANSCENDENT";
+                    stateLabel.className = "font-bold tracking-wider uppercase text-fuchsia-300 truncate";
+                } else if (flowCtrl.tier === 3) {
+                    stateLabel.textContent = "T3 • DEEP RESONANCE";
+                    stateLabel.className = "font-bold tracking-wider uppercase text-purple-300 truncate";
+                } else if (flowCtrl.tier === 2) {
+                    stateLabel.textContent = "T2 • GROOVE LOCKED";
+                    stateLabel.className = "font-bold tracking-wider uppercase text-emerald-300 truncate";
+                } else {
+                    stateLabel.textContent = flowCtrl.resonanceLocked
+                        ? "T1 • CADENCE SYNCED"
+                        : "T1 • CALIBRATING";
+                    stateLabel.className = "font-bold tracking-wider uppercase text-cyan-300 truncate";
+                }
+            }
+
+            // ============================================================================
+            // 6. MAIN 60FPS PHYSICS & HARMONIC BUOYANCY LOOP
+            // ============================================================================
+            let lastFrameTime = performance.now();
+            let gridScrollX = 0;
+
+            function updatePhysics(rawDt) {
+                synth.updateScheduler(flowCtrl.bpm, flowCtrl.flowIndex, flowCtrl.tier, {
+                    onQuarterBeat: () => {
+                        kickPulse = 1.0;
+                    },
+                    onSixteenth: () => {
+                        sixteenthPulse = 1.0;
+                    }
+                });
+
+                kickPulse = Math.max(0, kickPulse - rawDt * 4.2);
+                sixteenthPulse = Math.max(0, sixteenthPulse - rawDt * 7.5);
+
+                if (!gameStarted) {
+                    bird.y = height * 0.52 + Math.sin(performance.now() * 0.004) * 10;
+                    return;
+                }
+
+                if (flowCtrl.bulletTimeTimer > 0) {
+                    flowCtrl.bulletTimeTimer = Math.max(0, flowCtrl.bulletTimeTimer - rawDt);
+                    flowCtrl.timeScale = 0.48;
+                } else {
+                    flowCtrl.timeScale += (1.0 - flowCtrl.timeScale) * Math.min(1.0, rawDt * 5.0);
+                }
+
+                const dt = rawDt * flowCtrl.timeScale;
+                const frameScale = dt * 60;
+
+                updateCadenceSynchronizer(rawDt);
+
+                if (bird.ghostTimer > 0) bird.ghostTimer = Math.max(0, bird.ghostTimer - rawDt);
+                if (bird.shakeTimer > 0) bird.shakeTimer = Math.max(0, bird.shakeTimer - rawDt);
+                if (bird.washAlpha > 0) bird.washAlpha = Math.max(0, bird.washAlpha - rawDt * 1.4);
+
+                // Vertical kinematics with gentle buoyancy along the Harmonic Guide Ribbon
+                const gravScale = flowCtrl.hyperGlideTimer > 0 ? 0.80 : flowCtrl.tier >= 4 ? 0.90 : 1.0;
+                bird.vy += bird.gravity * gravScale * frameScale;
+                bird.vy = Math.min(bird.vy, 8.2);
+                bird.y += bird.vy * frameScale;
+
+                // Subtle Resonant Buoyancy toward the Harmonic Guide Ribbon (effortless cruising)
+                const idealGuideY = getHarmonicGuideYAtX(bird.x);
+                const buoyancyStrength =
+                    flowCtrl.hyperGlideTimer > 0
+                        ? 0.075
+                        : flowCtrl.tier >= 4
+                        ? 0.052
+                        : flowCtrl.resonanceLocked
+                        ? 0.036
+                        : 0.022;
+                bird.vy += (idealGuideY - bird.y) * buoyancyStrength * dt;
+
+                // Update & Check Tier 3+ Harmonic Slipstreams (Glowing wind tunnels between pipes)
+                for (let i = slipstreams.length - 1; i >= 0; i--) {
+                    const s = slipstreams[i];
+                    s.xStart -= flowCtrl.vx * frameScale;
+                    s.xEnd -= flowCtrl.vx * frameScale;
+                    s.phase += rawDt * 6.0;
+
+                    if (bird.x >= s.xStart && bird.x <= s.xEnd) {
+                        const t = (bird.x - s.xStart) / Math.max(1, s.xEnd - s.xStart);
+                        const streamY = s.yStart + (s.yEnd - s.yStart) * t;
+                        if (Math.abs(bird.y - streamY) < s.height * 0.65) {
+                            // Gently auto-center trajectory inside the slipstream and award rapid resonance ticks
+                            bird.vy += (streamY - bird.y) * 0.14 * frameScale;
+                            bird.vy *= Math.pow(0.88, frameScale);
+                            flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + rawDt * 0.18);
+
+                            slipstreamTickCounter++;
+                            if (slipstreamTickCounter % 14 === 0) {
+                                incrementStreak(1);
+                                synth.playSlipstreamTick(slipstreamTickCounter);
+                                spawnParticles(bird.x, bird.y, "#c084fc", 4);
+                                spawnCallout("SLIPSTREAM +1", bird.x + 18, bird.y - 22, "#e879f9", 0.92);
+                            }
+                        }
+                    }
+
+                    if (s.xEnd < -60) {
+                        slipstreams.splice(i, 1);
+                    }
+                }
+
+                // Pipe-lip magnetic forgiveness
+                pipes.forEach((p) => {
+                    const distX = p.x + p.width * 0.5 - bird.x;
+                    if (distX > -35 && distX < 75) {
+                        const topLip = p.gapY - p.gapHeight * 0.5;
+                        const bottomLip = p.gapY + p.gapHeight * 0.5;
+                        const nearTopLip = bird.y - topLip < p.gapHeight * 0.25 && bird.vy < 0;
+                        const nearBottomLip = bottomLip - bird.y < p.gapHeight * 0.25 && bird.vy > 0;
+                        if (nearTopLip || nearBottomLip) {
+                            bird.vy *= Math.pow(0.80, frameScale);
+                        }
+                    }
+                });
+
+                // Silk Ribbon Trail (pulses on 16th-note grid in Tier 2+)
+                bird.trail.unshift({ x: bird.x, y: bird.y, pulse: sixteenthPulse });
+                const maxTrail = Math.floor(24 + flowCtrl.tier * 8);
+                while (bird.trail.length > maxTrail) {
+                    bird.trail.pop();
+                }
+                for (let i = 1; i < bird.trail.length; i++) {
+                    bird.trail[i].x -= flowCtrl.vx * frameScale;
+                }
+
+                // Soft Ceiling & Floor Cushioning
+                const ceilingY = 104;
+                const floorY = height - 28;
+                if (bird.y - bird.radius < ceilingY) {
+                    bird.y = ceilingY + bird.radius;
+                    bird.vy = Math.max(0.6, bird.vy * 0.25);
+                } else if (bird.y + bird.radius > floorY) {
+                    bird.y = floorY - bird.radius;
+                    bird.vy = bird.jumpImpulse * 0.76;
+                    spawnParticles(bird.x, floorY, "#38bdf8", 5);
+                }
+
+                gridScrollX = (gridScrollX + flowCtrl.vx * frameScale * 0.55) % 52;
+
+                // Update Starfield Parallax (Awakens in Tier 2+)
+                stars.forEach((st) => {
+                    st.x -= flowCtrl.vx * st.speedFactor * frameScale;
+                    st.twinklePhase += rawDt * 3.0;
+                    if (st.x < 0) st.x += width;
+                });
+
+                // Update Golden Flow Orbs
+                for (let i = goldenOrbs.length - 1; i >= 0; i--) {
+                    const orb = goldenOrbs[i];
+                    orb.x -= flowCtrl.vx * frameScale;
+                    orb.phase += dt * 4.2;
+                    orb.y = orb.baseY + Math.sin(orb.phase) * 8;
+
+                    const dx = bird.x - orb.x;
+                    const dy = bird.y - orb.y;
+                    const dist = Math.hypot(dx, dy);
+                    if (dist < 130 && !orb.collected) {
+                        orb.x += (dx / Math.max(dist, 1)) * 3.2 * frameScale;
+                        orb.y += (dy / Math.max(dist, 1)) * 3.2 * frameScale;
+                    }
+
+                    if (!orb.collected && dist < bird.radius + orb.radius + 12) {
+                        orb.collected = true;
+                        incrementStreak(3);
+                        flowCtrl.hyperGlideTimer = 4.5;
+                        flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.12);
+
+                        synth.playGoldenOrbShimmer();
+                        triggerHaptic([12, 24, 16]);
+                        spawnCallout("GOLDEN RESONANCE +3", orb.x, orb.y - 24, "#fbbf24", 1.15);
+                        spawnBeatRing(orb.x, orb.y, 135, "#fbbf24");
+                        spawnParticles(orb.x, orb.y, "#fde047", 22);
+                        updateHudDisplays();
+                    }
+
+                    if (orb.collected || orb.x < -50) {
+                        goldenOrbs.splice(i, 1);
+                    }
+                }
+
+                // Update Pipes
+                const spacing = getQuantizedPipeSpacing();
+                for (let i = pipes.length - 1; i >= 0; i--) {
+                    const p = pipes[i];
+                    p.x -= flowCtrl.vx * frameScale;
+
+                    const topLip = p.gapY - p.gapHeight * 0.5;
+                    const bottomLip = p.gapY + p.gapHeight * 0.5;
+
+                    const withinPipeX =
+                        bird.x + bird.radius * 0.7 > p.x + 4 &&
+                        bird.x - bird.radius * 0.7 < p.x + p.width - 4;
+
+                    if (withinPipeX && bird.ghostTimer <= 0) {
+                        const graceMargin = 9.0;
+                        const hardHitTop = bird.y - bird.radius + graceMargin < topLip;
+                        const hardHitBottom = bird.y + bird.radius - graceMargin > bottomLip;
+
+                        const softGrazeTop = !hardHitTop && bird.y - bird.radius < topLip + 5;
+                        const softGrazeBottom = !hardHitBottom && bird.y + bird.radius > bottomLip - 5;
+
+                        if (softGrazeTop) {
+                            bird.y = topLip + bird.radius - graceMargin + 2;
+                            bird.vy = Math.max(0.5, bird.vy);
+                            p.wasGrazed = true;
+                        } else if (softGrazeBottom) {
+                            bird.y = bottomLip - bird.radius + graceMargin - 2;
+                            bird.vy = Math.min(-0.6, bird.vy);
+                            p.wasGrazed = true;
+                        } else if (hardHitTop || hardHitBottom) {
+                            p.passed = true;
+                            handleGentleClipRecovery(bird.y);
+                        }
+                    }
+
+                    if (!p.passed && p.x + p.width * 0.5 < bird.x) {
+                        p.passed = true;
+                        if (bird.ghostTimer <= 0) {
+                            evaluatePipePass(p);
+                        }
+                    }
+
+                    if (p.x + p.width < -60) {
+                        pipes.splice(i, 1);
+                    }
+                }
+
+                if (pipes.length > 0) {
+                    const lastPipe = pipes[pipes.length - 1];
+                    if (lastPipe.x < width + 120) {
+                        spawnNextHarmonicPipe(lastPipe.x + spacing);
+                    }
+                }
+
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const pt = particles[i];
+                    pt.x += pt.vx * frameScale;
+                    pt.y += pt.vy * frameScale;
+                    pt.alpha -= rawDt * 1.7;
+                    if (pt.alpha <= 0) particles.splice(i, 1);
+                }
+
+                for (let i = beatRings.length - 1; i >= 0; i--) {
+                    const r = beatRings[i];
+                    r.x -= flowCtrl.vx * frameScale * 0.3;
+                    r.radius += (r.maxRadius - r.radius) * rawDt * 5.8;
+                    r.alpha -= rawDt * 1.4;
+                    if (r.alpha <= 0.02) beatRings.splice(i, 1);
+                }
+
+                for (let i = callouts.length - 1; i >= 0; i--) {
+                    const c = callouts[i];
+                    c.y += c.vy * (rawDt * 60);
+                    c.alpha -= rawDt * 1.0;
+                    if (c.alpha <= 0) callouts.splice(i, 1);
+                }
+
+                if (performance.now() - lastHudTime > 120) {
+                    updateHudDisplays();
+                    lastHudTime = performance.now();
+                }
+            }
+
+            // ============================================================================
+            // 7. 4-TIER SYNESTHETIC RENDERER (AURORA, GUIDE RIBBON & SLIPSTREAMS)
+            // ============================================================================
+            function renderScene() {
+                ctx.save();
+
+                if (bird.shakeTimer > 0) {
+                    const mag = bird.shakeTimer * 10;
+                    ctx.translate((Math.random() - 0.5) * mag, (Math.random() - 0.5) * mag);
+                }
+
+                const tier = flowCtrl.tier;
+                const primaryColor = getTierPrimaryColor();
+                const nowSec = performance.now() * 0.001;
+
+                // 1. 4-Tier Evolving Backdrop
+                const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+                if (tier === 4) {
+                    bgGrad.addColorStop(0, "#0b041d");
+                    bgGrad.addColorStop(0.5, "#190a36");
+                    bgGrad.addColorStop(1, "#061d2c");
+                } else if (tier === 3) {
+                    bgGrad.addColorStop(0, "#08061a");
+                    bgGrad.addColorStop(0.55, "#110d2e");
+                    bgGrad.addColorStop(1, "#071829");
+                } else if (tier === 2) {
+                    bgGrad.addColorStop(0, "#050914");
+                    bgGrad.addColorStop(0.6, "#071827");
+                    bgGrad.addColorStop(1, "#041e20");
+                } else {
+                    bgGrad.addColorStop(0, "#050711");
+                    bgGrad.addColorStop(1, "#0b1326");
+                }
+                ctx.fillStyle = bgGrad;
+                ctx.fillRect(0, 0, width, height);
+
+                // Tier 4 Transcendent Bioluminescent Aurora Waves
+                if (tier >= 4) {
+                    ctx.save();
+                    for (let band = 0; band < 2; band++) {
+                        ctx.beginPath();
+                        const baseY = height * (0.32 + band * 0.25);
+                        ctx.moveTo(0, baseY);
+                        for (let x = 0; x <= width; x += 40) {
+                            const waveY =
+                                baseY +
+                                Math.sin(x * 0.006 + nowSec * 1.4 + band) * 38 +
+                                Math.cos(x * 0.012 - nowSec * 0.9) * 20;
+                            ctx.lineTo(x, waveY);
+                        }
+                        ctx.lineTo(width, height);
+                        ctx.lineTo(0, height);
+                        ctx.closePath();
+                        const aurGrad = ctx.createLinearGradient(0, baseY - 50, 0, baseY + 160);
+                        aurGrad.addColorStop(
+                            0,
+                            band === 0
+                                ? `rgba(244, 114, 182, ${0.14 + kickPulse * 0.08})`
+                                : `rgba(45, 212, 191, ${0.14 + kickPulse * 0.08})`
+                        );
+                        aurGrad.addColorStop(1, "rgba(6, 182, 212, 0)");
+                        ctx.fillStyle = aurGrad;
+                        ctx.fill();
+                    }
+                    ctx.restore();
+                }
+
+                // Tier 2+ Parallax Starfield
+                if (tier >= 2) {
+                    ctx.save();
+                    stars.forEach((st) => {
+                        const alpha = (0.3 + Math.sin(st.twinklePhase) * 0.25) * Math.min(1, (tier - 1) * 0.45);
+                        ctx.fillStyle = `rgba(226, 232, 240, ${alpha})`;
+                        ctx.beginPath();
+                        ctx.arc(st.x, st.y, st.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    });
+                    ctx.restore();
+                }
+
+                // 2. Beat-Synced Perspective Grid
+                const gridAlpha = 0.22 + kickPulse * 0.25 + (tier - 1) * 0.06;
+                ctx.strokeStyle =
+                    tier >= 3
+                        ? `rgba(192, 132, 252, ${gridAlpha * 0.42})`
+                        : `rgba(30, 58, 95, ${gridAlpha})`;
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for (let x = -gridScrollX; x < width; x += 52) {
+                    ctx.moveTo(x, 102);
+                    ctx.lineTo(x, height - 26);
+                }
+                for (let y = 104; y < height - 26; y += 52) {
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(width, y);
+                }
+                ctx.stroke();
+
+                // 3. Undulating "Harmonic Guide Ribbon" (Shows the ideal resonant flight wave)
+                if (pipes.length > 0) {
+                    ctx.save();
+                    const ribbonAlpha = flowCtrl.resonanceLocked ? 0.42 + kickPulse * 0.18 : 0.22;
+                    ctx.strokeStyle = primaryColor;
+                    ctx.globalAlpha = ribbonAlpha;
+                    ctx.lineWidth = flowCtrl.resonanceLocked ? 4.0 : 2.2;
+                    ctx.beginPath();
+                    for (let x = 0; x <= width; x += 18) {
+                        const gy = getHarmonicGuideYAtX(x);
+                        if (x === 0) ctx.moveTo(x, gy);
+                        else ctx.lineTo(x, gy);
+                    }
+                    ctx.stroke();
+
+                    // Soft outer glow around the guide ribbon
+                    ctx.globalAlpha = ribbonAlpha * 0.28;
+                    ctx.lineWidth = 16;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                // 4. Tier 3+ Harmonic Slipstreams (Glowing wind tunnels between pipes)
+                slipstreams.forEach((s) => {
+                    ctx.save();
+                    const grad = ctx.createLinearGradient(s.xStart, s.yStart, s.xEnd, s.yEnd);
+                    grad.addColorStop(0, "rgba(192, 132, 252, 0.02)");
+                    grad.addColorStop(0.5, `rgba(232, 121, 249, ${0.22 + kickPulse * 0.12})`);
+                    grad.addColorStop(1, "rgba(56, 189, 248, 0.02)");
+
+                    ctx.strokeStyle = grad;
+                    ctx.lineWidth = s.height;
+                    ctx.lineCap = "round";
+                    ctx.beginPath();
+                    ctx.moveTo(s.xStart, s.yStart);
+                    ctx.lineTo(s.xEnd, s.yEnd);
+                    ctx.stroke();
+
+                    // Animated wind streamlines inside tunnel
+                    ctx.strokeStyle = "rgba(240, 171, 252, 0.45)";
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([10, 14]);
+                    ctx.lineDashOffset = -s.phase * 24;
+                    ctx.beginPath();
+                    ctx.moveTo(s.xStart, s.yStart - 10);
+                    ctx.lineTo(s.xEnd, s.yEnd - 10);
+                    ctx.moveTo(s.xStart, s.yStart + 10);
+                    ctx.lineTo(s.xEnd, s.yEnd + 10);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.restore();
+                });
+
+                // 5. Oncoming Harmonic Pipes
+                const isGhost = bird.ghostTimer > 0;
+                pipes.forEach((p) => {
+                    const topPipeBottom = p.gapY - p.gapHeight * 0.5;
+                    const bottomPipeTop = p.gapY + p.gapHeight * 0.5;
+
+                    ctx.save();
+                    if (isGhost) ctx.globalAlpha = 0.42;
+
+                    const pipeGrad = ctx.createLinearGradient(p.x, 0, p.x + p.width, 0);
+                    pipeGrad.addColorStop(0, "#090f1d");
+                    pipeGrad.addColorStop(0.5, "#162238");
+                    pipeGrad.addColorStop(1, "#090f1d");
+                    ctx.fillStyle = pipeGrad;
+
+                    ctx.fillRect(p.x, 102, p.width, Math.max(0, topPipeBottom - 102));
+                    ctx.fillRect(p.x, bottomPipeTop, p.width, Math.max(0, height - 26 - bottomPipeTop));
+
+                    ctx.strokeStyle = primaryColor;
+                    ctx.lineWidth = 1.8 + kickPulse * 1.3;
+                    ctx.strokeRect(p.x, 102, p.width, Math.max(0, topPipeBottom - 102));
+                    ctx.strokeRect(p.x, bottomPipeTop, p.width, Math.max(0, height - 26 - bottomPipeTop));
+
+                    ctx.fillStyle = primaryColor;
+                    ctx.fillRect(p.x - 3, topPipeBottom - 6, p.width + 6, 6);
+                    ctx.fillRect(p.x - 3, bottomPipeTop, p.width + 6, 6);
+
+                    ctx.restore();
+                });
+
+                // 6. Golden Flow Orbs
+                goldenOrbs.forEach((orb) => {
+                    ctx.save();
+                    ctx.translate(orb.x, orb.y);
+
+                    const pulseR = orb.radius + kickPulse * 6;
+                    const orbGlow = ctx.createRadialGradient(0, 0, 2, 0, 0, pulseR * 1.85);
+                    orbGlow.addColorStop(0, "rgba(253, 224, 71, 0.95)");
+                    orbGlow.addColorStop(0.5, "rgba(245, 158, 11, 0.45)");
+                    orbGlow.addColorStop(1, "rgba(245, 158, 11, 0)");
+                    ctx.fillStyle = orbGlow;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, pulseR * 1.85, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    ctx.strokeStyle = "#fef08a";
+                    ctx.lineWidth = 2.2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, orb.radius + Math.sin(orb.phase * 2) * 2.5, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.fillStyle = "#fef9c3";
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
+
+                // 7. Expanding Harmonic Shockwave Rings
+                beatRings.forEach((r) => {
+                    ctx.save();
+                    ctx.strokeStyle = r.color;
+                    ctx.globalAlpha = Math.max(0, r.alpha);
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.restore();
+                });
+
+                // 8. Silk Ribbon Trail (Pulses on 16th-note subdivisions in Tier 2+)
+                if (bird.trail.length > 1) {
+                    ctx.save();
+                    const baseWidth = bird.radius * (0.85 + tier * 0.22 + kickPulse * 0.35);
+                    for (let i = 0; i < bird.trail.length - 1; i++) {
+                        const curr = bird.trail[i];
+                        const next = bird.trail[i + 1];
+                        const ratio = 1 - i / bird.trail.length;
+                        const gridPulse = tier >= 2 ? curr.pulse * 0.35 : 0;
+
+                        ctx.strokeStyle =
+                            flowCtrl.hyperGlideTimer > 0
+                                ? "#fbbf24"
+                                : i % 2 === 0
+                                ? primaryColor
+                                : "#22d3ee";
+                        ctx.globalAlpha = ratio * (0.65 + gridPulse);
+                        ctx.lineWidth = Math.max(1.5, baseWidth * ratio * (1 + gridPulse));
+                        ctx.lineCap = "round";
+                        ctx.beginPath();
+                        ctx.moveTo(curr.x, curr.y);
+                        ctx.lineTo(next.x, next.y);
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
+
+                // 9. Particles
+                particles.forEach((pt) => {
+                    ctx.save();
+                    ctx.fillStyle = pt.color;
+                    ctx.globalAlpha = Math.max(0, pt.alpha);
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, pt.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
+
+                // 10. Player Avatar & Shield Halo
+                ctx.save();
+                ctx.translate(bird.x, bird.y);
+                const pitchAngle = Math.max(-0.46, Math.min(0.52, bird.vy * 0.07));
+                ctx.rotate(pitchAngle);
+
+                if (isGhost) {
+                    ctx.globalAlpha = 0.6 + Math.sin(performance.now() * 0.03) * 0.22;
+                }
+
+                const haloR = bird.radius + 8 + kickPulse * 7 + tier * 2.5;
+                const haloGrad = ctx.createRadialGradient(0, 0, bird.radius * 0.3, 0, 0, haloR);
+                haloGrad.addColorStop(0, primaryColor);
+                haloGrad.addColorStop(1, "rgba(6, 182, 212, 0)");
+                ctx.fillStyle = haloGrad;
+                ctx.beginPath();
+                ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+                ctx.fill();
+
+                if (flowCtrl.shieldReady) {
+                    ctx.strokeStyle = "rgba(56, 189, 248, 0.88)";
+                    ctx.lineWidth = 2.2;
+                    ctx.setLineDash([5, 3]);
+                    ctx.beginPath();
+                    ctx.arc(0, 0, bird.radius + 6 + kickPulse * 2, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+
+                ctx.fillStyle = "#f8fafc";
+                ctx.strokeStyle = primaryColor;
+                ctx.lineWidth = 2.4;
+                ctx.beginPath();
+                ctx.moveTo(bird.radius * 1.3, 0);
+                ctx.quadraticCurveTo(0, -bird.radius * 1.05, -bird.radius * 1.1, -bird.radius * 0.65);
+                ctx.lineTo(-bird.radius * 0.65, 0);
+                ctx.lineTo(-bird.radius * 1.1, bird.radius * 0.65);
+                ctx.quadraticCurveTo(0, bird.radius * 1.05, bird.radius * 1.3, 0);
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.fillStyle = primaryColor;
+                ctx.beginPath();
+                ctx.arc(bird.radius * 0.35, -1.8, 3.2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                // 11. Top & Bottom Laser Cushion Lines
+                ctx.strokeStyle = `rgba(56, 189, 248, ${0.35 + kickPulse * 0.25})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, 102);
+                ctx.lineTo(width, 102);
+                ctx.moveTo(0, height - 26);
+                ctx.lineTo(width, height - 26);
+                ctx.stroke();
+
+                // 12. Floating Callouts
+                callouts.forEach((c) => {
+                    ctx.save();
+                    ctx.font = `800 ${Math.round(13 * c.scale)}px 'JetBrains Mono', monospace`;
+                    ctx.textAlign = "center";
+                    ctx.globalAlpha = Math.max(0, c.alpha);
+                    ctx.fillStyle = c.color;
+                    ctx.shadowColor = "rgba(0, 0, 0, 0.85)";
+                    ctx.shadowBlur = 8;
+                    ctx.fillText(c.text, c.x, c.y);
+                    ctx.restore();
+                });
+
+                if (bird.washAlpha > 0) {
+                    ctx.save();
+                    ctx.fillStyle = bird.washColor;
+                    ctx.globalAlpha = bird.washAlpha * 0.24;
+                    ctx.fillRect(0, 0, width, height);
+                    ctx.restore();
+                }
+
+                ctx.restore();
+            }
+
+            function gameLoop(now) {
+                const rawDt = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000));
+                lastFrameTime = now;
+
+                updatePhysics(rawDt);
+                renderScene();
+
+                requestAnimationFrame(gameLoop);
+            }
+
+            window.onload = function () {
+                updateHudDisplays();
+                requestAnimationFrame(gameLoop);
+            };
+        })();
+    </script>
 </body>
 </html>
