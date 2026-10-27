@@ -46,6 +46,7 @@ What makes it a toy, not a game:
 The Flow layer:
 - Put <script src="flow-layer.js" data-mode="toy"></script> as the first thing in <head>. The arcade swaps in the real layer: a soft glow wash and an optional quiet pad. It exposes window.Flow.
 - All sound goes through it, so mute works everywhere: window.Flow && Flow.note(degree, { vol, dur, type }) plays scale degree 0–13 of the current chord right away (0–6 warm and low, 7–13 bell-like); map sizes, lengths, or heights to degrees so everything is in key. window.Flow && Flow.hit(x, y, true) adds a pop ring at a point.
+- Advance all motion and timers by real elapsed time (delta time from the requestAnimationFrame timestamp), never a fixed amount per frame, so it feels the same on 60 Hz, 120 Hz, and throttled windows.
 - Keep the machine cool: in your requestAnimationFrame loop, when window.Flow && Flow.away is true (the player is in another window), skip frames so you draw about 10 times a second.
 - Never create your own AudioContext.
 
@@ -118,8 +119,12 @@ const BEHAVIOURS = [
   "colours blend where things meet", "it glows brighter the gentler you are"
 ];
 
+const recentToy = { material: [], gesture: [] };
+
 export function randomToyConcept() {
-  return `${pick(MATERIALS)}, played by ${pick(GESTURES)}, where ${pick(BEHAVIOURS)}; ${pick(MOODS)}`;
+  const material = pickFresh(MATERIALS, recentToy.material, 10);
+  const gesture = pickFresh(GESTURES, recentToy.gesture, 4);
+  return `${material}, played by ${gesture}, where ${pick(BEHAVIOURS)}; ${pick(MOODS)}`;
 }
 
 export function generateToyPrompt(concept) {

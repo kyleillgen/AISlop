@@ -135,5 +135,36 @@ window.AISLOP_GAMES = [
     path: "games/dripbeat.html",
     status: "fresh",
     hue: 160
+  },
+  // Batch 3: three live toy rolls; kept toys shelve under Flow Toys
+  {
+    id: "sunset-lyre",
+    title: "Sunset Lyre",
+    blurb: "The setting sun's rays are strings. Tap or strum across them and the sky answers in key.",
+    prompt: "Random toy roll: plucked strings, played by tapping, where it settles into patterns; sunset pop",
+    path: "games/sunset-lyre.html",
+    status: "fresh",
+    lane: "toy",
+    hue: 330
+  },
+  {
+    id: "ember-harp",
+    title: "Ember Harp",
+    blurb: "A warm harp of glowing strings. Tap or drag across them and embers flicker off each note.",
+    prompt: "Random toy roll: plucked strings, played by tapping, where it swirls and calms down; cosy and warm",
+    path: "games/ember-harp.html",
+    status: "fresh",
+    lane: "toy",
+    hue: 30
+  },
+  {
+    id: "breathing-glowsand",
+    title: "Breathing Glowsand",
+    blurb: "A tray of glowing sand. Press and hold to breathe in a hollow; let go and it breathes back out.",
+    prompt: "Random toy roll: kinetic sand, played by pressing and releasing, where it breathes in and out; neon at night",
+    path: "games/breathing-glowsand.html",
+    status: "fresh",
+    lane: "toy",
+    hue: 255
   }
 ];
