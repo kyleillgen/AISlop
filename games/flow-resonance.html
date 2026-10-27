@@ -748,7 +748,15 @@
                 tapRhythmScore: 0.85,
                 bulletTimeTimer: 0,
                 timeScale: 1.0,
-                hyperGlideTimer: 0
+                hyperGlideTimer: 0,
+
+                // Calibration: learn the player's cadence before locking, follow them if it drifts,
+                // and ease the gaps (never tighten them) when clips start to cluster
+                tapCount: 0,
+                recentCadenceBpm: 108,
+                driftTimer: 0,
+                clipTimes: [],
+                easeTimer: 0
             };
 
             const bird = {
@@ -870,6 +878,8 @@
                         const clampedBpm = Math.max(96, Math.min(124, normalizedBpm));
                         flowCtrl.detectedCadenceBpm =
                             flowCtrl.detectedCadenceBpm * 0.82 + clampedBpm * 0.18;
+                        flowCtrl.recentCadenceBpm = clampedBpm;
+                        flowCtrl.tapCount++;
                     }
                 }
             }
@@ -951,6 +961,13 @@
                     spawnCallout("SOFT CUSHION • KEEP GROOVING", bird.x + 28, bird.y - 28, "#a78bfa", 1.05);
                 }
 
+                // Two clips within 12 seconds means the challenge is outpacing the player right now:
+                // ease the gaps for the next stretch so the rhythm can come back
+                const nowSec = performance.now() / 1000;
+                flowCtrl.clipTimes = flowCtrl.clipTimes.filter((t) => nowSec - t < 12);
+                flowCtrl.clipTimes.push(nowSec);
+                if (flowCtrl.clipTimes.length >= 2) flowCtrl.easeTimer = 15;
+
                 flowCtrl.bulletTimeTimer = 0.45;
                 bird.ghostTimer = 1.15;
                 bird.shakeTimer = 0.12;
@@ -980,7 +997,34 @@
                 flowCtrl.flowIndex += (targetFlow - flowCtrl.flowIndex) * Math.min(1.0, dt * 0.65);
 
                 const wasLocked = flowCtrl.resonanceLocked;
-                flowCtrl.resonanceLocked = flowCtrl.manualLock || flowCtrl.flowIndex >= 0.75;
+
+                // Calibrated = the tempo has actually reached the player's own cadence (and the
+                // scroll speed has followed), not just that a few seconds have passed. A long run
+                // of steady taps locks regardless, so an unusual cadence can't stall it forever.
+                const matchedVxNow = 2.85 + ((flowCtrl.bpm - 96) / 28) * 0.55;
+                const calibrated =
+                    flowCtrl.tapCount >= 24 ||
+                    (flowCtrl.tapCount >= 8 &&
+                        Math.abs(flowCtrl.detectedCadenceBpm - flowCtrl.recentCadenceBpm) < 1.5 &&
+                        Math.abs(flowCtrl.bpm - flowCtrl.recentCadenceBpm) < 2 &&
+                        Math.abs(flowCtrl.vx - matchedVxNow) < 0.05);
+
+                // Once locked, keep following the player: if their natural cadence settles a few
+                // BPM away from the locked tempo for a few seconds, let go and re-match
+                if (wasLocked && !flowCtrl.manualLock && Math.abs(flowCtrl.detectedCadenceBpm - flowCtrl.bpm) > 6) {
+                    flowCtrl.driftTimer += dt;
+                } else {
+                    flowCtrl.driftTimer = 0;
+                }
+                const drifted = flowCtrl.driftTimer > 4;
+                if (drifted) {
+                    flowCtrl.tapCount = Math.min(flowCtrl.tapCount, 6);
+                    spawnCallout("RE-SYNCING TO YOUR RHYTHM", width * 0.5, height * 0.30, "#7dd3fc", 1.0);
+                }
+
+                flowCtrl.resonanceLocked =
+                    flowCtrl.manualLock ||
+                    (flowCtrl.flowIndex >= 0.75 && (wasLocked ? !drifted : calibrated));
 
                 if (flowCtrl.resonanceLocked && !wasLocked && !flowCtrl.manualLock) {
                     spawnCallout("RESONANCE LOCKED • SWEET SPOT FROZEN", width * 0.5, height * 0.30, "#34d399", 1.12);
@@ -992,9 +1036,15 @@
                     flowCtrl.bpm += (flowCtrl.detectedCadenceBpm - flowCtrl.bpm) * Math.min(1.0, dt * 1.4);
                     const matchedVx = 2.85 + ((flowCtrl.bpm - 96) / 28) * 0.55;
                     flowCtrl.vx += (matchedVx - flowCtrl.vx) * Math.min(1.0, dt * 1.2);
-                    // Gap stays wide and generous (172 - 178px)
-                    flowCtrl.gapHeight = 175;
                 }
+
+                // Gap stays wide and generous at 175px; after clips cluster it eases up to 199px
+                // for a while and then glides back. Changes stay under ~2% a second so they're felt,
+                // not noticed, and the gap never gets narrower than the original.
+                if (flowCtrl.easeTimer > 0) flowCtrl.easeTimer = Math.max(0, flowCtrl.easeTimer - dt);
+                const targetGap = 175 + (flowCtrl.easeTimer > 0 ? 24 : 0);
+                const maxStep = 3.5 * dt;
+                flowCtrl.gapHeight += Math.max(-maxStep, Math.min(maxStep, targetGap - flowCtrl.gapHeight));
 
                 synth.updateSynesthesia(flowCtrl.flowIndex, flowCtrl.tier, flowCtrl.bpm, dt);
             }
