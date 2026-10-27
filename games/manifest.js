@@ -10,6 +10,15 @@ window.AISLOP_GAMES = [
     status: "house",
     hue: 168
   },
+  {
+    // First game on the shared flow engine (games/flow-engine.js)
+    id: "word-rain",
+    title: "Word Rain",
+    blurb: "Type the falling words before they reach the river. The music settles into your typing rhythm and every letter is a note.",
+    path: "games/word-rain.html",
+    status: "house",
+    hue: 200
+  },
   // Flow Toys: hand-made fidgets with no score and no losing, for keeping beside your editor
   {
     id: "resonance-glide",

@@ -1,5 +1,7 @@
 # Flow // Resonance: audit against the research brief
 
+> The engine now also exists as a shared module, `games/flow-engine.js` (see [flow-engine.md](flow-engine.md)), with the same behaviour plus three changes. Cadence is read from the median interval and fitted per game (`perBeat`). Drift re-sync pauses during autopilot. Contract tests are in `tests/flow-engine.test.cjs`. The rows below refer to Flow's own copy.
+
 This document checks the final copy of Flow // Resonance against every recommendation in [flow-engine-research.md](flow-engine-research.md). Each row names the recommendation, what the game does, where the code is, and whether it fully meets the brief.
 
 - **Code:** `index.html` on `main` (the same file as `games/flow-resonance.html` on `arcade-trial`). Code is referenced by function and constant names, so the references survive edits.

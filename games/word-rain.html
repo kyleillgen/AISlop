@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="data:,">
+<title>Word Rain</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #050a14; color: #e2e8f0; font-family: Inter, system-ui, sans-serif; }
+  canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .kbd { display: inline-block; min-width: 1.6em; padding: 0 .4em; border: 1px solid #334155; border-bottom-width: 2px; border-radius: 5px; color: #e2e8f0; font: 500 10px/1.6 'JetBrains Mono', monospace; text-align: center; }
+
+  header { position: fixed; top: 0; left: 0; right: 0; z-index: 20; padding: 8px; max-width: 42rem; margin: 0 auto; pointer-events: none; }
+  .bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(2, 6, 23, .9); border: 1px solid rgba(30, 41, 59, .9); border-radius: 16px; padding: 8px 12px; }
+  .streak small { display: block; font-size: 10px; color: #94a3b8; }
+  .streak b { font: 700 26px/1 'JetBrains Mono', monospace; color: #34d399; }
+  .streak span { font-size: 10px; color: #64748b; margin-left: 6px; }
+  .state { flex: 1; min-width: 0; max-width: 220px; }
+  .state-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+  #stateLabel { font-weight: 600; color: #67e8f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #flowPct { font: 600 10px 'JetBrains Mono', monospace; color: #6ee7b7; margin-left: 6px; }
+  .meter { height: 4px; background: rgba(30, 41, 59, .8); border-radius: 99px; overflow: hidden; }
+  #flowFill { height: 100%; width: 45%; border-radius: 99px; background: linear-gradient(90deg, #06b6d4, #34d399, #e879f9); transition: width .5s ease-out; }
+  .controls { display: flex; gap: 6px; pointer-events: auto; }
+  .chip { white-space: nowrap; padding: 6px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; background: rgba(15, 23, 42, .9); border: 1px solid rgba(51, 65, 85, .7); }
+  .chip:active { transform: scale(.95); }
+  #trackBtn { color: #67e8f9; }
+  #voiceBtn { color: #a5b4fc; }
+  .icon { padding: 6px 8px; display: flex; align-items: center; }
+  .icon svg { width: 16px; height: 16px; }
+  @media (max-width: 520px) { #voiceBtn, .streak span { display: none; } }
+
+  .overlay { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(2, 6, 23, .7); }
+  .overlay.show { display: flex; }
+  .card { max-width: 24rem; width: 100%; background: rgba(15, 23, 42, .96); border: 1px solid #1e293b; border-radius: 24px; padding: 24px; }
+  .kicker { font: 600 10px 'JetBrains Mono', monospace; letter-spacing: .3em; text-transform: uppercase; color: rgba(103, 232, 249, .8); }
+  h1 { margin: 8px 0; font-size: 27px; font-weight: 600; letter-spacing: -.01em; line-height: 1.15; color: #fff; }
+  .card p { margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: #94a3b8; }
+  .keys { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 12px; color: #94a3b8; margin-bottom: 18px; }
+  .start { width: 100%; padding: 13px; border: 0; border-radius: 16px; font-size: 16px; font-weight: 600; color: #020617; background: linear-gradient(90deg, #34d399, #5eead4, #22d3ee); }
+  .or { margin-top: 10px; text-align: center; font-size: 12px; color: #64748b; }
+  .rows div { display: flex; justify-content: space-between; font-size: 12px; color: #cbd5e1; margin: 6px 0; }
+  .note { margin-top: 10px; font-size: 12px; color: #64748b; }
+  #hint { position: fixed; bottom: 14px; left: 0; right: 0; z-index: 10; text-align: center; pointer-events: none; transition: opacity .7s; }
+  #hint div { display: inline-block; padding: 6px 14px; border-radius: 99px; font-size: 11px; color: #cbd5e1; background: rgba(2, 6, 23, .8); border: 1px solid rgba(30, 41, 59, .9); }
+  /* Brings up the phone keyboard; kept on screen (iOS won't focus hidden inputs) but invisible */
+  #typer { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<header>
+  <div class="bar">
+    <div class="streak"><small>Streak</small><b id="streak">0</b><span>best <strong id="best">0</strong></span></div>
+    <div class="state">
+      <div class="state-row"><span id="stateLabel">Finding your rhythm</span><span id="flowPct">45%</span></div>
+      <div class="meter"><div id="flowFill"></div></div>
+    </div>
+    <div class="controls">
+      <button class="chip" id="trackBtn" title="Switch track (Tab)">midnight</button>
+      <button class="chip" id="voiceBtn" title="Switch voice (Shift+Tab)">lo-fi rhodes</button>
+      <button class="chip icon" id="pauseBtn" title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg></button>
+      <button class="chip icon" id="muteBtn" title="Mute (0)" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.6l4.7-4.7c.6-.6 1.7-.2 1.7.7v14c0 .9-1.1 1.3-1.7.7z"/><path id="waves" d="M15.5 8.5a5 5 0 010 7M18.4 5.6a9 9 0 010 12.8"/><path id="cross" d="M17 10l4 4m0-4l-4 4" style="display:none"/></svg></button>
+    </div>
+  </div>
+</header>
+
+<div id="hint"><div>Type the lowest word &middot; no need to fix typos &middot; <span class="kbd">?</span> keys</div></div>
+<input id="typer" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" aria-label="Type here">
+
+<div class="overlay show" id="startCard">
+  <div class="card">
+    <div class="kicker">Word Rain</div>
+    <h1>Type the rain<br>into the river.</h1>
+    <p>Words drift down on the beat. Type the lowest one before it reaches the water. The music settles into your typing rhythm, and every letter is a note. Typos don't count against you and there's nothing to fix. Stop typing and the rain types itself.</p>
+    <div class="keys">
+      <span><span class="kbd">a–z</span> type</span>
+      <span><span class="kbd">Esc</span> pause</span>
+      <span><span class="kbd">Enter</span> autopilot</span>
+      <span><span class="kbd">Tab</span> track</span>
+    </div>
+    <button class="start" id="startBtn">Start</button>
+    <div class="or">or just start typing</div>
+  </div>
+</div>
+
+<div class="overlay" id="pauseCard">
+  <div style="text-align:center">
+    <div style="font-size:24px;font-weight:600;color:#fff">Paused</div>
+    <div style="font-size:14px;color:#94a3b8;margin-top:6px">Tap or <span class="kbd">Esc</span> to resume</div>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
+      <button class="chip" id="pTrack" style="color:#67e8f9">track</button>
+      <button class="chip" id="pVoice" style="color:#a5b4fc">voice</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="keysCard">
+  <div class="card" style="max-width:20rem;padding:20px">
+    <div style="font-weight:600;color:#fff;margin-bottom:6px">Keys</div>
+    <div class="rows">
+      <div><span>Type</span><span class="kbd">a–z</span></div>
+      <div><span>Pause</span><span class="kbd">Esc</span></div>
+      <div><span>Autopilot</span><span class="kbd">Enter</span></div>
+      <div><span>Track / voice</span><span><span class="kbd">Tab</span> <span class="kbd">Shift+Tab</span></span></div>
+      <div><span>Volume / mute</span><span><span class="kbd">-</span> <span class="kbd">=</span> <span class="kbd">0</span></span></div>
+      <div><span>Audio offset</span><span><span class="kbd">[</span> <span class="kbd">]</span></span></div>
+    </div>
+    <div class="note">Stop typing for a few seconds and the words type themselves, without scoring. Type again to take over; the next two words that reach the water are forgiven.</div>
+  </div>
+</div>
+
+<script src="flow-engine.js"></script>
+<script>
+(() => {
+  "use strict";
+
+  // Calm, common words, 3-7 letters
+  const WORDS = (
+    "rain moss tide fern reed dune cove glen mist dew pond lake reef cliff brook creek river stream delta marsh " +
+    "cedar maple birch aspen willow alder oak pine elm ash yew larch spruce hazel holly ivy clover thyme sage mint " +
+    "lily lotus poppy tulip iris daisy aster lilac orchid violet petal bloom seed root stem leaf bark twig acorn " +
+    "ember flame spark glow lamp candle hearth smoke cloud storm thunder breeze gust wind calm still quiet hush " +
+    "drift float glide sway swirl ripple wave swell crest shore sand stone pebble shell coral pearl amber jade " +
+    "dawn dusk noon night moon star comet orbit solar lunar north south east west field meadow grove forest trail " +
+    "path road bridge harbor island valley canyon summit ridge slope hill peak cave echo tone chord note tune song " +
+    "hum beat pulse rhythm tempo flow focus mind think dream rest sleep wake breathe slow steady easy light soft " +
+    "warm cool fresh clear bright gentle kind open free whole true clean plain simple small quick sharp deep wide " +
+    "blue green amber gold silver copper rust indigo teal cyan coral plum olive cream ivory honey ink paper page " +
+    "book word line verse rhyme story letter quill desk lamp chair window door roof attic garden porch fence gate " +
+    "kettle teapot mug bread butter apple pear plum fig olive lemon orange cherry berry melon grape peach " +
+    "otter heron crane robin wren finch swift lark owl hawk fox deer hare badger beaver salmon trout seal whale " +
+    "build code test merge ship patch fix bug loop byte cache queue stack array string commit branch deploy compile"
+  ).split(" ");
+
+  const TIER_COLORS = ["", "#38bdf8", "#34d399", "#c084fc", "#f472b6"];
+  const TIER_NAMES = ["", "Finding your rhythm", "Steady rain", "Downpour", "Monsoon"];
+  const BG = [
+    null,
+    ["#050a14", "#0a1626"],
+    ["#04100f", "#0a2321"],
+    ["#0a0818", "#170f30"],
+    ["#12061a", "#1d0b2c"]
+  ];
+  const REDUCED = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const eng = FlowEngine.create({
+    key: "wordRain",
+    // Keystrokes per beat: the typing stride, not one tap per beat. The in-between counts
+    // leave no gaps, so any pace from ~120 to ~620 ms a key fits the 96-124 band.
+    perBeat: [1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4],
+    minMs: 60,
+    maxMs: 900,
+    stableTol: 2.5, // typing is raggeder than tapping
+    idleSec: 4, // people pause to think while typing; give them longer than Flow does
+    phaseFollow: false // keystrokes aren't aimed at the beat, so don't drag the grid with them
+  });
+  window.flowTelemetry = () => eng.history();
+  // Read-only snapshot for automated play tests
+  window.wordRainState = () => {
+    const w = activeWord();
+    return { active: w ? w.text.slice(w.typed) : null, onScreen: words.filter((x) => x.state === "falling").length, streak: eng.streak, tier: eng.tier, bpm: +eng.bpm.toFixed(1), locked: eng.locked, auto: eng.auto, spacingBeats };
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("c");
+  const ctx = canvas.getContext("2d", { alpha: false });
+  const typer = $("typer");
+  let W = 0, H = 0, dpr = 1, waterY = 0;
+
+  function resize() {
+    const vv = window.visualViewport;
+    W = window.innerWidth;
+    H = vv ? Math.round(vv.height) : window.innerHeight; // stay above a phone keyboard
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.height = H + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    waterY = Math.round(H - Math.max(70, H * 0.16));
+    bgKey = "";
+    initRain();
+  }
+
+  // ---- World state ---------------------------------------------------------------------
+  const TOP_Y = 96;
+  let words = [];
+  let particles = [];
+  let ripples = [];
+  let callouts = [];
+  let rain = [];
+  let beatsSinceSpawn = 99;
+  let spacingBeats = 4; // follows the player's own pace (see complete)
+  let wordSec = null; // how long you take per word: first key to last, plus reading time
+  let phrase = 0;
+  let phraseClean = true;
+  let kick = 0;
+  let ghostClock = 0;
+  let recentLanes = [];
+  let bgKey = "";
+  let bgGrad = null;
+  let waterGrad = null;
+
+  function initRain() {
+    rain = [];
+    for (let i = 0; i < 90; i++) {
+      rain.push({ x: Math.random() * W, y: Math.random() * H, len: 8 + Math.random() * 14, v: 380 + Math.random() * 260 });
+    }
+  }
+
+  const FONT_PX = () => (W < 520 ? 22 : 26);
+  function spawnWord(beat) {
+    const lanes = 5;
+    let lane;
+    do lane = Math.floor(Math.random() * lanes);
+    while (recentLanes.includes(lane));
+    recentLanes.push(lane);
+    if (recentLanes.length > 2) recentLanes.shift();
+    const margin = Math.min(110, W * 0.18);
+    const x = margin + ((lane + 0.5) / lanes) * (W - margin * 2);
+    let text;
+    do text = WORDS[Math.floor(Math.random() * WORDS.length)];
+    while (words.some((w) => w.text === text));
+    // Assist (after misses) slows the fall and is fixed when the word appears off-screen
+    const fallBeats = Math.round(10 + 5 * eng.assist);
+    words.push({ text, x, spawnBeat: beat, fallBeats, typed: 0, errors: 0, state: "falling", fade: 1, shake: 0, ghost: false });
+  }
+
+  const progressOf = (w) => (eng.beatPos() - w.spawnBeat) / w.fallBeats;
+  const yOf = (w) => TOP_Y - 20 + Math.min(1, progressOf(w)) * (waterY - TOP_Y + 4);
+  function activeWord() {
+    let best = null;
+    for (const w of words) if (w.state === "falling" && (!best || w.spawnBeat < best.spawnBeat)) best = w;
+    return best;
+  }
+
+  eng.on("beat", (n) => {
+    kick = 1;
+    if (!started || eng.paused) return;
+    beatsSinceSpawn++;
+    const falling = words.filter((w) => w.state === "falling").length;
+    if (beatsSinceSpawn >= spacingBeats && falling < 4) {
+      spawnWord(n);
+      beatsSinceSpawn = 0;
+    }
+  });
+  eng.on("lock", () => callout("In sync", W / 2, H * 0.3, "#5eead4", 1.05));
+  eng.on("auto", hud);
+  eng.on("manual", hud);
+  eng.on("pause", (on) => {
+    if (on === "build-done") callout("Build done", W / 2, H * 0.3, "#e2e8f0", 1.1);
+    hud();
+  });
+
+  // ---- Typing ----------------------------------------------------------------------------
+  let started = false;
+  function start() {
+    if (started) return;
+    started = true;
+    eng.start();
+    $("startCard").classList.remove("show");
+    beatsSinceSpawn = 99; // first word on the next beat
+    hud();
+  }
+
+  function typeLetter(ch) {
+    if (!started) start();
+    if (eng.paused) return;
+    $("hint").style.opacity = "0";
+    const w = activeWord();
+    if (!w) {
+      eng.tap({ note: false });
+      return;
+    }
+    if (ch === w.text[w.typed]) {
+      if (w.typed === 0 || w.ghost) w.firstKeyMs = performance.now();
+      w.typed++;
+      w.ghost = false;
+      // Each word climbs the scale as you type it
+      eng.tap({ height: 0.85 - 0.7 * (w.typed / w.text.length) });
+      const lx = letterX(w, w.typed - 1);
+      burst(lx, yOf(w) - 8, color(), 3, -1);
+      if (w.typed === w.text.length) complete(w, false);
+    } else {
+      // A typo costs nothing: it still counts toward your rhythm, and there's nothing to fix
+      eng.tap({ note: false });
+      eng.error();
+      w.errors++;
+      w.shake = 0.22;
+    }
+  }
+
+  function complete(w, ghost) {
+    w.state = "done";
+    const y = yOf(w);
+    for (let i = 0; i < w.text.length; i++) burst(letterX(w, i), y, ghost ? "#64748b" : color(), 2, 1);
+    ripple(w.x, ghost ? 0.5 : 1);
+    if (ghost) return;
+    const perfect = w.errors === 0 && progressOf(w) < 0.6;
+    const tierUp = eng.score(1, perfect ? "PERFECT" : "CLEAN");
+    if (tierUp && eng.milestones) callout(TIER_NAMES[eng.tier], W / 2, H * 0.3, color(), 1.2);
+    // Words arrive at the pace you type them: your time per word (first key to last, plus
+    // 0.6 s to read the next one) with 15% slack, in whole beats. Measured from your typing,
+    // not from gaps between words, so waiting never feeds back into slower spawns.
+    if (w.firstKeyMs) {
+      const sec = Math.min(6, (performance.now() - w.firstKeyMs) / 1000 + 0.6);
+      wordSec = wordSec === null ? sec : wordSec * 0.75 + sec * 0.25;
+      spacingBeats = Math.max(2, Math.min(8, Math.round((wordSec * 1.15) / eng.beatSec + 2 * eng.assist)));
+    }
+    // Phrase celebration: every 8 words, if none reached the water
+    if (++phrase >= 8) {
+      if (phraseClean) {
+        eng.chime();
+        ripple(W / 2, 2.4);
+      }
+      phrase = 0;
+      phraseClean = true;
+    }
+    hud();
+  }
+
+  function reachWater(w) {
+    w.state = "sunk";
+    ripple(w.x, 0.8);
+    if (eng.auto) return; // autopilot never costs anything
+    if (eng.clip()) {
+      phraseClean = false;
+      if (!REDUCED) flash = 0.25;
+    }
+    hud();
+  }
+
+  // ---- Effects ---------------------------------------------------------------------------
+  let flash = 0;
+  const color = () => TIER_COLORS[eng.tier];
+  function burst(x, y, c, n, dir) {
+    if (REDUCED) n = Math.ceil(n / 2);
+    for (let i = 0; i < n && particles.length < 140; i++) {
+      particles.push({ x, y, vx: (Math.random() - 0.5) * 60, vy: dir > 0 ? 60 + Math.random() * 120 : -40 - Math.random() * 60, a: 1, c });
+    }
+  }
+  function ripple(x, size) {
+    ripples.push({ x, r: 4, max: 40 + 50 * size, a: 0.8 });
+  }
+  function callout(text, x, y, c, scale = 1) {
+    callouts.push({ text, x, y, vy: -0.55, a: 1, c, scale });
+  }
+  function letterX(w, i) {
+    const cw = FONT_PX() * 0.6;
+    return w.x - (w.text.length * cw) / 2 + cw * (i + 0.5);
+  }
+
+  // ---- Frame -----------------------------------------------------------------------------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
+    last = now;
+    eng.update(dt);
+    if (!eng.paused) {
+      step(dt);
+      draw(now / 1000);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function step(dt) {
+    kick = Math.max(0, kick - dt * 4.2);
+    flash = Math.max(0, flash - dt * 1.4);
+
+    // Autopilot: the active word types itself at a gentle three letters a beat, scoring nothing
+    if (eng.auto && started) {
+      ghostClock += dt;
+      const w = activeWord();
+      if (w && ghostClock > eng.beatSec / 3) {
+        ghostClock = 0;
+        w.typed++;
+        w.ghost = true;
+        if (w.typed >= w.text.length) complete(w, true);
+      }
+    }
+
+    for (const w of words) {
+      w.shake = Math.max(0, w.shake - dt);
+      if (w.state === "falling" && progressOf(w) >= 1) reachWater(w);
+      if (w.state !== "falling") w.fade -= dt * 2.2;
+    }
+    words = words.filter((w) => w.fade > 0);
+
+    const wind = 40 + eng.tier * 10;
+    const density = [0, 40, 60, 75, 90][eng.tier];
+    rain.forEach((d, i) => {
+      if (i >= density) return;
+      d.y += d.v * dt * (1 - 0.3 * eng.ctrl.windDown);
+      d.x -= wind * dt * 0.3;
+      if (d.y > waterY) {
+        d.y = TOP_Y - 20 - Math.random() * 60;
+        d.x = Math.random() * (W + 60);
+      }
+      if (d.x < -20) d.x += W + 40;
+    });
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 260 * dt;
+      p.a -= dt * 1.6;
+      if (p.y > waterY) p.a = 0;
+      if (p.a <= 0) particles.splice(i, 1);
+    }
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const r = ripples[i];
+      r.r += (r.max - r.r) * dt * 2.6;
+      r.a -= dt * 0.9;
+      if (r.a <= 0) ripples.splice(i, 1);
+    }
+    for (let i = callouts.length - 1; i >= 0; i--) {
+      const c = callouts[i];
+      c.y += c.vy * dt * 60;
+      c.vy *= Math.pow(0.97, dt * 60);
+      c.a -= dt * 0.7;
+      if (c.a <= 0) callouts.splice(i, 1);
+    }
+  }
+
+  function draw(t) {
+    const tier = eng.tier;
+    const col = color();
+    const key = tier + "|" + W + "|" + H;
+    if (key !== bgKey) {
+      bgKey = key;
+      bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+      bgGrad.addColorStop(0, BG[tier][0]);
+      bgGrad.addColorStop(1, BG[tier][1]);
+      waterGrad = ctx.createLinearGradient(0, waterY, 0, H);
+      waterGrad.addColorStop(0, "rgba(14, 116, 144, 0.32)");
+      waterGrad.addColorStop(1, "rgba(2, 6, 23, 0.9)");
+    }
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Rain: one path, thin and faint
+    const density = [0, 40, 60, 75, 90][tier];
+    ctx.strokeStyle = `rgba(148, 197, 255, ${0.16 + kick * 0.08})`;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < density; i++) {
+      const d = rain[i];
+      ctx.moveTo(d.x, d.y);
+      ctx.lineTo(d.x - 3, d.y + d.len);
+    }
+    ctx.stroke();
+
+    // Water: a gently breathing surface
+    ctx.fillStyle = waterGrad;
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let x = 0; x <= W + 24; x += 24) {
+      ctx.lineTo(x, waterY + Math.sin(x * 0.018 + t * 1.3) * (2 + kick * 1.5));
+    }
+    ctx.lineTo(W, H);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.35 + kick * 0.2;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Ripples on the water
+    ctx.lineWidth = 1.5;
+    for (const r of ripples) {
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = Math.max(0, r.a);
+      ctx.beginPath();
+      ctx.ellipse(r.x, waterY + 4, r.r, r.r * 0.22, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // Words
+    const px = FONT_PX();
+    const cw = px * 0.6;
+    ctx.font = `600 ${px}px 'JetBrains Mono', monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    const active = activeWord();
+    for (const w of words) {
+      const y = yOf(w);
+      const isActive = w === active;
+      const sx = w.shake > 0 && !REDUCED ? Math.sin(w.shake * 70) * 3 : 0;
+      const baseAlpha = w.state === "falling" ? (isActive ? 1 : 0.5) : Math.max(0, w.fade) * 0.7;
+      const x0 = w.x - (w.text.length * cw) / 2 + sx;
+      if (isActive) {
+        // A soft line under the word you're typing, filling as you go
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = col;
+        ctx.fillRect(x0, y + 7, w.text.length * cw, 2);
+        ctx.globalAlpha = 0.9;
+        ctx.fillRect(x0, y + 7, w.typed * cw, 2);
+      }
+      for (let i = 0; i < w.text.length; i++) {
+        const typed = i < w.typed;
+        ctx.globalAlpha = baseAlpha * (typed ? 1 : 0.82);
+        ctx.fillStyle = typed ? (w.ghost ? "#94a3b8" : col) : "#e2e8f0";
+        ctx.fillText(w.text[i], x0 + cw * (i + 0.5), y);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.a);
+      ctx.fillStyle = p.c;
+      ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.textAlign = "center";
+    for (const c of callouts) {
+      ctx.font = `600 ${Math.round(15 * c.scale)}px Inter, sans-serif`;
+      ctx.globalAlpha = Math.max(0, Math.min(1, (1 - c.a) * 8, c.a));
+      ctx.fillStyle = c.c;
+      ctx.fillText(c.text, c.x, c.y);
+    }
+    ctx.globalAlpha = 1;
+
+    if (flash > 0) {
+      ctx.fillStyle = `rgba(56, 189, 248, ${flash * 0.18})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // ---- HUD -------------------------------------------------------------------------------
+  let lastHud = 0;
+  function hud() {
+    $("streak").textContent = eng.streak;
+    $("best").textContent = Math.max(eng.ctrl.best, bestSaved);
+    const pct = Math.round(eng.flowIndex * 100);
+    $("flowPct").textContent = pct + "%";
+    $("flowFill").style.width = pct + "%";
+    let label = eng.tier === 1 ? (eng.locked ? "In sync" : TIER_NAMES[1]) : TIER_NAMES[eng.tier];
+    let c = TIER_COLORS[eng.tier];
+    if (eng.paused) [label, c] = ["Paused", "#94a3b8"];
+    else if (eng.auto && started) [label, c] = ["Autopilot · type to take over", "#fcd34d"];
+    $("stateLabel").textContent = label;
+    $("stateLabel").style.color = c;
+    $("trackBtn").textContent = eng.trackName.toLowerCase();
+    $("voiceBtn").textContent = eng.voiceName.toLowerCase();
+    $("pTrack").textContent = "track: " + eng.trackName.toLowerCase();
+    $("pVoice").textContent = "voice: " + eng.voiceName.toLowerCase();
+    $("waves").style.display = eng.muted ? "none" : "";
+    $("cross").style.display = eng.muted ? "" : "none";
+    if (eng.ctrl.best > bestSaved) {
+      bestSaved = eng.ctrl.best;
+      try { localStorage.setItem("wordRain.best", String(bestSaved)); } catch (e) {}
+    }
+  }
+  let bestSaved = 0;
+  try { bestSaved = parseInt(localStorage.getItem("wordRain.best") || "0", 10) || 0; } catch (e) {}
+  setInterval(() => !eng.paused && hud(), 250);
+
+  // ---- Controls --------------------------------------------------------------------------
+  function setPaused(on) {
+    if (!started) return;
+    eng.pause(on);
+    $("pauseCard").classList.toggle("show", on);
+    hud();
+  }
+  const keysShown = () => $("keysCard").classList.contains("show");
+  const press = (id, fn) => $(id).addEventListener("pointerdown", (e) => { e.stopPropagation(); e.preventDefault(); fn(); hud(); });
+  press("trackBtn", () => callout(eng.cycleTrack().toLowerCase(), W / 2, 130, "#67e8f9", 0.95));
+  press("voiceBtn", () => callout(eng.cycleVoice().toLowerCase(), W / 2, 130, "#a5b4fc", 0.95));
+  press("pTrack", () => eng.cycleTrack());
+  press("pVoice", () => eng.cycleVoice());
+  press("pauseBtn", () => setPaused(!eng.paused));
+  press("muteBtn", () => eng.toggleMute());
+  press("startBtn", () => { start(); typer.focus(); });
+  $("pauseCard").addEventListener("pointerdown", () => setPaused(false));
+  $("keysCard").addEventListener("pointerdown", () => $("keysCard").classList.remove("show"));
+  // Tapping the game focuses the hidden input, which brings up a phone's keyboard
+  canvas.addEventListener("pointerdown", () => {
+    typer.focus();
+    if (!started) start();
+  });
+  $("startCard").addEventListener("pointerdown", (e) => {
+    if (e.target === $("startCard")) { start(); typer.focus(); }
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (keysShown() && e.key !== "?") {
+      $("keysCard").classList.remove("show");
+      if (e.key === "Escape") return;
+    }
+    if (e.key.length === 1 && /[a-z]/i.test(e.key)) {
+      e.preventDefault();
+      if (e.repeat) return;
+      typeLetter(e.key.toLowerCase());
+      return;
+    }
+    if (e.repeat) return;
+    if (e.key === "Escape") setPaused(!eng.paused);
+    else if (e.key === "Enter" && started) eng.setAuto(!eng.auto);
+    else if (e.key === "Tab") {
+      e.preventDefault();
+      const name = e.shiftKey ? eng.cycleVoice() : eng.cycleTrack();
+      callout(name.toLowerCase(), W / 2, 130, e.shiftKey ? "#a5b4fc" : "#67e8f9", 0.95);
+    } else if (e.key === "-") callout(`Volume ${Math.round(eng.changeVolume(-0.1) * 100)}%`, W / 2, 130, "#94a3b8", 0.95);
+    else if (e.key === "=" || e.key === "+") callout(`Volume ${Math.round(eng.changeVolume(0.1) * 100)}%`, W / 2, 130, "#94a3b8", 0.95);
+    else if (e.key === "0") eng.toggleMute();
+    else if (e.key === "[" || e.key === "]") {
+      const ms = eng.adjustOffset(e.key === "[" ? -10 : 10);
+      callout(`Audio offset ${ms > 0 ? "+" : ""}${ms} ms`, W / 2, 130, "#94a3b8", 0.95);
+    } else if (e.key === "?") $("keysCard").classList.toggle("show");
+    else return;
+    hud();
+  });
+  // Phone keyboards deliver text through the input, not reliable keydowns
+  typer.addEventListener("input", () => {
+    const v = typer.value;
+    typer.value = "";
+    for (const ch of v.toLowerCase()) if (ch >= "a" && ch <= "z") typeLetter(ch);
+  });
+  typer.addEventListener("keydown", (e) => {
+    // Desktop: the window handler already took the letter; stop it reaching the input too
+    if (e.key.length === 1) e.preventDefault();
+  });
+
+  window.addEventListener("resize", resize);
+  if (window.visualViewport) visualViewport.addEventListener("resize", resize);
+  resize();
+  hud();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

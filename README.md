@@ -13,3 +13,9 @@ Four tracks (**MIDNIGHT**, **GOLDEN HOUR**, **DEEP SEA**, **RAIN ON GLASS**) in 
 Design follows a sourced research brief ([docs/flow-engine-research.md](docs/flow-engine-research.md)), and [docs/flow-engine-audit.md](docs/flow-engine-audit.md) maps each recommendation to the code. Session measurements stay on your device (`flowTelemetry()` in the console). Experiment switches: `?phase=frozen`, `?milestones=off`.
 
 Play at https://kyleillgen.github.io/AISlop/ or open `games/flow-resonance.html`.
+
+## Word Rain and the flow engine
+
+Flow's engine now lives in its own module, [`games/flow-engine.js`](games/flow-engine.js). It handles tempo matching, the generated music, autopilot, stopping cues and on-device measurement for any rhythm micro-game. API and design: [docs/flow-engine.md](docs/flow-engine.md). Tests: `node --test tests/flow-engine.test.cjs`.
+
+**Word Rain** is the first game built on it: words drift down on the beat and you type them before they reach the river. The music settles into your typing rhythm, every letter is a note, and typos cost nothing. Stop typing and the rain types itself. Open `games/word-rain.html`.
