@@ -1,0 +1,13 @@
+{
+  "name": "aislop-sandbox",
+  "private": true,
+  "type": "module",
+  "description": "Local-only generate → scrap/fix → submit loop for the AISlop Arcade.",
+  "scripts": {
+    "mock": "node server.mjs",
+    "live": "node server.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0"
+  }
+}

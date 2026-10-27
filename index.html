@@ -58,6 +58,28 @@
   #player .top strong { flex: 1; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #player .top .btn { flex: none; padding: 7px 12px; }
   #player iframe { flex: 1; width: 100%; border: 0; background: #000; }
+  .studio { max-width: 720px; display: flex; flex-direction: column; gap: 12px; }
+  .studio-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .concept-label { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .concept { font-size: 15px; margin-top: 4px; line-height: 1.4; }
+  .moves { display: flex; gap: 6px; padding-top: 4px; }
+  .moves i { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); display: block; }
+  .moves i.used { background: var(--panel-2); border: 1px solid var(--line); }
+  .stage { position: relative; height: min(68vh, 560px); background: #000; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .stage iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .stage-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 24px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  .stage.busy .stage-msg { background: rgba(0,0,0,0.7); color: var(--text); }
+  .studio-controls { display: flex; }
+  .studio-controls .btn { flex: none; padding: 11px 22px; }
+  .fixrow { display: flex; flex-direction: column; gap: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chips button { background: var(--panel-2); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: 12px; padding: 6px 10px; border-radius: 999px; cursor: pointer; }
+  .fixline { position: relative; }
+  .fixline input, #sTitle { width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 11px 50px 11px 12px; font: inherit; font-size: 15px; }
+  #sTitle { padding-right: 12px; flex: 2; }
+  .fixline .left { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--muted); }
+  .log { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .err { color: var(--trash); font-size: 13px; }
   footer { max-width: 1040px; margin: 0 auto; padding: 0 16px 30px; color: var(--muted); font-size: 12px; }
 </style>
 </head>
@@ -88,7 +110,42 @@
     <div class="grid" id="g-slop"></div>
   </section>
   <section data-panel="generate" hidden>
-    <div class="gen">
+    <!-- Studio: only appears when the local sandbox server (with the API) is running -->
+    <div class="studio" id="studio" hidden>
+      <div class="studio-head">
+        <div>
+          <div class="concept-label">Your random game</div>
+          <div class="concept" id="sConcept">Roll a game to get started.</div>
+        </div>
+        <div class="moves" id="sMoves" title="Moves left: each Scrap or Fix uses one"></div>
+      </div>
+      <div class="stage" id="sStage">
+        <iframe id="sFrame" sandbox="allow-scripts" title="Your game" hidden></iframe>
+        <div class="stage-msg" id="sMsg">You get one random game and <b>3 moves</b>. Scrap it for a new one, or Fix it with a short instruction.</div>
+      </div>
+      <div class="studio-controls" id="sControls">
+        <button class="btn play" id="sRoll">Roll a game</button>
+      </div>
+      <div class="fixrow" id="sFixRow" hidden>
+        <div class="chips" id="sChips"></div>
+        <div class="fixline">
+          <input id="sFix" maxlength="100" placeholder="What should change? (100 characters)">
+          <span class="left" id="sFixLeft">100</span>
+        </div>
+        <div class="actions">
+          <button class="btn keep" id="sFixBtn">Fix it</button>
+          <button class="btn trash" id="sScrap">Scrap it</button>
+        </div>
+      </div>
+      <div class="actions" id="sDone" hidden>
+        <input id="sTitle" maxlength="40" placeholder="Name it">
+        <button class="btn play" id="sSubmit">Submit to Fresh</button>
+        <button class="btn" id="sDiscard">Let it go</button>
+      </div>
+      <ol class="log" id="sLog"></ol>
+      <div class="hint" id="sMode"></div>
+    </div>
+    <div class="gen" id="issueGen">
       <p class="intro" style="margin:0">Describe a game. Keep it small: one screen, one or two controls, playable with a tap and with a keyboard.</p>
       <textarea id="idea" placeholder="e.g. A moth that has to stay near a flickering lamp while gusts of wind push it around"></textarea>
       <button class="btn" id="submitIdea">Request this game</button>
@@ -120,7 +177,7 @@
   "use strict";
   const REPO = "kyleillgen/AISlop";
   const STORE = "aislop.arcade.v1";
-  const games = window.AISLOP_GAMES || [];
+  const games = (window.AISLOP_GAMES || []).slice();
 
   // { votes: {id: "keep"|"trash"}, played: {id: true} }
   let saved = { votes: {}, played: {} };
@@ -250,8 +307,128 @@
     window.open(url, "_blank", "noopener");
   });
 
+  // Studio: the 3-move generate → scrap/fix → submit loop. Only active when the local
+  // sandbox server answers /api/status; the public site keeps the issue form above.
+  const QUICK_FIXES = ["It's too hard", "It's too easy", "Controls feel off", "Something's broken", "Make it prettier", "Add sound"];
+  const $ = (id) => document.getElementById(id);
+  let studioRun = null;
+
+  async function call(method, url, data) {
+    const r = await fetch(url, {
+      method,
+      headers: data ? { "Content-Type": "application/json" } : {},
+      body: data ? JSON.stringify(data) : undefined
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "Request failed");
+    return j;
+  }
+
+  function setError(msg) {
+    let e = $("sErr");
+    if (!e) { e = el("div", "err"); e.id = "sErr"; $("studio").insertBefore(e, $("sLog")); }
+    e.textContent = msg || "";
+  }
+
+  function showRun(run) {
+    studioRun = run;
+    $("sConcept").textContent = run.concept;
+    const pips = $("sMoves");
+    pips.replaceChildren();
+    for (let i = 0; i < 3; i++) {
+      const pip = el("i", i < run.movesLeft ? "" : "used");
+      pips.appendChild(pip);
+    }
+    $("sFrame").hidden = false;
+    $("sFrame").src = run.url;
+    $("sMsg").hidden = true;
+    $("sControls").hidden = true;
+    $("sFixRow").hidden = run.movesLeft <= 0;
+    $("sDone").hidden = false;
+    $("sLog").replaceChildren(...run.history.map((h) =>
+      el("li", "", h.type === "fix" ? `Fixed: “${h.text}”` : "Scrapped and re-rolled")));
+  }
+
+  function clearRun() {
+    studioRun = null;
+    $("sConcept").textContent = "Roll a game to get started.";
+    $("sMoves").replaceChildren();
+    $("sFrame").hidden = true;
+    $("sFrame").src = "about:blank";
+    $("sMsg").hidden = false;
+    $("sMsg").innerHTML = "You get one random game and <b>3 moves</b>. Scrap it for a new one, or Fix it with a short instruction.";
+    $("sControls").hidden = false;
+    $("sFixRow").hidden = true;
+    $("sDone").hidden = true;
+    $("sLog").replaceChildren();
+    $("sFix").value = ""; $("sTitle").value = "";
+    updateFixLeft();
+  }
+
+  async function act(label, fn) {
+    setError("");
+    const stage = $("sStage");
+    const buttons = $("studio").querySelectorAll("button, input");
+    buttons.forEach((b) => { b.disabled = true; });
+    stage.classList.add("busy");
+    $("sMsg").hidden = false;
+    $("sMsg").textContent = label;
+    try {
+      await fn();
+    } catch (e) {
+      setError(e.message);
+      if (studioRun) $("sMsg").hidden = true; else clearRun();
+    } finally {
+      stage.classList.remove("busy");
+      buttons.forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  function updateFixLeft() { $("sFixLeft").textContent = 100 - $("sFix").value.length; }
+
+  async function detectSandbox() {
+    let status;
+    try { status = await call("GET", "/api/status"); } catch (e) { return; }
+    $("studio").hidden = false;
+    $("issueGen").hidden = true;
+    document.querySelector('[data-tab="generate"]').textContent = "+ Make one";
+    $("sMode").textContent = status.mode === "live"
+      ? `Live: ${status.model}, ${status.callsLeft} model calls left on this server run.`
+      : "Mock mode (no API key): rolls use the seed games, and fixes show a banner instead of changing the game.";
+    for (const q of QUICK_FIXES) {
+      const chip = el("button", "", q);
+      chip.addEventListener("click", () => { $("sFix").value = q; updateFixLeft(); $("sFix").focus(); });
+      $("sChips").appendChild(chip);
+    }
+    if (status.run) showRun(status.run);
+    try {
+      for (const f of await call("GET", "/api/fresh")) if (!games.some((g) => g.id === f.id)) games.push(f);
+      render();
+    } catch (e) {}
+  }
+
+  $("sRoll").addEventListener("click", () => act("Rolling a random game…", async () => showRun(await call("POST", "/api/new"))));
+  $("sScrap").addEventListener("click", () => act("Scrapping it and rolling a new one…", async () => showRun(await call("POST", "/api/scrap"))));
+  $("sFixBtn").addEventListener("click", () => act("Applying your fix…", async () => {
+    const text = $("sFix").value.trim();
+    if (!text) throw new Error("Say what to change first.");
+    showRun(await call("POST", "/api/fix", { text }));
+    $("sFix").value = ""; updateFixLeft();
+  }));
+  $("sFix").addEventListener("input", updateFixLeft);
+  $("sSubmit").addEventListener("click", () => act("Submitting…", async () => {
+    const entry = await call("POST", "/api/submit", { title: $("sTitle").value });
+    games.push(entry);
+    clearRun(); render(); show("fresh");
+  }));
+  $("sDiscard").addEventListener("click", () => act("Letting it go…", async () => {
+    await call("POST", "/api/discard");
+    clearRun();
+  }));
+
   render();
   show(games.some((g) => shelf(g) === "fresh") ? "fresh" : "arcade");
+  detectSandbox();
 })();
 </script>
 </body>
