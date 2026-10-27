@@ -6,7 +6,7 @@
     <link rel="icon" href="data:,">
     <title>Flow // Resonance</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500;700;800&family=Righteous&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
     <style>
         * {
             box-sizing: border-box;
@@ -55,128 +55,94 @@
         }
     </style>
 </head>
-<body class="relative w-full h-full select-none overflow-hidden bg-[#05070e]">
+<body class="relative w-full h-full select-none overflow-hidden bg-[#140f0c]">
 
     <!-- Full-Viewport Interactive Canvas -->
     <canvas id="gameCanvas" class="absolute inset-0 z-0"></canvas>
 
-    <!-- Top Cybernetic Telemetry & Synesthesia HUD -->
-    <header id="hudHeader" class="absolute top-0 left-0 right-0 z-20 p-2 sm:p-3 pointer-events-none flex flex-col gap-1.5 max-w-2xl mx-auto">
-        
-        <!-- Primary Card: Streak, Tier/Shield, Resonance Meter, and Live Controls -->
-        <div class="flex items-center justify-between gap-2 bg-slate-950/90 border border-slate-800/90 rounded-2xl px-3 py-2">
-            
-            <!-- Left: Streak & Rechargeable Shield Indicator -->
-            <div class="flex items-center gap-2.5">
-                <div class="flex flex-col">
-                    <div class="flex items-center gap-1.5">
-                        <span class="text-[10px] tracking-wide text-slate-400">Streak</span>
-                        <span id="shieldBadge" class="whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold uppercase tracking-wider bg-slate-800/90 text-slate-400 border border-slate-700/60 transition-all duration-300">
-                            SHIELD 0%
-                        </span>
-                    </div>
-                    <div class="flex items-baseline gap-2 mt-0.5">
-                        <span id="streakDisplay" class="text-2xl sm:text-3xl font-black font-mono-tech text-[#ffc21a] tracking-tight leading-none">0</span>
-                        <span class="hidden sm:inline text-[10px] text-slate-500">best <strong id="bestStreakDisplay" class="text-slate-300 font-mono-tech">0</strong></span>
-                    </div>
-                </div>
+    <!-- Backbox: 7-segment streak, insert-light flow meter, cream buttons (pinball-skin.js) -->
+    <header id="hudHeader" class="absolute top-0 left-0 right-0 z-20 p-2 sm:p-3 pointer-events-none max-w-2xl mx-auto">
+        <div class="pb-bar">
+            <div>
+                <span class="pb-cap">Streak <span id="shieldBadge" class="pb-badge">shield 0%</span></span>
+                <span class="pb-window" id="streakSeg"></span><span class="pb-best hidden sm:inline">best <b id="bestStreakDisplay">0</b></span>
+                <span id="streakDisplay" hidden>0</span>
             </div>
-
-            <!-- Center: Continuous Flow Resonance % & 4-Tier Evolution Label -->
-            <div class="flex flex-col items-center flex-1 min-w-0 max-w-[165px] sm:max-w-[230px] px-1">
-                <div class="w-full flex items-center justify-between text-[9px] sm:text-[10px] font-mono-tech mb-1">
-                    <span id="stateLabel" class="font-semibold text-[#7aa2ff] truncate" style="font-family: Inter, sans-serif">Finding your tempo</span>
-                    <span id="flowPctDisplay" class="font-bold text-[#ffc21a] ml-1">45%</span>
-                </div>
-                <div class="w-full h-1 bg-slate-800/80 rounded-full overflow-hidden">
-                    <div id="flowBarFill" class="h-full rounded-full bg-[#3d7bff] transition-[width] duration-500 ease-out" style="width: 45%"></div>
-                </div>
+            <div class="flex-1 min-w-0 max-w-[220px]">
+                <span id="stateLabel" class="pb-label text-[#7aa2ff]">Finding your tempo</span>
+                <div class="pb-lights" id="flowLights"></div>
+                <span id="flowPctDisplay" hidden>45%</span><div id="flowBarFill" hidden></div>
             </div>
-
-            <!-- Right: Track, Groove Voice & Audio Mute (cadence lock lives on the L key) -->
-            <div class="flex items-center gap-1 sm:gap-1.5 pointer-events-auto">
-                <button id="trackBtn" type="button" title="Switch track (T)" class="whitespace-nowrap px-2.5 py-1.5 rounded-xl text-[11px] font-medium lowercase border transition-all active:scale-95 bg-slate-900/90 text-[#ffc21a] border-slate-700/70">
-                    <span id="phraseReadout">MIDNIGHT</span>
+            <div class="flex items-center gap-[7px] pointer-events-auto">
+                <button id="trackBtn" type="button" title="Switch track (T)" class="pb-btn"><span id="phraseReadout">MIDNIGHT</span></button>
+                <button id="voiceBtn" type="button" title="Switch groove voice (V)" class="pb-btn hidden sm:inline-block">LO-FI RHODES</button>
+                <button id="pauseBtn" type="button" aria-label="Pause (P)" title="Pause (P)" class="pb-btn pb-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
                 </button>
-                <button id="voiceBtn" type="button" title="Switch groove voice (V)" class="hidden sm:inline-block whitespace-nowrap px-2.5 py-1.5 rounded-xl text-[11px] font-medium lowercase border transition-all active:scale-95 bg-slate-900/90 text-[#ff4f9e] border-slate-700/70">
-                    LO-FI RHODES
-                </button>
-                <button id="pauseBtn" type="button" aria-label="Pause (P)" title="Pause (P)" class="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/70 transition-all active:scale-95">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>
-                </button>
-                <button id="muteBtn" type="button" aria-label="Toggle Audio" class="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/70 transition-all active:scale-95">
-                    <svg id="speakerOnIcon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-[#ffc21a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                    </svg>
-                    <svg id="speakerOffIcon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-                    </svg>
+                <button id="muteBtn" type="button" aria-label="Toggle Audio" class="pb-btn pb-icon">
+                    <svg id="speakerOnIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+                    <svg id="speakerOffIcon" xmlns="http://www.w3.org/2000/svg" class="hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path stroke-linecap="round" stroke-linejoin="round" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
                 </button>
             </div>
         </div>
-
     </header>
 
-    <!-- Bottom Subtle Guidance Banner -->
-    <div id="touchHint" class="absolute bottom-4 left-0 right-0 z-10 pointer-events-none flex justify-center transition-opacity duration-700 opacity-85 px-4">
-        <div class="px-4 py-1.5 rounded-full bg-slate-950/80 border border-slate-800/90 text-[11px] text-slate-300 text-center">
-            Tap a steady rhythm<span class="hidden sm:inline"> &middot; the music settles into your tempo &middot; <span class="kbd">?</span> keys</span>
-        </div>
+    <!-- Hint -->
+    <div id="touchHint" class="absolute bottom-7 left-0 right-0 z-10 pointer-events-none flex justify-center transition-opacity duration-700 px-4">
+        <span class="pb-hint">Tap a steady rhythm<span class="hidden sm:inline"> &middot; <span class="pb-kbd">?</span> keys</span></span>
     </div>
 
-    <!-- Start & Web Audio Unlock Overlay -->
-    <div id="startOverlay" class="absolute inset-0 z-30 flex items-center justify-center p-4 sm:p-5 bg-slate-950/85 transition-opacity duration-500">
-        <div class="max-w-sm w-full bg-slate-900/95 border border-slate-800 rounded-3xl p-6 sm:p-7 flex flex-col gap-5">
-            <div class="space-y-2">
-                <div class="text-[10px] font-mono-tech uppercase tracking-[0.3em] text-[#ffc21a]">Flow // Resonance</div>
-                <h1 class="text-2xl sm:text-[30px] tracking-wide text-white leading-tight" style="font-family: Righteous, Inter, sans-serif">Find your rhythm.<br>Stay in it.</h1>
-                <p class="text-sm text-slate-400 leading-relaxed">
-                    Tap a steady beat. The music settles into your tempo, the pillars arrive on the beat, and every tap plays in key. You can't lose, and it never speeds up. Stop tapping and it flies itself.
-                </p>
+    <!-- Start: the backglass -->
+    <div id="startOverlay" class="absolute inset-0 z-30 flex items-center justify-center p-4 sm:p-5 pb-backglass transition-opacity duration-500">
+        <div class="pb-card">
+            <div class="pb-kicker">Flow // Resonance</div>
+            <h1 class="pb-title">Find your rhythm.<br>Stay in it.</h1>
+            <p>Tap a steady beat. The music settles into your tempo, the pillars arrive on the beat, and every tap plays in key. You can't lose, and it never speeds up. Stop tapping and it flies itself.</p>
+            <div class="pb-keys">
+                <span><span class="pb-kbd">Space</span> fly</span>
+                <span><span class="pb-kbd">A</span> autopilot</span>
+                <span><span class="pb-kbd">P</span> pause</span>
+                <span><span class="pb-kbd">T</span> <span class="pb-kbd">V</span> track, voice</span>
             </div>
-            <div class="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12px] text-slate-400">
-                <span><span class="kbd">Space</span> fly</span>
-                <span><span class="kbd">A</span> autopilot</span>
-                <span><span class="kbd">P</span> pause</span>
-                <span><span class="kbd">T</span> <span class="kbd">V</span> track, voice</span>
-            </div>
-            <button id="startBtn" type="button" class="w-full py-3.5 px-6 rounded-2xl bg-[#ff6a1a] text-slate-950 font-semibold text-base active:scale-[0.98] transition-transform cursor-pointer">
-                Start
-            </button>
+            <button id="startBtn" type="button" class="pb-start">Start</button>
+            <div class="pb-or">or just tap</div>
         </div>
     </div>
 
     <!-- Pause -->
-    <div id="pauseOverlay" class="absolute inset-0 z-30 hidden items-center justify-center bg-slate-950/60">
-        <div class="text-center space-y-2">
-            <div class="text-2xl font-semibold text-white">Paused</div>
-            <div class="text-sm text-slate-400">Tap, <span class="kbd">Space</span> or <span class="kbd">P</span> to resume</div>
-            <div class="flex justify-center gap-2 pt-3">
-                <button id="pauseTrackBtn" type="button" class="px-3 py-1.5 rounded-xl text-xs bg-slate-900/90 text-[#ffc21a] border border-slate-700/70">track</button>
-                <button id="pauseVoiceBtn" type="button" class="px-3 py-1.5 rounded-xl text-xs bg-slate-900/90 text-[#ff4f9e] border border-slate-700/70">voice</button>
+    <div id="pauseOverlay" class="absolute inset-0 z-30 hidden items-center justify-center" style="background: rgba(20,15,12,.72)">
+        <div class="text-center">
+            <div class="pb-paused">Paused</div>
+            <div class="pb-sub">Tap, <span class="pb-kbd">Space</span> or <span class="pb-kbd">P</span> to resume</div>
+            <div class="flex justify-center gap-[10px] pt-4">
+                <button id="pauseTrackBtn" type="button" class="pb-btn">track</button>
+                <button id="pauseVoiceBtn" type="button" class="pb-btn">voice</button>
             </div>
         </div>
     </div>
 
     <!-- Keys -->
-    <div id="keysOverlay" class="absolute inset-0 z-40 hidden items-center justify-center p-4 bg-slate-950/70">
-        <div class="max-w-xs w-full bg-slate-900/95 border border-slate-800 rounded-2xl p-5 text-[12px] text-slate-300 space-y-2">
-            <div class="text-sm font-semibold text-white mb-1">Keys</div>
-            <div class="flex justify-between"><span>Fly</span><span><span class="kbd">Space</span> <span class="kbd">&uarr;</span> or tap</span></div>
-            <div class="flex justify-between"><span>Autopilot</span><span class="kbd">A</span></div>
-            <div class="flex justify-between"><span>Pause</span><span><span class="kbd">P</span> <span class="kbd">Esc</span></span></div>
-            <div class="flex justify-between"><span>Track / voice</span><span><span class="kbd">T</span> <span class="kbd">V</span></span></div>
-            <div class="flex justify-between"><span>Volume / mute</span><span><span class="kbd">-</span> <span class="kbd">=</span> <span class="kbd">M</span></span></div>
-            <div class="flex justify-between"><span>Hold this tempo</span><span class="kbd">L</span></div>
-            <div class="flex justify-between"><span>Audio offset</span><span><span class="kbd">[</span> <span class="kbd">]</span></span></div>
-            <div class="pt-2 text-slate-500">Stop tapping for a few seconds and it flies itself without scoring. Any tap takes back control, and the next two pillars are forgiven.</div>
+    <div id="keysOverlay" class="absolute inset-0 z-40 hidden items-center justify-center p-4" style="background: rgba(20,15,12,.72)">
+        <div class="pb-card" style="max-width: 20rem; transform: none">
+            <div class="pb-kicker">Keys</div>
+            <div class="pb-rows">
+                <div><span>Fly</span><span><span class="pb-kbd">Space</span> <span class="pb-kbd">&uarr;</span></span></div>
+                <div><span>Autopilot</span><span class="pb-kbd">A</span></div>
+                <div><span>Pause</span><span><span class="pb-kbd">P</span> <span class="pb-kbd">Esc</span></span></div>
+                <div><span>Track / voice</span><span><span class="pb-kbd">T</span> <span class="pb-kbd">V</span></span></div>
+                <div><span>Volume / mute</span><span><span class="pb-kbd">-</span> <span class="pb-kbd">=</span> <span class="pb-kbd">M</span></span></div>
+                <div><span>Hold this tempo</span><span class="pb-kbd">L</span></div>
+                <div><span>Audio offset</span><span><span class="pb-kbd">[</span> <span class="pb-kbd">]</span></span></div>
+            </div>
+            <div class="pb-note">Stop tapping for a few seconds and it flies itself without scoring. Any tap takes back control, and the next two pillars are forgiven.</div>
         </div>
     </div>
 
+    <script src="pinball-skin.js"></script>
     <script>
         (function () {
             "use strict";
+            PinballSkin.install();
 
             // ============================================================================
             // 1. MULTI-VOICE QUANTIZED CO-CREATION SYNTHESIZER (4-Bar Chord Progression)
@@ -799,6 +765,8 @@
             const speakerOffIcon = document.getElementById("speakerOffIcon");
             const phraseReadout = document.getElementById("phraseReadout");
             const touchHint = document.getElementById("touchHint");
+            const streakSeg = document.getElementById("streakSeg");
+            const flowLights = document.getElementById("flowLights");
             const pauseBtn = document.getElementById("pauseBtn");
             const pauseOverlay = document.getElementById("pauseOverlay");
             const keysOverlay = document.getElementById("keysOverlay");
@@ -1244,7 +1212,8 @@
                         "Deep resonance",
                         "Transcendent"
                     ];
-                    spawnCallout(tierNames[flowCtrl.tier], width * 0.5, height * 0.34, "#ff2d8a", 1.22);
+                    spawnCallout(tierNames[flowCtrl.tier], width * 0.5, height * 0.34, getTierPrimaryColor(), 1.22);
+                    bulbFlash = 1.2;
                     spawnBeatRing(bird.x, bird.y, 160, "#ff2d8a");
                     triggerHaptic([15, 30, 20]);
                 }
@@ -1871,10 +1840,7 @@
                 if (flowCtrl.hyperGlideTimer > 0) return "#ffc21a";
                 if (runPeak >= PLATINUM_AT) return "#e5e7eb"; // Platinum: chrome ribbon, trail and halo
                 // Hot colours, 70s sci-fi rather than neon: blue, green, pink, orange
-                if (flowCtrl.tier === 4) return "#ff6a1a";
-                if (flowCtrl.tier === 3) return "#ff2d8a";
-                if (flowCtrl.tier === 2) return "#22d36b";
-                return "#3d7bff";
+                return PinballSkin.tiers[flowCtrl.tier - 1]; // playfield insert colours
             }
 
             // The partner colour for double stripes (ribbon, lips)
@@ -1889,6 +1855,8 @@
                 flowPctDisplay.textContent = pct + "%";
                 flowBarFill.style.width = pct + "%";
                 flowBarFill.style.background = getTierPrimaryColor();
+                PinballSkin.lights(flowLights, pct, getTierPrimaryColor());
+                PinballSkin.score(streakSeg, streak);
 
                 phraseReadout.textContent = TRACKS[trackIndex].name;
 
@@ -1896,11 +1864,11 @@
                 const shieldPct = Math.round(flowCtrl.shieldCharge * 100);
                 if (flowCtrl.shieldReady) {
                     shieldBadge.textContent = "shield ready";
-                    shieldBadge.className =
+                    shieldBadge.className = "pb-badge ready"; void
                         "whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold tracking-wide bg-[#14204d] text-[#9db8ff] border border-[#3d7bff]/70";
                 } else {
                     shieldBadge.textContent = `shield ${shieldPct}%`;
-                    shieldBadge.className =
+                    shieldBadge.className = "pb-badge"; void
                         "whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold tracking-wide bg-slate-900 text-slate-400 border border-slate-700/70";
                 }
 
@@ -1916,7 +1884,7 @@
                 if (paused) [label, color] = ["Paused", "text-slate-400"];
                 else if (autoMode) [label, color] = ["Autopilot · tap to fly", "text-[#ffc21a]"];
                 stateLabel.textContent = label;
-                stateLabel.className = "font-semibold truncate " + color;
+                stateLabel.className = "pb-label " + color;
             }
 
             // ============================================================================
@@ -1927,6 +1895,8 @@
             let bgCache = null;
             let bgCacheKey = "";
             let lockVis = 0;
+            let beatCounter = 0;
+            let bulbFlash = 0;
 
             function updatePhysics(rawDt) {
                 windDown = Math.max(0, Math.min(1, windDown + (autoMode ? 1 : -1) * WIND_RATE * rawDt));
@@ -1935,6 +1905,7 @@
                 synth.updateScheduler(flowCtrl.bpm * (1 - 0.05 * windDown), flowCtrl.flowIndex, flowCtrl.tier, {
                     onQuarterBeat: () => {
                         kickPulse = 1.0;
+                        beatCounter++;
                     },
                     onSixteenth: () => {
                         sixteenthPulse = 1.0;
@@ -1942,6 +1913,7 @@
                 });
 
                 kickPulse = Math.max(0, kickPulse - rawDt * 4.2);
+                bulbFlash = Math.max(0, bulbFlash - rawDt);
                 sixteenthPulse = Math.max(0, sixteenthPulse - rawDt * 7.5);
 
                 if (!gameStarted) {
@@ -2176,6 +2148,7 @@
                             phrasePasses++;
                             if (phrasePasses >= 8) {
                                 if (phraseClean) {
+                                    bulbFlash = 0.8;
                                     synth.playGoldenOrbShimmer();
                                     spawnBeatRing(bird.x, bird.y, 220, getTierPrimaryColor());
                                 }
@@ -2425,12 +2398,17 @@
                     // Lit lips: a soft glow under a thin bright line, breathing with the kick
                     ctx.lineCap = "round";
                     ctx.beginPath();
-                    ctx.moveTo(p.x + r * 0.6, topPipeBottom - 1);
-                    ctx.lineTo(p.x + p.width - r * 0.6, topPipeBottom - 1);
-                    ctx.moveTo(p.x + r * 0.6, bottomPipeTop + 1);
-                    ctx.lineTo(p.x + p.width - r * 0.6, bottomPipeTop + 1);
+                    ctx.moveTo(p.x - 3, topPipeBottom - 2);
+                    ctx.lineTo(p.x + p.width + 3, topPipeBottom - 2);
+                    ctx.moveTo(p.x - 3, bottomPipeTop + 2);
+                    ctx.lineTo(p.x + p.width + 3, bottomPipeTop + 2);
+                    // Lips are rubber bands: black outline, tier colour inside
                     ctx.globalAlpha = isGhost ? 0.42 : 1;
-                    ctx.lineWidth = 3.5 + kickPulse * 1.5;
+                    ctx.strokeStyle = "#140f0c";
+                    ctx.lineWidth = 8 + kickPulse * 1.5;
+                    ctx.stroke();
+                    ctx.strokeStyle = primaryColor;
+                    ctx.lineWidth = 4 + kickPulse * 1.5;
                     ctx.stroke();
 
                     ctx.restore();
@@ -2569,16 +2547,12 @@
                 ctx.stroke();
 
                 // 12. Floating Callouts
-                callouts.forEach((c) => {
-                    ctx.save();
-                    ctx.font = `${Math.round(16 * c.scale)}px Righteous, Inter, sans-serif`;
-                    ctx.textAlign = "center";
-                    // Fade in over the first few frames, then ease out
-                    ctx.globalAlpha = Math.max(0, Math.min(1, (1 - c.alpha) * 8, c.alpha));
-                    ctx.fillStyle = c.color;
-                    ctx.fillText(c.text, c.x, c.y);
-                    ctx.restore();
-                });
+                // Fade in over the first few frames, then ease out
+                callouts.forEach((c) => PinballSkin.callout(ctx, c.text, c.x, c.y, c.color, 20 * c.scale, Math.max(0, Math.min(1, (1 - c.alpha) * 8, c.alpha))));
+
+                // Chaser bulbs along the bottom, stepping on the eighth notes; they blink on milestones
+                const beatNow = synth.lastBeatTime && synth.beatSec && synth.ctx ? beatCounter + (synth.ctx.currentTime - synth.lastBeatTime) / synth.beatSec : performance.now() / 555;
+                PinballSkin.bulbs(ctx, width, height - 12, beatNow, bulbFlash > 0 && Math.floor(bulbFlash * 10) % 2 === 0 ? 1 : 0);
 
                 if (bird.washAlpha > 0 && !REDUCED_MOTION) {
                     ctx.save();
