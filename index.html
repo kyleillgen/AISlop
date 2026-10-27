@@ -46,9 +46,7 @@
         .desktop-mode #gameCanvas {
             box-shadow: 0 0 80px rgba(34, 211, 238, 0.08), 0 0 0 1px rgba(30, 41, 59, 0.9);
         }
-        .desktop-mode #telemetryRow,
-        .desktop-mode #voiceBtn,
-        .desktop-mode #lockCadenceBtn,
+        /* Desktop keeps every control the original has: groove voice, cadence lock, telemetry */
         .desktop-mode #featureList {
             display: none;
         }
@@ -991,18 +989,10 @@
                     }
                 }
 
-                // Phase entrainment: before lock the groove slides toward where you tap;
-                // after lock it holds still and you ride it. Landing in the pocket feeds Flow.
+                // Visual only: a soft ring when a flap lands on the beat. The beat grid itself
+                // is never moved; tempo follows you exactly as the original engine does.
                 const offset = synth.isInitialized ? synth.getBeatOffset(synth.getHeardTime()) : null;
-                if (offset !== null) {
-                    const absMs = Math.abs(offset) * 1000;
-                    if (!flowCtrl.resonanceLocked) {
-                        synth.nudgePhase(Math.max(-0.025, Math.min(0.025, offset * 0.35)));
-                    }
-                    const hit = absMs < 55 ? 1 : absMs < 110 ? 0.5 : 0;
-                    flowCtrl.pocketScore = flowCtrl.pocketScore * 0.8 + hit * 0.2;
-                    if (hit === 1) pocketPulse = 1.0;
-                }
+                if (offset !== null && Math.abs(offset) < 0.055) pocketPulse = 1.0;
             }
 
             function adjustChallenge(delta) {
@@ -1133,9 +1123,7 @@
                 // Flow resonance rises smoothly with steady rhythm and streak
                 const targetFlow = Math.min(
                     1.0,
-                    0.38 +
-                        (flowCtrl.tapRhythmScore * 0.65 + flowCtrl.pocketScore * 0.35) * 0.48 +
-                        Math.min(0.22, streak * 0.01)
+                    0.38 + flowCtrl.tapRhythmScore * 0.48 + Math.min(0.22, streak * 0.01)
                 );
                 flowCtrl.flowIndex += (targetFlow - flowCtrl.flowIndex) * Math.min(1.0, dt * 0.65);
 
