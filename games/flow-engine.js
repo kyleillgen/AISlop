@@ -1089,7 +1089,38 @@
       ctrl,
       synth,
       pacer,
-      forceNotes: false, // true: every action plays its note even before the tempo locks (Fidget)
+      quietLead: false, // true: actions don't queue the grid-snapped lead note (Fidget plays its own)
+      // An immediate note for Fidget: no waiting for the grid, in key with the current chord.
+      // height 0 (high) to 1 (low); sustain in seconds (long rings for slow presses, short
+      // staccato for fast ones); a soft click on top so every press has a tactile edge.
+      pluck(height = 0.5, sustain = 0.6, vel = 0.12) {
+        if (!synth.ctx || synth.isMuted || !synth.padFilter) return;
+        const t = synth.ctx.currentTime;
+        const scale = CHORD_PROGRESSION[synth.chordIndex].scale;
+        const idx = Math.max(0, Math.min(scale.length - 1, Math.floor((1 - height) * scale.length)));
+        const osc = synth.ctx.createOscillator();
+        const gain = synth.ctx.createGain();
+        osc.type = synth.voiceIndex === 1 ? "triangle" : "sine";
+        osc.frequency.setValueAtTime(scale[idx], t);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.linearRampToValueAtTime(vel, t + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0005, t + sustain);
+        osc.connect(gain);
+        gain.connect(synth.padFilter);
+        if (sustain > 0.4) gain.connect(synth.delayNode); // slow presses ring out through the delay
+        osc.start(t);
+        osc.stop(t + sustain + 0.02);
+        const click = synth.ctx.createOscillator();
+        const cg = synth.ctx.createGain();
+        click.type = "square";
+        click.frequency.setValueAtTime(1800, t);
+        cg.gain.setValueAtTime(0.018, t);
+        cg.gain.exponentialRampToValueAtTime(0.0004, t + 0.012);
+        click.connect(cg);
+        cg.connect(synth.masterGain);
+        click.start(t);
+        click.stop(t + 0.015);
+      },
       milestones,
       // Call from the first user gesture (audio needs one)
       start() {
@@ -1115,7 +1146,7 @@
           }
         }
         // The grid-snapped lead note stays silent while calibrating so it can't bias timing
-        synth.queueQuantizedTap(height, ctrl.tier, note && (ctrl.locked || eng.forceNotes));
+        synth.queueQuantizedTap(height, ctrl.tier, note && ctrl.locked && !eng.quietLead);
         drainEvents();
         return a;
       },

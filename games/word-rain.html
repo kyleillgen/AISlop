@@ -115,6 +115,11 @@
     input: "type",
     tierNames: ["Finding your rhythm", "Steady rain", "Downpour", "Monsoon"],
     modes: ["Golden Words"],
+    // Fidget: effects come from the word you're on (or mid-sky when none is falling)
+    fidgetPoint: (api) => {
+      const w = activeWord();
+      return w ? { x: letterX(w, Math.min(w.typed, w.text.length - 1), api), y: yOf(w, api) } : { x: api.W / 2, y: api.H * 0.45 };
+    },
     engine: {
       // Keystrokes per beat: the typing stride. The in-between counts leave no gaps, so
       // any pace from ~120 to ~620 ms a key fits the 96-124 band.

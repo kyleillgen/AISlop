@@ -90,6 +90,11 @@
     tierNames: ["Finding your rhythm", "Lit up", "Multiball", "Jackpot"],
     // Moves follow the lights (every 1-4 beats); waiting in the right lane counts as playing
     modes: ["Spinner"],
+    // Fidget: effects come from the ball, and the switch under it pops on every press
+    fidgetPoint: () => ({ x: ballX, y: hitY + 32 }),
+    onFidget() {
+      pop[lane] = 1;
+    },
     engine: { perBeat: [0.25, 1 / 3, 0.5, 1, 2], stableTol: 3, pacing: { minBeats: 1, startBeats: 2 } },
 
     resize(api) {

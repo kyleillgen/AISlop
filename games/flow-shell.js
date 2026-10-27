@@ -199,10 +199,35 @@
     function applyStyle() {
       const fidget = playStyle === "fidget";
       eng.ctrl.o.idleSec = fidget ? Infinity : baseIdle;
-      eng.forceNotes = fidget;
+      eng.quietLead = fidget; // Fidget plays its own immediate notes instead
       if (fidget && eng.auto) eng.setAuto(false);
       if (fidget && mode) endMode(false);
     }
+    // Fidget presses are an instrument for your pressing speed. Slow presses ring long with wide
+    // rings of light; fast mashing climbs the scale in short staccato notes with sparks, and the
+    // insert lights become a rev meter. (Intense movement goes with better focus in ADHD studies,
+    // so speed is made expressive; nothing here asks you to decide anything.)
+    let pressRate = 0; // presses a second, smoothed
+    let rev = 0; // 0 calm .. 1 flat out
+    let lastPress = 0;
+    let climb = 0;
+    let chase = 0;
+    function fidgetPress(e) {
+      if (playStyle !== "fidget" || eng.paused) return;
+      const now = performance.now();
+      const gap = lastPress ? now - lastPress : 1000;
+      lastPress = now;
+      pressRate += (1000 / Math.max(60, gap) - pressRate) * 0.35;
+      rev = Math.max(rev, Math.min(1, (pressRate - 1) / 8));
+      climb = gap < 380 ? climb + 1 : Math.floor(Math.random() * 3); // quick runs climb the scale
+      const height = 0.9 - ((climb % 9) / 9) * 0.8;
+      eng.pluck(height, 1.4 - 1.25 * rev, 0.15 - 0.06 * rev);
+      const at = e && e.x !== undefined ? { x: e.x, y: e.y } : g.fidgetPoint ? g.fidgetPoint(api) : { x: W / 2, y: H * 0.55 };
+      if (rev < 0.35) api.ring(at.x, at.y, api.color(), 70 - 40 * rev);
+      api.burst(at.x, at.y, rev > 0.5 ? "#ffc400" : api.color(), 2 + Math.round(rev * 6), -1);
+      if (g.onFidget) g.onFidget(api, rev, at);
+    }
+
     function toggleStyle() {
       playStyle = playStyle === "fidget" ? "flow" : "fidget";
       store(g.key + ".style", playStyle);
@@ -495,7 +520,7 @@
       q("[data-style]").classList.toggle("on", playStyle === "fidget");
       const nextRank = RANKS[RANKS.indexOf(rank) + 1];
       q("[data-rank]").textContent = rank.name + " \u00b7 " + rank.finish + " ball \u00b7 " + lifetime.toLocaleString() + " lifetime" + (nextRank ? " \u00b7 " + nextRank.name + " at " + nextRank.at.toLocaleString() : "");
-      Skin.lights(q("[data-lights]"), eng.flowIndex * 100, api.color());
+      Skin.lights(q("[data-lights]"), playStyle === "fidget" ? rev * 100 : eng.flowIndex * 100, playStyle === "fidget" && rev > 0.6 ? "#ffc400" : api.color());
       let label = eng.tier === 1 ? (eng.locked ? "In sync" : tierNames[0]) : tierNames[eng.tier - 1];
       let c = api.color();
       if (mode && started && !eng.auto) {
@@ -513,6 +538,7 @@
       q("[data-cross]").style.display = eng.muted ? "" : "none";
     }
     setInterval(() => !eng.paused && hud(), 250);
+    setInterval(() => playStyle === "fidget" && !eng.paused && Skin.lights(q("[data-lights]"), rev * 100, rev > 0.6 ? "#ffc400" : api.color()), 60);
 
     // Session numbers go to a host page (the pocket app logs them for tuning), every 20 s
     // of play and whenever autopilot takes over
@@ -554,12 +580,14 @@
       lastInputAt = performance.now();
       if (!started) start();
       if (eng.paused) return setPaused(false);
+      fidgetPress(e);
       if (g.onAction) g.onAction(api, e || {});
     }
     function letter(ch) {
       lastInputAt = performance.now();
       if (!started) start();
       if (eng.paused) return;
+      fidgetPress();
       if (g.onLetter) g.onLetter(ch, api);
     }
 
@@ -606,6 +634,7 @@
         // A game's own keys (arrows in Rollover) start the game too, like Space or a tap
         e.preventDefault();
         lastInputAt = performance.now();
+        fidgetPress();
         if (!started) start();
       }
       else return;
@@ -637,6 +666,9 @@
         if (g.update) g.update(dt, api);
         flash = Math.max(0, flash - dt * 1.4);
         bulbFlash = Math.max(0, bulbFlash - dt);
+        rev = Math.max(0, rev - dt * 0.6); // the rev meter falls back when you ease off
+        pressRate *= Math.pow(0.5, dt);
+        chase += (dt / eng.beatSec) * 2 * (1 + (playStyle === "fidget" ? rev * 3 : 0)); // bulbs chase faster as you rev
         const drag = Math.pow(0.12, dt); // particles slow as they spread, then hang and fade
         for (let i = particles.length - 1; i >= 0; i--) {
           const p = particles[i];
@@ -693,7 +725,7 @@
         ctx.globalAlpha = 1;
         for (const c of callouts) Skin.callout(ctx, c.text, c.x, c.y, c.color, 20 * c.scale, Math.max(0, Math.min(1, (1 - c.a) * 8, c.a)), 1 - c.a);
         // Chaser bulbs along the bottom edge run on the eighth notes and blink on big moments
-        if (g.bulbs !== false) Skin.bulbs(ctx, W, H - 9, eng.beatPos(), bulbFlash > 0 && Math.floor(bulbFlash * 10) % 2 === 0 ? 1 : 0);
+        if (g.bulbs !== false) Skin.bulbs(ctx, W, H - 9, chase / 2, bulbFlash > 0 && Math.floor(bulbFlash * 10) % 2 === 0 ? 1 : 0);
         if (flash > 0) {
           ctx.fillStyle = `rgba(232, 35, 31, ${flash * 0.16})`;
           ctx.fillRect(0, 0, W, H);
