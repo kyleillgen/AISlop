@@ -756,8 +756,21 @@
                 recentCadenceBpm: 108,
                 driftTimer: 0,
                 clipTimes: [],
-                easeTimer: 0
+                easeTimer: 0,
+                savedTempo: false
             };
+
+            // Quick sessions (a minute while something compiles): remember the tempo you settled
+            // into, so the next session opens already in your groove and only fine-tunes
+            const TEMPO_KEY = "flowResonanceTempo";
+            try {
+                const saved = parseFloat(localStorage.getItem(TEMPO_KEY));
+                if (saved >= 96 && saved <= 124) {
+                    flowCtrl.bpm = flowCtrl.detectedCadenceBpm = flowCtrl.recentCadenceBpm = saved;
+                    flowCtrl.vx = 2.85 + ((saved - 96) / 28) * 0.55;
+                    flowCtrl.savedTempo = true;
+                }
+            } catch (e) {}
 
             const bird = {
                 x: 95,
@@ -1004,7 +1017,7 @@
                 const matchedVxNow = 2.85 + ((flowCtrl.bpm - 96) / 28) * 0.55;
                 const calibrated =
                     flowCtrl.tapCount >= 24 ||
-                    (flowCtrl.tapCount >= 8 &&
+                    (flowCtrl.tapCount >= (flowCtrl.savedTempo ? 4 : 8) &&
                         Math.abs(flowCtrl.detectedCadenceBpm - flowCtrl.recentCadenceBpm) < 1.5 &&
                         Math.abs(flowCtrl.bpm - flowCtrl.recentCadenceBpm) < 2 &&
                         Math.abs(flowCtrl.vx - matchedVxNow) < 0.05);
@@ -1028,6 +1041,9 @@
 
                 if (flowCtrl.resonanceLocked && !wasLocked && !flowCtrl.manualLock) {
                     spawnCallout("RESONANCE LOCKED • SWEET SPOT FROZEN", width * 0.5, height * 0.30, "#34d399", 1.12);
+                    try {
+                        localStorage.setItem(TEMPO_KEY, flowCtrl.bpm.toFixed(1));
+                    } catch (e) {}
                 }
 
                 // When NOT locked yet, gently adapt BPM & horizontal speed to match player's natural cadence
@@ -1209,6 +1225,11 @@
             // ============================================================================
             function triggerFlap() {
                 if (!gameStarted) return;
+                // While paused, a tap or Space starts the count-in instead of flapping
+                if (pauseState) {
+                    if (pauseState === "paused") beginCountIn();
+                    return;
+                }
 
                 const nowMs = performance.now();
                 recordTapAndEntrainCadence(nowMs);
@@ -1998,9 +2019,79 @@
                 ctx.restore();
             }
 
+            // ============================================================================
+            // 8. QUICK-SESSION PAUSE: glance away (window loses focus) and the game pauses and
+            //    goes quiet; tap or Space to come back, and a one-bar count-in on the groove
+            //    brings you back in on the beat instead of mid-air
+            // ============================================================================
+            let pauseState = null; // null | "paused" | "countin"
+            let countBeats = 0;
+            const pauseOverlay = document.createElement("div");
+            pauseOverlay.style.cssText =
+                "position:absolute;inset:0;z-index:25;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;" +
+                "background:rgba(5,7,14,0.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);pointer-events:none;" +
+                "font-family:'JetBrains Mono',monospace;text-align:center";
+            const pauseBig = document.createElement("div");
+            pauseBig.style.cssText = "font-size:48px;font-weight:800;color:#34d399;min-height:58px";
+            const pauseSmall = document.createElement("div");
+            pauseSmall.style.cssText = "font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8";
+            pauseOverlay.appendChild(pauseBig);
+            pauseOverlay.appendChild(pauseSmall);
+            document.body.appendChild(pauseOverlay);
+
+            function pauseGame() {
+                if (!gameStarted || pauseState) return;
+                pauseState = "paused";
+                pauseBig.textContent = "❚❚";
+                pauseSmall.textContent = "paused · tap or space to flow back in";
+                pauseOverlay.style.display = "flex";
+                if (synth.ctx && synth.ctx.state === "running") synth.ctx.suspend();
+            }
+
+            function beginCountIn() {
+                pauseState = "countin";
+                countBeats = 4;
+                pauseBig.textContent = "4";
+                pauseSmall.textContent = "back in on the beat";
+                if (synth.ctx && synth.ctx.state !== "running") synth.ctx.resume();
+            }
+
+            function resumePlay() {
+                pauseState = null;
+                pauseOverlay.style.display = "none";
+                bird.ghostTimer = Math.max(bird.ghostTimer, 0.6); // a moment of grace on re-entry
+                lastFrameTime = performance.now();
+            }
+
+            window.addEventListener("blur", pauseGame);
+            document.addEventListener("visibilitychange", () => {
+                if (document.visibilityState === "hidden") pauseGame();
+            });
+
             function gameLoop(now) {
                 const rawDt = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000));
                 lastFrameTime = now;
+
+                // Paused: no updates and no drawing, so it costs next to nothing while you work
+                if (pauseState === "paused") {
+                    requestAnimationFrame(gameLoop);
+                    return;
+                }
+                // Count-in: the world holds still while the groove counts you back in, 4-3-2-1
+                if (pauseState === "countin") {
+                    synth.updateScheduler(flowCtrl.bpm, flowCtrl.flowIndex, flowCtrl.tier, {
+                        onQuarterBeat: () => {
+                            kickPulse = 1.0;
+                            countBeats--;
+                            if (countBeats > 0) pauseBig.textContent = String(countBeats);
+                            else resumePlay();
+                        }
+                    });
+                    kickPulse = Math.max(0, kickPulse - rawDt * 4.2);
+                    renderScene();
+                    requestAnimationFrame(gameLoop);
+                    return;
+                }
 
                 updatePhysics(rawDt);
                 renderScene();

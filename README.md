@@ -8,4 +8,6 @@ Built with Gemini to draw you into a flow state. You never die; a clip just step
 
 Every 500 points the backdrop slowly evolves into a new epoch (Obsidian & Emerald Neon, Platinum, Solar Gold & Amber Flare, Deep Cosmos Prism), and at 1000 the run turns **Platinum**: chrome ribbon, brushed-platinum pipes and diamond-dust trail.
 
+Made for quick sessions, like a minute while something compiles: it remembers the tempo you settled into, so the next session opens in your groove; it pauses and goes quiet the moment you look away; and when you tap back in, a one-bar count-in on the groove brings you back on the beat.
+
 Play at https://kyleillgen.github.io/AISlop/ or open `index.html`.
