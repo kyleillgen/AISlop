@@ -1846,6 +1846,11 @@
                     return;
                 }
                 if (e.repeat) return;
+                // Number keys switch games when hosted (the pocket app)
+                if (/^Digit[1-9]$/.test(e.code) && window.parent !== window) {
+                    window.parent.postMessage({ type: "flow:game", n: +e.code.slice(5) }, "*");
+                    return;
+                }
                 if (keysOverlay.style.display === "flex" && e.code !== "Slash") {
                     toggleKeys(false);
                     if (e.code === "Escape") return;
