@@ -13,7 +13,7 @@ window.AISLOP_GAMES = [
   {
     id: "leap",
     title: "Leap",
-    blurb: "A steel ball rolls down a lit lane. Tap on the beat and it hops the hurdles at the top of its arc.",
+    blurb: "A steel ball rolls down a lit lane. Find your rhythm and it sails over every hurdle.",
     path: "games/leap.html",
     status: "house",
     hue: 30
@@ -21,7 +21,7 @@ window.AISLOP_GAMES = [
   {
     id: "rollover",
     title: "Rollover",
-    blurb: "Lit inserts come down four lanes on the beat. Slide under them; every lane is a note, so you play the tune.",
+    blurb: "Lights come down four lanes. Roll under them to light up F-L-O-W; every lane is a note, so you play the tune.",
     path: "games/rollover.html",
     status: "house",
     hue: 330

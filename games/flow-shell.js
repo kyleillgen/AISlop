@@ -1,13 +1,13 @@
 // Flow shell: everything a flow-engine game needs that isn't the game itself.
 //
 // It provides the header (streak, best, state, flow meter, track, voice, pause, mute), the
-// start card, the pause card (which doubles as settings on phones), the keys card, the
+// attract-mode marquee, one-time tips, the pause card (doubles as settings on phones), the keys card, the
 // standard keys, a phone keyboard for typing games, the canvas with DPR and resizing, the
 // frame loop, pause, autopilot labels, tier and lock callouts, phrase celebrations,
 // particles and the miss flash. A game supplies its rules and its look:
 //
 //   FlowShell.mount({
-//     key: "myGame", title: "My Game", tagline: "One line.", about: "Two sentences.",
+//     key: "myGame", title: "My Game", hint: "The one thing to do",  // attract marquee
 //     input: "tap" | "type",                 // tap: Space/↑/pointer; type: letters
 //     engine: { ... },                       // FlowEngine.create options
 //     tierNames: [...4], colors: [...4],     // optional
@@ -244,7 +244,10 @@
       if (!eng.paused && g.onBeat) g.onBeat(n, api); // attract mode spawns too
     });
     eng.on("lock", () => api.callout("In sync", W / 2, H * 0.3, "#ffc400", 1.05));
-    eng.on("auto", hud);
+    eng.on("auto", () => {
+      hud();
+      reportSession();
+    });
     eng.on("manual", hud);
     eng.on("pause", hud);
     // "Claude is done", "Build done": the cue to switch back; the bulbs blink with it
@@ -274,6 +277,15 @@
       q("[data-cross]").style.display = eng.muted ? "" : "none";
     }
     setInterval(() => !eng.paused && hud(), 250);
+
+    // Session numbers go to a host page (the pocket app logs them for tuning), every 20 s
+    // of play and whenever autopilot takes over
+    function reportSession() {
+      if (!started || window.parent === window) return;
+      window.parent.postMessage({ type: "flow:session", session: eng.telemetry() }, "*");
+    }
+    setInterval(() => started && !eng.auto && !eng.paused && reportSession(), 20000);
+    window.addEventListener("pagehide", reportSession);
 
     function setPaused(on) {
       if (!started) return;

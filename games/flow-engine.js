@@ -902,6 +902,9 @@
     let beatCount = 0;
     let silentBeat = 0;
     const audioLive = () => started && synth.ctx && synth.ctx.state === "running";
+    const timingLive = () => audioLive() && !!synth.lastBeatTime && !!synth.beatSec;
+    let handoverAt = null;
+    let handoverGap = 0;
     const timing = { meanAsync: 0, samples: 0 };
     const listeners = { beat: [], lock: [], auto: [], manual: [], pause: [], signal: [] };
     const emit = (evt, arg) => listeners[evt].forEach((fn) => fn(arg));
@@ -922,6 +925,7 @@
       startedAt: Date.now(),
       variant: { phase: o.phaseFollow ? "follow" : "frozen", milestones: milestones ? "on" : "off" },
       activeSec: 0,
+      autoSec: 0,
       intervals: [],
       asyncs: [],
       bursts: [],
@@ -959,6 +963,9 @@
         startedAt: new Date(tel.startedAt).toISOString(),
         variant: tel.variant,
         activeSec: Math.round(tel.activeSec),
+        autoSec: Math.round(tel.autoSec),
+        cleanRate: +pacer.rate().toFixed(2),
+        paceBeats: pacer.beats(eng.beatSec),
         actions: iv.length,
         intervalCv: iv.length > 1 ? +(sd(iv) / avg(iv)).toFixed(3) : null,
         asyncMeanMs: tel.asyncs.length ? Math.round(avg(tel.asyncs) * 1000) : null,
@@ -1120,12 +1127,15 @@
         if (started) {
           ctrl.update(dt);
           if (!ctrl.auto) tel.activeSec += dt;
+          else tel.autoSec += dt;
           drainEvents();
         }
         // Until audio is running (browsers need a gesture first), a silent clock keeps the
-        // same tempo, so games can play themselves in attract mode before anyone taps
+        // same tempo, so games can play themselves in attract mode before anyone taps. It keeps
+        // running until the audio clock has scheduled its first beat, so motion never freezes
+        // at the moment you take over.
+        if (!timingLive()) silentBeat += dt / eng.beatSec;
         if (!audioLive()) {
-          silentBeat += dt / eng.beatSec;
           while (silentBeat >= beatCount + 1) {
             beatCount++;
             emit("beat", beatCount);
@@ -1143,10 +1153,15 @@
       },
       // Continuous beat count locked to what the player hears (e.g. 41.37)
       beatPos() {
-        if (!audioLive()) return silentBeat;
-        if (!synth.beatSec || !synth.lastBeatTime) return beatCount;
+        if (!timingLive()) return silentBeat;
         const latency = synth.ctx.outputLatency || synth.ctx.baseLatency || 0;
-        return beatCount + (synth.ctx.currentTime - latency - synth.lastBeatTime) / synth.beatSec;
+        const raw = beatCount + (synth.ctx.currentTime - latency - synth.lastBeatTime) / synth.beatSec;
+        // Hand over from the silent clock without a jump: the difference fades out in ~250 ms
+        if (handoverAt === null) {
+          handoverAt = performance.now();
+          handoverGap = silentBeat - raw;
+        }
+        return raw + handoverGap * Math.exp(-(performance.now() - handoverAt) / 250);
       },
       on(evt, fn) {
         listeners[evt].push(fn);

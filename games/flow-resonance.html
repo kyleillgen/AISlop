@@ -1077,6 +1077,7 @@
                     startedAt: new Date(telemetry.startedAt).toISOString(),
                     variant: telemetry.variant,
                     activeSec: Math.round(telemetry.activeSec),
+                    autoSec: Math.round(telemetry.autoSec || 0),
                     taps: telemetry.intervals.length,
                     intervalCv: iv.mean ? +(iv.sd / iv.mean).toFixed(3) : null,
                     asyncMeanMs: as.mean !== null ? Math.round(as.mean * 1000) : null,
@@ -1089,6 +1090,13 @@
                     check: telemetry.check
                 };
             }
+
+            // Session numbers go to a host page (the pocket app logs them for tuning)
+            function reportSession() {
+                if (window.parent === window || telemetry.activeSec < 5) return;
+                window.parent.postMessage({ type: "flow:session", session: Object.assign({ game: "flow" }, summarizeTelemetry()) }, "*");
+            }
+            setInterval(() => gameStarted && !autoMode && !paused && reportSession(), 20000);
 
             function saveTelemetry() {
                 if (telemetry.activeSec < 5) return;
@@ -1582,6 +1590,7 @@
                 if (!gameStarted || autoMode) return;
                 autoMode = true;
                 synth.setAutopilot(true); // resolve home, then the long-form drift arrangement
+                reportSession();
                 saveTelemetry();
                 maybeAskFlowCheck();
                 updateHudDisplays();
@@ -1912,6 +1921,7 @@
                 windDown = Math.max(0, Math.min(1, windDown + (autoMode ? 1 : -1) * WIND_RATE * rawDt));
                 if (synth.masterGain && !synth.isMuted) synth.masterGain.gain.value = masterLevel * (1 - 0.35 * windDown);
                 if (gameStarted && !autoMode) telemetry.activeSec += rawDt;
+                else if (gameStarted) telemetry.autoSec = (telemetry.autoSec || 0) + rawDt;
                 synth.updateScheduler(flowCtrl.bpm * (1 - 0.05 * windDown), flowCtrl.flowIndex, flowCtrl.tier, {
                     onQuarterBeat: () => {
                         kickPulse = 1.0;

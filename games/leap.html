@@ -74,10 +74,7 @@
   const api = FlowShell.mount({
     key: "leap",
     title: "Leap",
-    tagline: "Hop on<br>the beat.",
-    about:
-      "A steel ball rolls down a lit lane. Tap on the beat and it hops the hurdles right at the top of its arc. The music settles into your rhythm, the floor lights up behind clean hops, and a clipped hurdle just gets knocked flat. You can't lose, and it never speeds up.",
-    hint: "Tap or Space on the beat",
+    hint: "Tap or Space to hop &middot; find your rhythm",
     input: "tap",
     tierNames: ["Finding your rhythm", "Rolling", "Flying", "Pinball wizard"],
     // Taps follow the hurdles, so they come every 1-4 beats rather than on every beat
@@ -151,7 +148,7 @@
           h.state = "hit";
           for (let i = 0; i < 5; i++) shards.push({ x: xOf(h.beat, now, api), y: groundY - h.h * Math.random(), vx: 60 + Math.random() * 120, vy: -120 - Math.random() * 120, a: 1 });
           api.miss(); // steps the streak down a little; ignored on autopilot
-          api.hint("timing", "Tap right on the beat: the hop peaks over the hurdle");
+          api.hint("timing", "Find your rhythm: when it clicks, the ball clears every hurdle at the top of its hop");
         }
       }
       hurdles = hurdles.filter((h) => xOf(h.beat, now, api) > -60);

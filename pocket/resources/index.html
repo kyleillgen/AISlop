@@ -26,7 +26,7 @@
 <body>
   <div class="strip" id="strip" title="Drag to move">
     <button class="pb-btn" data-game="flow-resonance.html" title="Flow // Resonance">Flow</button>
-    <button class="pb-btn" data-game="leap.html" title="Leap: hop on the beat">Leap</button>
+    <button class="pb-btn" data-game="leap.html" title="Leap: hop the hurdles">Leap</button>
     <button class="pb-btn" data-game="rollover.html" title="Rollover: slide under the lights">Roll</button>
     <button class="pb-btn" data-game="word-rain.html" title="Word Rain">Rain</button>
     <span class="grow"></span>
@@ -164,6 +164,16 @@
       const ext = gl && gl.getExtension("WEBGL_debug_renderer_info");
       gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl ? gl.getParameter(gl.RENDERER) : "no webgl";
     } catch (e) {}
+    // Each game's session numbers are appended to ~/.flow-pocket/sessions.log for tuning
+    // (node pocket/report.mjs summarises them)
+    window.addEventListener("message", async (e) => {
+      if (!e.data || e.data.type !== "flow:session" || !e.data.session) return;
+      try {
+        const home = await Neutralino.os.getEnv("USERPROFILE");
+        const line = JSON.stringify(Object.assign({ loggedAt: new Date().toISOString() }, e.data.session));
+        await Neutralino.filesystem.appendFile(home + "/.flow-pocket/sessions.log", line + "\n");
+      } catch (err) {}
+    });
     window.addEventListener("message", async (e) => {
       if (!e.data || e.data.type !== "flow:fps") return;
       document.getElementById("fps").textContent = e.data.fps + " FPS";

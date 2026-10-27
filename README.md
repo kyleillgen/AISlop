@@ -22,7 +22,7 @@ Flow's engine is its own module, and any small rhythm game can sit on top of it.
 - **Shell** ([`games/flow-shell.js`](games/flow-shell.js)): the header, start, pause and keys screens, input, the frame loop and effects.
 - **Game**: one HTML file answering five questions (what appears on the beat, how it moves, what the player does, what counts, how it looks).
 
-Start here: [docs/build-on-the-engine.md](docs/build-on-the-engine.md), which includes a copy-paste prompt kit. API: [docs/flow-engine.md](docs/flow-engine.md). Tests: `node --test tests/flow-engine.test.cjs`.
+The games improve through a data loop: Flow Pocket logs each session, and `node pocket/report.mjs` flags the mechanic to tune ([docs/tuning.md](docs/tuning.md)). Start here: [docs/build-on-the-engine.md](docs/build-on-the-engine.md), which includes a copy-paste prompt kit. API: [docs/flow-engine.md](docs/flow-engine.md). Tests: `node --test tests/flow-engine.test.cjs`.
 
 - **Word Rain** (`games/word-rain.html`): words drift down on the beat, and you type them before they reach the river. The music settles into your typing rhythm, every letter is a note, and typos cost nothing.
 - **Leap** (`games/leap.html`): a steel ball rolls down a lit lane. Tap on the beat and it hops each hurdle at the top of its arc. Perfect is ±45 ms, taps just before landing are buffered, and a clipped hurdle just gets knocked flat.

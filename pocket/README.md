@@ -55,6 +55,16 @@ Add these hooks to `~/.claude/settings.json`, merged into any `hooks` you alread
 
 `signal.mjs` writes one line to `~/.flow-pocket/signal`, and the app reads it every 1.5 s. The script swallows its own errors, so it can't slow down or break Claude Code. Any other tool can use the same file. For a build script, add `node pocket/signal.mjs done` at the end.
 
+## Tuning from your own sessions
+
+Every session's numbers are logged to `~/.flow-pocket/sessions.log`: steadiness, timing, misses, slowing after a miss, autopilot time and flow-check answers. Run:
+
+```bash
+node pocket/report.mjs --days 7
+```
+
+It summarises each game and flags anything out of range, naming the knob to adjust. The loop is described in [docs/tuning.md](../docs/tuning.md).
+
 ## Files
 
 | File | What it is |
@@ -63,6 +73,7 @@ Add these hooks to `~/.claude/settings.json`, merged into any `hooks` you alread
 | `resources/index.html` | The launcher: game switcher, pin, Claude lamp, and the game in a frame |
 | `setup.mjs` | Downloads the runtime and copies the games in |
 | `signal.mjs` | Writes the signal for Claude Code hooks or build scripts |
+| `report.mjs` | The tuning report from `sessions.log` |
 | `Flow Pocket.cmd` | Starts the app |
 | `flow-pocket.exe`, `bin/`, `resources/games/`, `resources/js/` | Downloaded or copied by setup; not in git |
 
