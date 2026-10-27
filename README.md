@@ -4,6 +4,8 @@ Sloppy AI games, reborn.
 
 ## Flow // Resonance
 
-The original Flow // Resonance by Gemini, unchanged: a flappy-style rhythm game that detects your natural tapping cadence, eases the tempo toward it, and locks into your sweet spot. Every tap plays in key, and the world evolves across four tiers as your streak climbs.
+Built with Gemini to draw you into a flow state. You never die; a clip just steps your streak down (or uses your Flow Shield). The engine listens to your natural tapping cadence, eases the tempo and physics toward it, and locks your sweet spot once you are steady. Pipes arrive on the beat and every tap plays in key, quantized to the 16th grid. It never gets harder over time; it gets deeper: four synesthetic tiers, golden orbs, slipstreams, groove voices (LO-FI RHODES, SYNTHWAVE PULSE, AMBIENT DRIFT), and an auto-sync / lock control.
+
+Every 500 points the backdrop slowly evolves into a new epoch (Obsidian & Emerald Neon, Platinum, Solar Gold & Amber Flare, Deep Cosmos Prism), and at 1000 the run turns **Platinum**: chrome ribbon, brushed-platinum pipes and diamond-dust trail.
 
 Play at https://kyleillgen.github.io/AISlop/ or open `index.html`.

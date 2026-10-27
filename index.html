@@ -672,6 +672,39 @@
                 bestStreak = 0;
             }
 
+            // 500-Point Epochs & Platinum at 1000: the backdrop slowly evolves toward the next
+            // epoch across every 500 points. Keyed to this run's peak, so a clip never rolls it back.
+            const EPOCH_SPAN = 500;
+            const PLATINUM_AT = 1000;
+            const EPOCHS = [
+                { name: "DEEP INDIGO", stops: null }, // 0-499: the original tier backdrops
+                { name: "OBSIDIAN & EMERALD NEON", stops: ["#020806", "#04201a", "#063b2c"] },
+                { name: "PLATINUM", stops: ["#14161c", "#2c313c", "#59606f"] },
+                { name: "SOLAR GOLD & AMBER FLARE", stops: ["#1a1004", "#3d2706", "#6b4210"] },
+                { name: "DEEP COSMOS PRISM", stops: ["#0a0420", "#1d0b3d", "#0b3a4a"] }
+            ];
+            let runPeak = 0;
+            let epochPos = 0;
+
+            function getTierBackdropStops(tier) {
+                if (tier === 4) return ["#0b041d", "#190a36", "#061d2c"];
+                if (tier === 3) return ["#08061a", "#110d2e", "#071829"];
+                if (tier === 2) return ["#050914", "#071827", "#041e20"];
+                return ["#050711", "#08101e", "#0b1326"];
+            }
+
+            function getEpochStops(i, tier) {
+                const e = EPOCHS[Math.min(i, EPOCHS.length - 1)];
+                return e.stops || getTierBackdropStops(tier);
+            }
+
+            function mixHex(a, b, t) {
+                const pa = parseInt(a.slice(1), 16);
+                const pb = parseInt(b.slice(1), 16);
+                const ch = (s) => Math.round(((pa >> s) & 255) + ((((pb >> s) & 255) - ((pa >> s) & 255)) * t));
+                return `rgb(${ch(16)}, ${ch(8)}, ${ch(0)})`;
+            }
+
             // 8-Pipe Musical Phrase Contours (Replaces random jagged heights)
             const HARMONIC_PHRASES = [
                 {
@@ -853,6 +886,25 @@
                 }
                 streakDisplay.textContent = streak;
                 flowCtrl.tier = computeTierFromStreak(streak);
+
+                // Epoch & Platinum milestones (this run's peak)
+                if (streak > runPeak) {
+                    const prevEpoch = Math.floor(runPeak / EPOCH_SPAN);
+                    const wasPlatinum = runPeak >= PLATINUM_AT;
+                    runPeak = streak;
+                    const newEpoch = Math.floor(runPeak / EPOCH_SPAN);
+                    if (!wasPlatinum && runPeak >= PLATINUM_AT) {
+                        spawnCallout("PLATINUM", width * 0.5, height * 0.3, "#f1f5f9", 1.35);
+                        spawnBeatRing(bird.x, bird.y, 320, "#e2e8f0");
+                        spawnParticles(bird.x, bird.y, "#f8fafc", 40);
+                        triggerHaptic([20, 40, 20, 40, 30]);
+                    } else if (newEpoch > prevEpoch) {
+                        const epoch = EPOCHS[Math.min(newEpoch, EPOCHS.length - 1)];
+                        spawnCallout(epoch.name, width * 0.5, height * 0.3, "#e0f2fe", 1.2);
+                        spawnBeatRing(bird.x, bird.y, 240, "#7dd3fc");
+                        triggerHaptic([15, 30, 15]);
+                    }
+                }
 
                 if (flowCtrl.tier > prevTier) {
                     const tierNames = [
@@ -1217,6 +1269,7 @@
 
             function getTierPrimaryColor() {
                 if (flowCtrl.hyperGlideTimer > 0) return "#fbbf24";
+                if (runPeak >= PLATINUM_AT) return "#e5e7eb"; // Platinum: chrome ribbon, trail and halo
                 if (flowCtrl.tier === 4) return "#f472b6";
                 if (flowCtrl.tier === 3) return "#c084fc";
                 if (flowCtrl.tier === 2) return "#10b981";
@@ -1385,6 +1438,10 @@
 
                 // Silk Ribbon Trail (pulses on 16th-note grid in Tier 2+)
                 bird.trail.unshift({ x: bird.x, y: bird.y, pulse: sixteenthPulse });
+                // Platinum: crystalline diamond dust shed from the trail
+                if (runPeak >= PLATINUM_AT && Math.random() < 0.35) {
+                    spawnParticles(bird.x - 10, bird.y, "#f8fafc", 1);
+                }
                 const maxTrail = Math.floor(24 + flowCtrl.tier * 8);
                 while (bird.trail.length > maxTrail) {
                     bird.trail.pop();
@@ -1548,7 +1605,18 @@
 
                 // 1. 4-Tier Evolving Backdrop
                 const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
-                if (tier === 4) {
+                // Ease toward this run's epoch position, then blend each 500-point band into the next
+                epochPos += (Math.min(runPeak / EPOCH_SPAN, EPOCHS.length - 1) - epochPos) * 0.02;
+                if (epochPos > 0.001) {
+                    const base = Math.floor(epochPos);
+                    const f = epochPos - base;
+                    const t = f * f * (3 - 2 * f);
+                    const from = getEpochStops(base, tier);
+                    const to = getEpochStops(base + 1, tier);
+                    bgGrad.addColorStop(0, mixHex(from[0], to[0], t));
+                    bgGrad.addColorStop(0.55, mixHex(from[1], to[1], t));
+                    bgGrad.addColorStop(1, mixHex(from[2], to[2], t));
+                } else if (tier === 4) {
                     bgGrad.addColorStop(0, "#0b041d");
                     bgGrad.addColorStop(0.5, "#190a36");
                     bgGrad.addColorStop(1, "#061d2c");
@@ -1692,9 +1760,17 @@
                     if (isGhost) ctx.globalAlpha = 0.42;
 
                     const pipeGrad = ctx.createLinearGradient(p.x, 0, p.x + p.width, 0);
-                    pipeGrad.addColorStop(0, "#090f1d");
-                    pipeGrad.addColorStop(0.5, "#162238");
-                    pipeGrad.addColorStop(1, "#090f1d");
+                    if (runPeak >= PLATINUM_AT) {
+                        // Brushed platinum with a slow sheen drifting across each pipe
+                        const sheen = 0.5 + Math.sin(nowSec * 1.3 + p.x * 0.01) * 0.3;
+                        pipeGrad.addColorStop(0, "#2a2f3a");
+                        pipeGrad.addColorStop(sheen, "#a8b0bd");
+                        pipeGrad.addColorStop(1, "#2a2f3a");
+                    } else {
+                        pipeGrad.addColorStop(0, "#090f1d");
+                        pipeGrad.addColorStop(0.5, "#162238");
+                        pipeGrad.addColorStop(1, "#090f1d");
+                    }
                     ctx.fillStyle = pipeGrad;
 
                     ctx.fillRect(p.x, 102, p.width, Math.max(0, topPipeBottom - 102));
