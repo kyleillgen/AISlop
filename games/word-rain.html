@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <link rel="icon" href="data:,">
 <title>Word Rain</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&family=Righteous&display=swap" rel="stylesheet">
 </head>
 <body>
 <script src="flow-engine.js"></script>
@@ -33,7 +33,8 @@
     "otter heron crane robin wren finch swift lark owl hawk fox deer hare badger beaver salmon trout seal whale " +
     "build code test merge ship patch fix bug loop byte cache queue stack array string commit branch deploy compile"
   ).split(" ");
-  const BG = [["#050a14", "#0a1626"], ["#04100f", "#0a2321"], ["#0a0818", "#170f30"], ["#12061a", "#1d0b2c"]];
+  // Gel-lit night skies, like a 70s sci-fi planet set: indigo, green, magenta, ember
+  const BG = [["#0d0930", "#3f1d8a"], ["#04170f", "#134a1d"], ["#1a0520", "#561034"], ["#1f0806", "#6a2508"]];
   const TOP_Y = 96;
 
   let words = [];
@@ -216,7 +217,7 @@
       ctx.fillRect(0, 0, W, H);
 
       // Rain: one path, thin and faint
-      ctx.strokeStyle = `rgba(148, 197, 255, ${0.16 + kick * 0.08})`;
+      ctx.strokeStyle = `rgba(255, 220, 180, ${0.14 + kick * 0.08})`;
       ctx.lineWidth = 1;
       ctx.beginPath();
       for (let i = 0; i < [40, 60, 75, 90][tier - 1]; i++) {
@@ -229,8 +230,8 @@
       // Water: a gently breathing surface
       ctx.fillStyle = api.cached("water", () => {
         const g = ctx.createLinearGradient(0, waterY, 0, H);
-        g.addColorStop(0, "rgba(14, 116, 144, 0.32)");
-        g.addColorStop(1, "rgba(2, 6, 23, 0.9)");
+        g.addColorStop(0, "rgba(60, 20, 110, 0.55)");
+        g.addColorStop(1, "rgba(10, 4, 24, 0.95)");
         return g;
       });
       ctx.beginPath();
@@ -273,7 +274,7 @@
         for (let i = 0; i < w.text.length; i++) {
           const typed = i < w.typed;
           ctx.globalAlpha = alpha * (typed ? 1 : 0.82);
-          ctx.fillStyle = typed ? (w.ghost ? "#94a3b8" : col) : "#e2e8f0";
+          ctx.fillStyle = typed ? (w.ghost ? "#a3a0b8" : col) : "#fff1d6";
           ctx.fillText(w.text[i], x0 + cw * (i + 0.5), y);
         }
       }
@@ -293,7 +294,9 @@
       locked: api.eng.locked,
       auto: api.eng.auto,
       spacingBeats: api.eng.paceBeats(),
-      cleanRate: +api.eng.pacer.rate().toFixed(2)
+      cleanRate: +api.eng.pacer.rate().toFixed(2),
+      musicMix: +api.eng.synth.autoMix.toFixed(2), // 0 game arrangement, 1 drift
+      chord: api.eng.synth.chordIndex
     };
   };
 })();

@@ -241,3 +241,23 @@ test("pacer changes wait for at least 4 items (hysteresis)", () => {
   assert.equal(changes.length, 3, `expected 3 steps up to the cap, got ${changes.length}`);
   for (let k = 1; k < changes.length; k++) assert.ok(changes[k] - changes[k - 1] >= 4, `steps at ${changes}`);
 });
+
+test("fast tappers up to 136 BPM aren't capped", () => {
+  const { log } = run([{ every: 60000 / 132, secs: 15 }]);
+  const lock = firstLock(log);
+  assert.ok(lock, "never locked");
+  assert.ok(Math.abs(lock.bpm - 132) < 2.5, `locked at ${lock.bpm.toFixed(1)}`);
+});
+
+test("a ragged typist between two folds keeps one fold", () => {
+  const c = createController({ perBeat: [1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4], minMs: 60, maxMs: 900, stableTol: 2.5 });
+  let s = 7;
+  const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const folds = [];
+  for (let i = 0; i < 200; i++) {
+    c.recordTap(200 + i * 215 + (rand() - 0.5) * 90); // ~215 ms a key, ±45 ms
+    if (c.fold) folds.push(c.fold);
+  }
+  const changes = folds.filter((f, i) => i > 0 && f !== folds[i - 1]).length;
+  assert.ok(changes <= 1, `fold changed ${changes} times`);
+});

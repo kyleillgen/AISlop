@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <link rel="icon" href="data:,">
 <title>Drop Catch</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&family=Righteous&display=swap" rel="stylesheet">
 </head>
 <body>
 <script src="flow-engine.js"></script>
@@ -79,7 +79,7 @@
   // 5. Drawing. Drops ride the beat: their height is a straight function of beatPos.
   function draw(ctx, api) {
     const { W, H } = api;
-    ctx.fillStyle = "#060b16";
+    ctx.fillStyle = ["#1a0f4a", "#08301a", "#3a0a3a", "#401406"][api.tier - 1];
     ctx.fillRect(0, 0, W, H);
     const x = W / 2;
     const top = 110;

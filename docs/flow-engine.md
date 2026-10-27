@@ -20,7 +20,7 @@ To build a game on it, start with [build-on-the-engine.md](build-on-the-engine.m
 | Fires `beat` on every quarter note. `beatPos()` gives a smooth beat count matched to what the player hears | Spawns things on the beat and moves them by `beatPos()` |
 | Paces new items with `paceBeats()`: the player's own handling speed with 15% slack, plus up to 3 beats of room when their clean rate drops below 85%. It changes in whole beats and only after 4 items | Spawns when that many beats have passed, and passes `handleSec` to `score()` |
 | Keeps the streak and tiers. A miss steps the streak down by a quarter, never to zero, and raises a slow-moving assist level | Calls `score()` and `clip()`, and widens its own margins by `assist`, for things not yet on screen |
-| Starts autopilot after `idleSec` with no input, or when the window loses focus. The music slows about 5%, gets quieter and settles on its home chord. The next input takes over again, and the next two misses are forgiven | Plays itself while `auto` is true and scores nothing |
+| Starts autopilot after `idleSec` with no input, or when the window loses focus. The music slows about 5% and gets quieter, resolves to its home chord, then crossfades into a long-form drift arrangement that doesn't loop: chords change every 4 bars and wander, the drums fade away, and a generated melody comes and goes. It crossfades back to the game arrangement when the player returns. The next input takes over again, and the next two misses are forgiven | Plays itself while `auto` is true and scores nothing |
 | Calibrates the player's timing against the audio output delay, with a manual offset | — |
 | Records measurements on the device (rhythm steadiness, timing, bursts, misses, typos) and occasionally asks two flow questions | — |
 
@@ -67,7 +67,7 @@ Experiment switches work in any game: `?phase=frozen` and `?milestones=off`.
 
 ## Fitting the tempo
 
-Each action interval is fitted to a tempo inside 96–124 BPM by trying each count in `perBeat` (actions per beat). In-band fits win, and among those, the one nearest the current tempo, so the reading doesn't jump between folds.
+Each action interval is fitted to a tempo inside 96–136 BPM (the brief suggested 124 as the ceiling; it was raised so fast players aren't capped) by trying each count in `perBeat` (actions per beat). In-band fits win, and among those, the one nearest the current tempo, so the reading doesn't jump between folds.
 
 - **Taps** use `[0.5, 1, 2]`: half time, on the beat, or double time.
 - **Word Rain** uses `[1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4]`. With those counts, any typing pace from about 120 to 620 ms a key has an in-band fit. A test checks this.

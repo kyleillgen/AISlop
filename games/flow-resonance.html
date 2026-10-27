@@ -6,7 +6,7 @@
     <link rel="icon" href="data:,">
     <title>Flow // Resonance</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@500;700;800&family=Righteous&display=swap" rel="stylesheet">
     <style>
         * {
             box-sizing: border-box;
@@ -76,7 +76,7 @@
                         </span>
                     </div>
                     <div class="flex items-baseline gap-2 mt-0.5">
-                        <span id="streakDisplay" class="text-2xl sm:text-3xl font-black font-mono-tech text-emerald-400 tracking-tight leading-none">0</span>
+                        <span id="streakDisplay" class="text-2xl sm:text-3xl font-black font-mono-tech text-[#ffc21a] tracking-tight leading-none">0</span>
                         <span class="hidden sm:inline text-[10px] text-slate-500">best <strong id="bestStreakDisplay" class="text-slate-300 font-mono-tech">0</strong></span>
                     </div>
                 </div>
@@ -85,27 +85,27 @@
             <!-- Center: Continuous Flow Resonance % & 4-Tier Evolution Label -->
             <div class="flex flex-col items-center flex-1 min-w-0 max-w-[165px] sm:max-w-[230px] px-1">
                 <div class="w-full flex items-center justify-between text-[9px] sm:text-[10px] font-mono-tech mb-1">
-                    <span id="stateLabel" class="font-semibold text-cyan-300 truncate" style="font-family: Inter, sans-serif">Finding your tempo</span>
-                    <span id="flowPctDisplay" class="font-bold text-emerald-300 ml-1">45%</span>
+                    <span id="stateLabel" class="font-semibold text-[#7aa2ff] truncate" style="font-family: Inter, sans-serif">Finding your tempo</span>
+                    <span id="flowPctDisplay" class="font-bold text-[#ffc21a] ml-1">45%</span>
                 </div>
                 <div class="w-full h-1 bg-slate-800/80 rounded-full overflow-hidden">
-                    <div id="flowBarFill" class="h-full rounded-full bg-gradient-to-r from-cyan-500 via-emerald-400 to-fuchsia-400 transition-[width] duration-500 ease-out" style="width: 45%"></div>
+                    <div id="flowBarFill" class="h-full rounded-full bg-[#3d7bff] transition-[width] duration-500 ease-out" style="width: 45%"></div>
                 </div>
             </div>
 
             <!-- Right: Track, Groove Voice & Audio Mute (cadence lock lives on the L key) -->
             <div class="flex items-center gap-1 sm:gap-1.5 pointer-events-auto">
-                <button id="trackBtn" type="button" title="Switch track (T)" class="whitespace-nowrap px-2.5 py-1.5 rounded-xl text-[11px] font-medium lowercase border transition-all active:scale-95 bg-slate-900/90 text-cyan-300 border-slate-700/70">
+                <button id="trackBtn" type="button" title="Switch track (T)" class="whitespace-nowrap px-2.5 py-1.5 rounded-xl text-[11px] font-medium lowercase border transition-all active:scale-95 bg-slate-900/90 text-[#ffc21a] border-slate-700/70">
                     <span id="phraseReadout">MIDNIGHT</span>
                 </button>
-                <button id="voiceBtn" type="button" title="Switch groove voice (V)" class="hidden sm:inline-block whitespace-nowrap px-2.5 py-1.5 rounded-xl text-[11px] font-medium lowercase border transition-all active:scale-95 bg-slate-900/90 text-indigo-300 border-slate-700/70">
+                <button id="voiceBtn" type="button" title="Switch groove voice (V)" class="hidden sm:inline-block whitespace-nowrap px-2.5 py-1.5 rounded-xl text-[11px] font-medium lowercase border transition-all active:scale-95 bg-slate-900/90 text-[#ff4f9e] border-slate-700/70">
                     LO-FI RHODES
                 </button>
                 <button id="pauseBtn" type="button" aria-label="Pause (P)" title="Pause (P)" class="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/70 transition-all active:scale-95">
                     <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>
                 </button>
                 <button id="muteBtn" type="button" aria-label="Toggle Audio" class="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 border border-slate-700/70 transition-all active:scale-95">
-                    <svg id="speakerOnIcon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <svg id="speakerOnIcon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-[#ffc21a]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
                     </svg>
                     <svg id="speakerOffIcon" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-rose-400 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -129,8 +129,8 @@
     <div id="startOverlay" class="absolute inset-0 z-30 flex items-center justify-center p-4 sm:p-5 bg-slate-950/85 transition-opacity duration-500">
         <div class="max-w-sm w-full bg-slate-900/95 border border-slate-800 rounded-3xl p-6 sm:p-7 flex flex-col gap-5">
             <div class="space-y-2">
-                <div class="text-[10px] font-mono-tech uppercase tracking-[0.3em] text-cyan-300/80">Flow // Resonance</div>
-                <h1 class="text-2xl sm:text-[28px] font-semibold tracking-tight text-white leading-tight">Find your rhythm.<br>Stay in it.</h1>
+                <div class="text-[10px] font-mono-tech uppercase tracking-[0.3em] text-[#ffc21a]">Flow // Resonance</div>
+                <h1 class="text-2xl sm:text-[30px] tracking-wide text-white leading-tight" style="font-family: Righteous, Inter, sans-serif">Find your rhythm.<br>Stay in it.</h1>
                 <p class="text-sm text-slate-400 leading-relaxed">
                     Tap a steady beat. The music settles into your tempo, the pillars arrive on the beat, and every tap plays in key. You can't lose, and it never speeds up. Stop tapping and it flies itself.
                 </p>
@@ -141,7 +141,7 @@
                 <span><span class="kbd">P</span> pause</span>
                 <span><span class="kbd">T</span> <span class="kbd">V</span> track, voice</span>
             </div>
-            <button id="startBtn" type="button" class="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-400 text-slate-950 font-semibold text-base start-btn-glow active:scale-[0.98] transition-transform cursor-pointer">
+            <button id="startBtn" type="button" class="w-full py-3.5 px-6 rounded-2xl bg-[#ff6a1a] text-slate-950 font-semibold text-base active:scale-[0.98] transition-transform cursor-pointer">
                 Start
             </button>
         </div>
@@ -153,8 +153,8 @@
             <div class="text-2xl font-semibold text-white">Paused</div>
             <div class="text-sm text-slate-400">Tap, <span class="kbd">Space</span> or <span class="kbd">P</span> to resume</div>
             <div class="flex justify-center gap-2 pt-3">
-                <button id="pauseTrackBtn" type="button" class="px-3 py-1.5 rounded-xl text-xs bg-slate-900/90 text-cyan-300 border border-slate-700/70">track</button>
-                <button id="pauseVoiceBtn" type="button" class="px-3 py-1.5 rounded-xl text-xs bg-slate-900/90 text-indigo-300 border border-slate-700/70">voice</button>
+                <button id="pauseTrackBtn" type="button" class="px-3 py-1.5 rounded-xl text-xs bg-slate-900/90 text-[#ffc21a] border border-slate-700/70">track</button>
+                <button id="pauseVoiceBtn" type="button" class="px-3 py-1.5 rounded-xl text-xs bg-slate-900/90 text-[#ff4f9e] border border-slate-700/70">voice</button>
             </div>
         </div>
     </div>
@@ -289,6 +289,21 @@
                     this.currentCutoff = 900;
                     this.cushionedFilterTimer = 0; // Smooth 2-second filter crossfade on gentle pipe clip
                     this.queuedTapNotes = [];      // Quantized notes triggered by player taps
+
+                    // Drift: the autopilot arrangement. autoMix crossfades 0 (game) to 1 (drift) over
+                    // about 6 s going in and 3 s coming back, so nothing ever switches abruptly.
+                    this.autoTarget = 0;
+                    this.autoMix = 0;
+                    this.lastMixTime = 0;
+                    this.resolvePending = false;
+                    this.driftDegree = 4;     // the drift melody's position in the scale (random walk)
+                    this.driftPhraseOn = true;
+                }
+
+                // Autopilot on: resolve home at the next bar, then drift into the long-form arrangement
+                setAutopilot(on) {
+                    this.autoTarget = on ? 1 : 0;
+                    if (on) this.resolvePending = true;
                 }
 
                 init() {
@@ -568,6 +583,11 @@
                         this.nextStepTime = now;
                     }
 
+                    const mixDt = Math.max(0, Math.min(0.1, now - (this.lastMixTime || now)));
+                    this.lastMixTime = now;
+                    const fadeSec = this.autoTarget > this.autoMix ? 6 : 3;
+                    this.autoMix += Math.max(-mixDt / fadeSec, Math.min(mixDt / fadeSec, this.autoTarget - this.autoMix));
+
                     while (this.nextStepTime < now + 0.09) {
                         this.scheduleStep(this.stepIndex, this.nextStepTime, flowIndex, tier, callbacks);
                         this.stepIndex = (this.stepIndex + 1) % 16;
@@ -575,8 +595,21 @@
                             this.barCount++;
                             // Cycle through the 4-chord progression (faster cycling in Tier 4 for lush movement)
                             const barsPerChord = tier >= 4 ? 1 : 2;
-                            if (this.holdTonic) {
-                                this.chordIndex = 0; // stopping cue: resolve home and stay there
+                            if (this.resolvePending) {
+                                this.chordIndex = 0; // stopping cue: resolve home first
+                                this.resolvePending = false;
+                                this.driftBar = 0;
+                            } else if (this.autoMix > 0.5) {
+                                // Drift: four bars a chord, wandering rather than looping. The next chord
+                                // is any other one, leaning toward a step forward, so no two passes match.
+                                this.driftBar = (this.driftBar || 0) + 1;
+                                if (this.driftBar % 4 === 0) {
+                                    const n = CHORD_PROGRESSION.length;
+                                    const step = Math.random() < 0.6 ? 1 : 1 + Math.floor(Math.random() * (n - 1));
+                                    this.chordIndex = (this.chordIndex + step) % n;
+                                }
+                                // Melody phrases come and go: roughly two bars on, one or two off
+                                this.driftPhraseOn = this.driftPhraseOn ? Math.random() < 0.55 : Math.random() < 0.6;
                             } else if (this.barCount % barsPerChord === 0) {
                                 this.chordIndex = (this.chordIndex + 1) % CHORD_PROGRESSION.length;
                             }
@@ -608,20 +641,23 @@
                             padOsc.type = voice === 0 ? "sine" : voice === 1 ? "sawtooth" : "triangle";
                             padOsc.frequency.setValueAtTime(freq, time);
 
-                            const padAmp = voice === 2 ? 0.055 : 0.038;
+                            const padAmp = (voice === 2 ? 0.055 : 0.038) * (1 + 0.45 * this.autoMix);
+                            const padRelease = 1.9 + 2.4 * this.autoMix; // drift pads overlap into a wash
                             padGain.gain.setValueAtTime(0.001, time);
-                            padGain.gain.linearRampToValueAtTime(padAmp, time + 0.35);
-                            padGain.gain.exponentialRampToValueAtTime(0.0008, time + 1.9);
+                            padGain.gain.linearRampToValueAtTime(padAmp, time + 0.35 + 0.5 * this.autoMix);
+                            padGain.gain.exponentialRampToValueAtTime(0.0008, time + padRelease);
 
                             padOsc.connect(padGain);
                             padGain.connect(this.padFilter);
                             padOsc.start(time);
-                            padOsc.stop(time + 1.95);
+                            padOsc.stop(time + padRelease + 0.05);
                         });
                     }
 
-                    // 2. Sub-Kick & Percussion Pocket (Adapted per Groove Voice)
-                    if (step % 4 === 0) {
+                    // 2. Sub-Kick & Percussion Pocket (Adapted per Groove Voice); in drift, a soft
+                    //    half-time pulse that fades almost away
+                    const drumMix = 1 - 0.8 * this.autoMix;
+                    if (step % 4 === 0 && (this.autoMix < 0.5 || step % 8 === 0)) {
                         const kickOsc = this.ctx.createOscillator();
                         const kickGain = this.ctx.createGain();
                         kickOsc.type = "sine";
@@ -629,7 +665,7 @@
                         kickOsc.frequency.setValueAtTime(startPitch, time);
                         kickOsc.frequency.exponentialRampToValueAtTime(42, time + 0.13);
 
-                        const kickAmp = voice === 2 ? 0.22 : 0.30;
+                        const kickAmp = (voice === 2 ? 0.22 : 0.30) * drumMix;
                         kickGain.gain.setValueAtTime(kickAmp, time);
                         kickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
 
@@ -640,7 +676,7 @@
                     }
 
                     // Off-beat dusty shaker / hat
-                    if (voice !== 2 && (step % 4 === 2 || (tier >= 2 && (step === 7 || step === 15)))) {
+                    if (voice !== 2 && this.autoMix < 0.9 && (step % 4 === 2 || (tier >= 2 && (step === 7 || step === 15)))) {
                         const hatOsc = this.ctx.createOscillator();
                         const hatGain = this.ctx.createGain();
                         hatOsc.type = "square";
@@ -650,8 +686,8 @@
                         hatFilter.type = "highpass";
                         hatFilter.frequency.value = 3000;
 
-                        const amp = step % 4 === 2 ? 0.026 : 0.012;
-                        hatGain.gain.setValueAtTime(amp, time);
+                        const amp = (step % 4 === 2 ? 0.026 : 0.012) * (1 - this.autoMix);
+                        hatGain.gain.setValueAtTime(Math.max(0.0006, amp), time);
                         hatGain.gain.exponentialRampToValueAtTime(0.0005, time + 0.04);
 
                         hatOsc.connect(hatFilter);
@@ -662,7 +698,8 @@
                     }
 
                     // 3. Tier 2+ Rolling Dorian/Chord Bassline
-                    if (tier >= 2 || step % 4 === 0) {
+                    const bassStep = this.autoMix > 0.5 ? step % 8 === 0 : tier >= 2 || step % 4 === 0;
+                    if (bassStep) {
                         const bassFreq = chord.bass[step % 8];
                         if (bassFreq > 0) {
                             const bassOsc = this.ctx.createOscillator();
@@ -670,21 +707,45 @@
                             bassOsc.type = voice === 1 ? "sawtooth" : "triangle";
                             bassOsc.frequency.setValueAtTime(bassFreq, time);
 
-                            const amp = 0.12 + Math.min(0.06, tier * 0.015);
+                            const amp = (0.12 + Math.min(0.06, tier * 0.015)) * (1 - 0.45 * this.autoMix);
+                            const bassDecay = 0.15 + 0.7 * this.autoMix; // long, round notes in drift
                             bassGain.gain.setValueAtTime(0.001, time);
                             bassGain.gain.linearRampToValueAtTime(amp, time + 0.012);
-                            bassGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+                            bassGain.gain.exponentialRampToValueAtTime(0.001, time + bassDecay);
 
                             bassOsc.connect(bassGain);
                             bassGain.connect(this.bassFilter);
                             bassOsc.start(time);
-                            bassOsc.stop(time + 0.16);
+                            bassOsc.stop(time + bassDecay + 0.01);
                         }
                     }
 
                     // 4. Quantized Player Co-Creation Lead OR Tier 3+ Lush Auto-Arpeggiator
                     const queuedTap = this.queuedTapNotes.shift();
-                    const shouldAutoArp = tier >= 3 && (step % 2 === 1);
+                    const shouldAutoArp = tier >= 3 && (step % 2 === 1) && Math.random() > this.autoMix;
+
+                    // Drift melody: on eighth notes, a slow random walk through the scale, phrased with
+                    // rests, ringing out through the delay. Generated, so it never repeats exactly.
+                    if (this.autoMix > 0.05 && step % 2 === 0 && this.driftPhraseOn && !queuedTap) {
+                        const chance = (step % 8 === 0 ? 0.55 : 0.22) * this.autoMix;
+                        if (Math.random() < chance) {
+                            const moves = [-2, -1, -1, 1, 1, 2, 0];
+                            this.driftDegree = Math.max(2, Math.min(chord.scale.length - 2, this.driftDegree + moves[Math.floor(Math.random() * moves.length)]));
+                            const dOsc = this.ctx.createOscillator();
+                            const dGain = this.ctx.createGain();
+                            dOsc.type = voice === 1 ? "triangle" : "sine";
+                            dOsc.frequency.setValueAtTime(chord.scale[this.driftDegree], time);
+                            const dPeak = 0.07 * this.autoMix;
+                            dGain.gain.setValueAtTime(0.001, time);
+                            dGain.gain.linearRampToValueAtTime(dPeak, time + 0.03);
+                            dGain.gain.exponentialRampToValueAtTime(0.0006, time + 1.1);
+                            dOsc.connect(dGain);
+                            dGain.connect(this.padFilter);
+                            dGain.connect(this.delayNode);
+                            dOsc.start(time);
+                            dOsc.stop(time + 1.15);
+                        }
+                    }
 
                     if (queuedTap || shouldAutoArp) {
                         const normH = queuedTap ? queuedTap.heightNorm : ((step * 3) % 10) / 10;
@@ -763,10 +824,10 @@
             const PLATINUM_AT = 1000;
             const EPOCHS = [
                 { name: "DEEP INDIGO", stops: null }, // 0-499: the original tier backdrops
-                { name: "OBSIDIAN & EMERALD NEON", stops: ["#020806", "#04201a", "#063b2c"] },
+                { name: "EMERALD GEL", stops: ["#04170f", "#0c3a1e", "#1d6a24"] },
                 { name: "PLATINUM", stops: ["#14161c", "#2c313c", "#59606f"] },
-                { name: "SOLAR GOLD & AMBER FLARE", stops: ["#1a1004", "#3d2706", "#6b4210"] },
-                { name: "DEEP COSMOS PRISM", stops: ["#0a0420", "#1d0b3d", "#0b3a4a"] }
+                { name: "SOLAR FLARE", stops: ["#2a0a04", "#5c1a06", "#9a3a0a"] },
+                { name: "COSMIC PRISM", stops: ["#1a0530", "#4a0d5a", "#7a1550"] }
             ];
             const PARAMS = new URLSearchParams(window.location.search);
             const PHASE_FOLLOW = PARAMS.get("phase") !== "frozen"; // A/B: frozen grid vs alpha 0.2 following
@@ -783,10 +844,11 @@
             let epochPos = Math.min(runPeak / 500, 4);
 
             function getTierBackdropStops(tier) {
-                if (tier === 4) return ["#0b041d", "#190a36", "#061d2c"];
-                if (tier === 3) return ["#08061a", "#110d2e", "#071829"];
-                if (tier === 2) return ["#050914", "#071827", "#041e20"];
-                return ["#050711", "#08101e", "#0b1326"];
+                // Gel-lit skies, as in renderScene's tier backdrops
+                if (tier === 4) return ["#1f0806", "#3f1206", "#6a2508"];
+                if (tier === 3) return ["#1a0520", "#360a36", "#561034"];
+                if (tier === 2) return ["#04170f", "#0a2d1c", "#134a1d"];
+                return ["#0d0930", "#241366", "#3f1d8a"];
             }
 
             function getEpochStops(i, tier) {
@@ -831,7 +893,7 @@
                 resonanceLocked: false,   // Automatically true when flowIndex >= 0.75 or manualLock
 
                 vx: 3.10,                 // Horizontal scroll velocity (never escalates punitively)
-                bpm: 108,                 // Synced to player's natural inter-tap cadence (96 - 124 BPM)
+                bpm: 108,                 // Synced to player's natural inter-tap cadence (96 - 136 BPM)
                 detectedCadenceBpm: 108,
                 gapHeight: 174,           // Wide, generous, zero-narrowing gap
 
@@ -863,7 +925,7 @@
             const TEMPO_KEY = "flowResonanceTempo";
             try {
                 const saved = parseFloat(localStorage.getItem(TEMPO_KEY));
-                if (saved >= 96 && saved <= 124) {
+                if (saved >= 96 && saved <= 136) {
                     flowCtrl.bpm = flowCtrl.detectedCadenceBpm = flowCtrl.recentCadenceBpm = saved;
                     flowCtrl.vx = 2.85 + ((saved - 96) / 28) * 0.55;
                     flowCtrl.savedTempo = true;
@@ -880,7 +942,7 @@
                 ghostTimer: 0,
                 shakeTimer: 0,
                 washAlpha: 0,
-                washColor: "#22d3ee",
+                washColor: "#3d7bff",
                 angle: 0,
                 trail: []
             };
@@ -983,14 +1045,14 @@
                         const consistency = Math.max(0.35, Math.min(1.0, 1.0 - (cv - 0.16) * 0.95));
                         flowCtrl.tapRhythmScore = flowCtrl.tapRhythmScore * 0.75 + consistency * 0.25;
 
-                        // Convert player's natural inter-tap interval into a resonant BPM (clamped 96 - 124 BPM)
+                        // Convert player's natural inter-tap interval into a resonant BPM (clamped 96 - 136 BPM)
                         const rawBpm = 60000 / meanMs;
                         // Fold half- and double-time tappers into the band by octaves (brief: fold
                         // ~50-62 and ~192-248 BPM rather than forcing them)
                         let normalizedBpm = rawBpm;
                         if (normalizedBpm < 96 && normalizedBpm * 2 <= 136) normalizedBpm *= 2;
-                        else if (normalizedBpm > 124 && normalizedBpm / 2 >= 88) normalizedBpm /= 2;
-                        const clampedBpm = Math.max(96, Math.min(124, normalizedBpm));
+                        else if (normalizedBpm > 136 && normalizedBpm / 2 >= 88) normalizedBpm /= 2;
+                        const clampedBpm = Math.max(96, Math.min(136, normalizedBpm));
                         flowCtrl.detectedCadenceBpm =
                             flowCtrl.detectedCadenceBpm * 0.82 + clampedBpm * 0.18;
                         flowCtrl.recentCadenceBpm = clampedBpm;
@@ -1168,8 +1230,8 @@
                         triggerHaptic([20, 40, 20, 40, 30]);
                     } else if (newEpoch > prevEpoch) {
                         const epoch = EPOCHS[Math.min(newEpoch, EPOCHS.length - 1)];
-                        spawnCallout(epoch.name.toLowerCase(), width * 0.5, height * 0.3, "#e0f2fe", 1.2);
-                        spawnBeatRing(bird.x, bird.y, 240, "#7dd3fc");
+                        spawnCallout(epoch.name.toLowerCase(), width * 0.5, height * 0.3, "#ffe9c2", 1.2);
+                        spawnBeatRing(bird.x, bird.y, 240, "#ffd27a");
                         triggerHaptic([15, 30, 15]);
                     }
                 }
@@ -1182,8 +1244,8 @@
                         "Deep resonance",
                         "Transcendent"
                     ];
-                    spawnCallout(tierNames[flowCtrl.tier], width * 0.5, height * 0.34, "#f472b6", 1.22);
-                    spawnBeatRing(bird.x, bird.y, 160, "#f472b6");
+                    spawnCallout(tierNames[flowCtrl.tier], width * 0.5, height * 0.34, "#ff2d8a", 1.22);
+                    spawnBeatRing(bird.x, bird.y, 160, "#ff2d8a");
                     triggerHaptic([15, 30, 20]);
                 }
 
@@ -1225,14 +1287,14 @@
                 bird.ghostTimer = 1.15;
                 bird.shakeTimer = 0.12;
                 bird.washAlpha = 0.32;
-                bird.washColor = "#38bdf8";
+                bird.washColor = "#3d7bff";
 
                 // Gently dip resonance slightly and cross-fade synth filter for 2s
                 flowCtrl.flowIndex = Math.max(0.45, flowCtrl.flowIndex - 0.12);
                 synth.triggerCushionCrossfade();
                 synth.playGentleCushionChord();
                 triggerHaptic([12, 25]);
-                spawnParticles(bird.x, impactY || bird.y, "#38bdf8", 16);
+                spawnParticles(bird.x, impactY || bird.y, "#3d7bff", 16);
                 updateHudDisplays();
             }
 
@@ -1257,7 +1319,7 @@
                 // forever (but a re-sync still finishes its slow walk before re-locking).
                 const matchedVxNow = 2.85 + ((flowCtrl.bpm - 96) / 28) * 0.55;
                 const calibrated =
-                    (flowCtrl.tapCount >= 24 && Math.abs(flowCtrl.bpm - flowCtrl.detectedCadenceBpm) < 3) ||
+                    (flowCtrl.tapCount >= 24 && Math.abs(flowCtrl.bpm - flowCtrl.detectedCadenceBpm) < 1.5) ||
                     (flowCtrl.tapCount >= (flowCtrl.savedTempo ? 4 : 8) &&
                         Math.abs(flowCtrl.detectedCadenceBpm - flowCtrl.recentCadenceBpm) < 1.5 &&
                         Math.abs(flowCtrl.bpm - flowCtrl.recentCadenceBpm) < 2 &&
@@ -1281,7 +1343,7 @@
                     (flowCtrl.flowIndex >= 0.75 && (wasLocked ? !drifted : calibrated));
 
                 if (flowCtrl.resonanceLocked && !wasLocked && !flowCtrl.manualLock) {
-                    spawnCallout("In sync", width * 0.5, height * 0.30, "#34d399", 1.1);
+                    spawnCallout("In sync", width * 0.5, height * 0.30, "#22d36b", 1.1);
                     try {
                         localStorage.setItem(TEMPO_KEY, flowCtrl.bpm.toFixed(1));
                     } catch (e) {}
@@ -1437,25 +1499,25 @@
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.055);
                     synth.playPipeHarmony(streak, "PERFECT");
                     triggerHaptic(10);
-                    spawnBeatRing(bird.x, bird.y, 115, "#10b981");
-                    spawnParticles(bird.x, bird.y, "#34d399", 14);
+                    spawnBeatRing(bird.x, bird.y, 115, "#22d36b");
+                    spawnParticles(bird.x, bird.y, "#22d36b", 14);
                 } else if (normDist > 0.72 || pipe.wasGrazed) {
                     incrementStreak(2);
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.04);
                     synth.playPipeHarmony(streak, "GRAZE");
-                    spawnBeatRing(bird.x, bird.y, 95, "#ec4899");
-                    spawnParticles(bird.x, bird.y, "#f472b6", 12);
+                    spawnBeatRing(bird.x, bird.y, 95, "#ff2d8a");
+                    spawnParticles(bird.x, bird.y, "#ff2d8a", 12);
                 } else {
                     incrementStreak(1);
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.035);
                     synth.playPipeHarmony(streak, "CLEAN");
-                    spawnBeatRing(bird.x, bird.y, 80, "#22d3ee");
-                    spawnParticles(bird.x, bird.y, "#22d3ee", 8);
+                    spawnBeatRing(bird.x, bird.y, 80, "#3d7bff");
+                    spawnParticles(bird.x, bird.y, "#3d7bff", 8);
                 }
 
                 // Tier 3+ sends a big harmonic shockwave across the background grid on every pipe pass
                 if (flowCtrl.tier >= 3) {
-                    spawnBeatRing(pipe.x + pipe.width * 0.5, pipe.gapY, 240, "#a855f7");
+                    spawnBeatRing(pipe.x + pipe.width * 0.5, pipe.gapY, 240, "#b026ff");
                 }
 
                 updateHudDisplays();
@@ -1539,7 +1601,7 @@
             function enterAuto() {
                 if (!gameStarted || autoMode) return;
                 autoMode = true;
-                synth.holdTonic = true;
+                synth.setAutopilot(true); // resolve home, then the long-form drift arrangement
                 saveTelemetry();
                 maybeAskFlowCheck();
                 updateHudDisplays();
@@ -1548,7 +1610,7 @@
             function exitAuto() {
                 if (!autoMode) return;
                 autoMode = false;
-                synth.holdTonic = false;
+                synth.setAutopilot(false); // crossfade back to the game arrangement
                 forgivePillars = 2;
                 closeFlowCheck();
                 updateHudDisplays();
@@ -1651,7 +1713,7 @@
                 const bloomCount = flowCtrl.tier >= 4 ? 10 : 5;
                 spawnParticles(bird.x - 10, bird.y + 6, getTierPrimaryColor(), bloomCount);
                 if (flowCtrl.tier >= 4) {
-                    spawnBeatRing(bird.x, bird.y, 75, "#f472b6");
+                    spawnBeatRing(bird.x, bird.y, 75, "#ff2d8a");
                 }
 
                 if (touchHint) {
@@ -1759,7 +1821,7 @@
                 synth.init();
                 const voiceName = synth.cycleVoice();
                 voiceBtn.textContent = voiceName;
-                spawnCallout(voiceName.toLowerCase(), width * 0.5, 138, "#38bdf8", 1.0);
+                spawnCallout(voiceName.toLowerCase(), width * 0.5, 138, "#3d7bff", 1.0);
                 savePrefs();
             }
             voiceBtn.addEventListener("pointerdown", (e) => {
@@ -1770,7 +1832,7 @@
             // Track Selector
             function cycleTrack() {
                 setTrack(trackIndex + 1);
-                spawnCallout(TRACKS[trackIndex].name.toLowerCase(), width * 0.5, 138, "#22d3ee", 1.0);
+                spawnCallout(TRACKS[trackIndex].name.toLowerCase(), width * 0.5, 138, "#3d7bff", 1.0);
                 updateHudDisplays();
                 savePrefs();
             }
@@ -1788,7 +1850,7 @@
                     flowCtrl.manualLock ? "Holding this tempo" : "Following your tempo",
                     width * 0.5,
                     138,
-                    flowCtrl.manualLock ? "#34d399" : "#cbd5e1",
+                    flowCtrl.manualLock ? "#22d36b" : "#cbd5e1",
                     1.0
                 );
             }
@@ -1806,12 +1868,19 @@
             });
 
             function getTierPrimaryColor() {
-                if (flowCtrl.hyperGlideTimer > 0) return "#fbbf24";
+                if (flowCtrl.hyperGlideTimer > 0) return "#ffc21a";
                 if (runPeak >= PLATINUM_AT) return "#e5e7eb"; // Platinum: chrome ribbon, trail and halo
-                if (flowCtrl.tier === 4) return "#f472b6";
-                if (flowCtrl.tier === 3) return "#c084fc";
-                if (flowCtrl.tier === 2) return "#10b981";
-                return "#38bdf8";
+                // Hot colours, 70s sci-fi rather than neon: blue, green, pink, orange
+                if (flowCtrl.tier === 4) return "#ff6a1a";
+                if (flowCtrl.tier === 3) return "#ff2d8a";
+                if (flowCtrl.tier === 2) return "#22d36b";
+                return "#3d7bff";
+            }
+
+            // The partner colour for double stripes (ribbon, lips)
+            function getTierStripeColor() {
+                if (runPeak >= PLATINUM_AT) return "#9aa3b2";
+                return ["", "#ff6a1a", "#ffc21a", "#ff6a1a", "#ff2d8a"][flowCtrl.tier];
             }
 
             let lastHudTime = 0;
@@ -1819,6 +1888,7 @@
                 const pct = Math.round(flowCtrl.flowIndex * 100);
                 flowPctDisplay.textContent = pct + "%";
                 flowBarFill.style.width = pct + "%";
+                flowBarFill.style.background = getTierPrimaryColor();
 
                 phraseReadout.textContent = TRACKS[trackIndex].name;
 
@@ -1827,7 +1897,7 @@
                 if (flowCtrl.shieldReady) {
                     shieldBadge.textContent = "shield ready";
                     shieldBadge.className =
-                        "whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold tracking-wide bg-cyan-950 text-cyan-300 border border-cyan-400/60 shadow-[0_0_10px_rgba(34,211,238,0.35)]";
+                        "whitespace-nowrap px-1.5 py-0.5 rounded text-[9px] font-mono-tech font-bold tracking-wide bg-[#14204d] text-[#9db8ff] border border-[#3d7bff]/70";
                 } else {
                     shieldBadge.textContent = `shield ${shieldPct}%`;
                     shieldBadge.className =
@@ -1837,14 +1907,14 @@
                 // State label
                 const states = [
                     null,
-                    flowCtrl.resonanceLocked ? ["In sync", "text-cyan-300"] : ["Finding your tempo", "text-cyan-300"],
-                    ["Groove", "text-emerald-300"],
-                    ["Deep resonance", "text-purple-300"],
-                    ["Transcendent", "text-fuchsia-300"]
+                    flowCtrl.resonanceLocked ? ["In sync", "text-[#7aa2ff]"] : ["Finding your tempo", "text-[#7aa2ff]"],
+                    ["Groove", "text-[#3ee07f]"],
+                    ["Deep resonance", "text-[#ff4f9e]"],
+                    ["Transcendent", "text-[#ff8a3d]"]
                 ];
                 let [label, color] = states[flowCtrl.tier];
                 if (paused) [label, color] = ["Paused", "text-slate-400"];
-                else if (autoMode) [label, color] = ["Autopilot · tap to fly", "text-amber-300"];
+                else if (autoMode) [label, color] = ["Autopilot · tap to fly", "text-[#ffc21a]"];
                 stateLabel.textContent = label;
                 stateLabel.className = "font-semibold truncate " + color;
             }
@@ -1959,7 +2029,7 @@
                             if (!autoMode && slipstreamTickCounter % 14 === 0) {
                                 incrementStreak(1);
                                 synth.playSlipstreamTick(slipstreamTickCounter);
-                                spawnParticles(bird.x, bird.y, "#c084fc", 4);
+                                spawnParticles(bird.x, bird.y, "#ff4f9e", 4);
                             }
                         }
                     }
@@ -2010,7 +2080,7 @@
                 } else if (bird.y + bird.radius > floorY) {
                     bird.y = floorY - bird.radius;
                     bird.vy = bird.jumpImpulse * 0.76;
-                    spawnParticles(bird.x, floorY, "#38bdf8", 5);
+                    spawnParticles(bird.x, floorY, "#3d7bff", 5);
                 }
 
                 gridScrollX = (gridScrollX + flowCtrl.vx * frameScale * 0.55) % 52;
@@ -2046,8 +2116,8 @@
 
                         synth.playGoldenOrbShimmer();
                         triggerHaptic([12, 24, 16]);
-                        spawnBeatRing(orb.x, orb.y, 135, "#fbbf24");
-                        spawnParticles(orb.x, orb.y, "#fde047", 22);
+                        spawnBeatRing(orb.x, orb.y, 135, "#ffc21a");
+                        spawnParticles(orb.x, orb.y, "#ffd84d", 22);
                         updateHudDisplays();
                     }
 
@@ -2184,13 +2254,13 @@
                     const to = getEpochStops(base + 1, tier);
                     stops = [[0, mixHex(from[0], to[0], t)], [0.55, mixHex(from[1], to[1], t)], [1, mixHex(from[2], to[2], t)]];
                 } else if (tier === 4) {
-                    stops = [[0, "#0b041d"], [0.5, "#190a36"], [1, "#061d2c"]];
+                    stops = [[0, "#1f0806"], [0.55, "#3f1206"], [1, "#6a2508"]];
                 } else if (tier === 3) {
-                    stops = [[0, "#08061a"], [0.55, "#110d2e"], [1, "#071829"]];
+                    stops = [[0, "#1a0520"], [0.55, "#360a36"], [1, "#561034"]];
                 } else if (tier === 2) {
-                    stops = [[0, "#050914"], [0.6, "#071827"], [1, "#041e20"]];
+                    stops = [[0, "#04170f"], [0.6, "#0a2d1c"], [1, "#134a1d"]];
                 } else {
-                    stops = [[0, "#050711"], [1, "#0b1326"]];
+                    stops = [[0, "#0d0930"], [0.6, "#241366"], [1, "#3f1d8a"]];
                 }
                 const bgKey = height + stops.join("|");
                 if (bgKey !== bgCacheKey) {
@@ -2222,10 +2292,10 @@
                         aurGrad.addColorStop(
                             0,
                             band === 0
-                                ? `rgba(244, 114, 182, ${0.14 + kickPulse * 0.08})`
-                                : `rgba(45, 212, 191, ${0.14 + kickPulse * 0.08})`
+                                ? `rgba(255, 45, 138, ${0.14 + kickPulse * 0.08})`
+                                : `rgba(255, 106, 26, ${0.14 + kickPulse * 0.08})`
                         );
-                        aurGrad.addColorStop(1, "rgba(6, 182, 212, 0)");
+                        aurGrad.addColorStop(1, "rgba(255, 106, 26, 0)");
                         ctx.fillStyle = aurGrad;
                         ctx.fill();
                     }
@@ -2247,7 +2317,7 @@
 
                 // 2. Beat-synced dot grid (lighter than full lines, and calmer)
                 const gridAlpha = 0.16 + kickPulse * 0.2 + (tier - 1) * 0.04;
-                ctx.fillStyle = tier >= 3 ? `rgba(192, 132, 252, ${gridAlpha})` : `rgba(125, 160, 210, ${gridAlpha})`;
+                ctx.fillStyle = tier >= 3 ? `rgba(255, 150, 90, ${gridAlpha})` : `rgba(160, 150, 255, ${gridAlpha})`;
                 for (let x = -gridScrollX; x < width; x += 52) {
                     for (let y = 130; y < height - 26; y += 52) {
                         ctx.fillRect(x - 1, y - 1, 2, 2);
@@ -2259,7 +2329,7 @@
                     ctx.save();
                     // Locking in thickens the ribbon over half a second instead of switching
                     lockVis += ((flowCtrl.resonanceLocked ? 1 : 0) - lockVis) * 0.05;
-                    const ribbonAlpha = 0.22 + lockVis * (0.2 + kickPulse * 0.18);
+                    const ribbonAlpha = 0.5 + lockVis * (0.3 + kickPulse * 0.15);
                     ctx.strokeStyle = primaryColor;
                     ctx.globalAlpha = ribbonAlpha;
                     ctx.lineWidth = 2.2 + lockVis * 1.6;
@@ -2272,9 +2342,10 @@
                     }
                     ctx.stroke();
 
-                    // Soft outer glow around the guide ribbon
-                    ctx.globalAlpha = ribbonAlpha * 0.28;
-                    ctx.lineWidth = 16;
+                    // A second, thinner stripe in the partner colour (70s racing stripes, no glow)
+                    ctx.translate(0, 8);
+                    ctx.strokeStyle = getTierStripeColor();
+                    ctx.lineWidth = 1.4 + lockVis;
                     ctx.stroke();
                     ctx.restore();
                 }
@@ -2283,9 +2354,9 @@
                 slipstreams.forEach((s) => {
                     ctx.save();
                     const grad = ctx.createLinearGradient(s.xStart, s.yStart, s.xEnd, s.yEnd);
-                    grad.addColorStop(0, "rgba(192, 132, 252, 0.02)");
+                    grad.addColorStop(0, "rgba(255, 45, 138, 0.02)");
                     grad.addColorStop(0.5, `rgba(232, 121, 249, ${0.22 + kickPulse * 0.12})`);
-                    grad.addColorStop(1, "rgba(56, 189, 248, 0.02)");
+                    grad.addColorStop(1, "rgba(61, 123, 255, 0.02)");
 
                     ctx.strokeStyle = grad;
                     ctx.lineWidth = s.height;
@@ -2296,7 +2367,7 @@
                     ctx.stroke();
 
                     // Animated wind streamlines inside tunnel
-                    ctx.strokeStyle = "rgba(240, 171, 252, 0.45)";
+                    ctx.strokeStyle = "rgba(255, 150, 200, 0.45)";
                     ctx.lineWidth = 1.5;
                     ctx.setLineDash([10, 14]);
                     ctx.lineDashOffset = -s.phase * 24;
@@ -2332,7 +2403,7 @@
                         pipeGrad.addColorStop(1, "#2a2f3a");
                         ctx.fillStyle = pipeGrad;
                     } else {
-                        ctx.fillStyle = "#111c33";
+                        ctx.fillStyle = "#0a0616"; // silhouettes against the gel-lit sky
                     }
                     const r = Math.min(12, p.width * 0.4);
                     ctx.beginPath();
@@ -2358,11 +2429,8 @@
                     ctx.lineTo(p.x + p.width - r * 0.6, topPipeBottom - 1);
                     ctx.moveTo(p.x + r * 0.6, bottomPipeTop + 1);
                     ctx.lineTo(p.x + p.width - r * 0.6, bottomPipeTop + 1);
-                    ctx.globalAlpha = (isGhost ? 0.42 : 1) * (0.22 + kickPulse * 0.2);
-                    ctx.lineWidth = 12;
-                    ctx.stroke();
                     ctx.globalAlpha = isGhost ? 0.42 : 1;
-                    ctx.lineWidth = 3;
+                    ctx.lineWidth = 3.5 + kickPulse * 1.5;
                     ctx.stroke();
 
                     ctx.restore();
@@ -2383,7 +2451,7 @@
                     ctx.arc(0, 0, pulseR * 1.85, 0, Math.PI * 2);
                     ctx.fill();
 
-                    ctx.strokeStyle = "#fef08a";
+                    ctx.strokeStyle = "#ffe68a";
                     ctx.lineWidth = 2.2;
                     ctx.beginPath();
                     ctx.arc(0, 0, orb.radius + Math.sin(orb.phase * 2) * 2.5, 0, Math.PI * 2);
@@ -2450,17 +2518,18 @@
                     ctx.globalAlpha = 0.6 + Math.sin(performance.now() * 0.03) * 0.22;
                 }
 
-                const haloR = bird.radius + 8 + kickPulse * 7 + tier * 2.5;
-                const haloGrad = ctx.createRadialGradient(0, 0, bird.radius * 0.3, 0, 0, haloR);
-                haloGrad.addColorStop(0, primaryColor);
-                haloGrad.addColorStop(1, "rgba(6, 182, 212, 0)");
-                ctx.fillStyle = haloGrad;
+                // A flat disc behind the craft, breathing with the kick (no glow)
+                const haloR = bird.radius + 6 + kickPulse * 5 + tier * 1.5;
+                const haloAlpha = ctx.globalAlpha;
+                ctx.globalAlpha = haloAlpha * 0.28;
+                ctx.fillStyle = primaryColor;
                 ctx.beginPath();
                 ctx.arc(0, 0, haloR, 0, Math.PI * 2);
                 ctx.fill();
+                ctx.globalAlpha = haloAlpha;
 
                 if (flowCtrl.shieldReady) {
-                    ctx.strokeStyle = "rgba(56, 189, 248, 0.88)";
+                    ctx.strokeStyle = "rgba(61, 123, 255, 0.88)";
                     ctx.lineWidth = 2.2;
                     ctx.setLineDash([5, 3]);
                     ctx.beginPath();
@@ -2490,7 +2559,7 @@
                 ctx.restore();
 
                 // 11. Top & Bottom Laser Cushion Lines
-                ctx.strokeStyle = `rgba(56, 189, 248, ${0.16 + kickPulse * 0.14})`;
+                ctx.strokeStyle = `rgba(61, 123, 255, ${0.16 + kickPulse * 0.14})`;
                 ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(0, 102);
@@ -2502,7 +2571,7 @@
                 // 12. Floating Callouts
                 callouts.forEach((c) => {
                     ctx.save();
-                    ctx.font = `600 ${Math.round(14 * c.scale)}px Inter, sans-serif`;
+                    ctx.font = `${Math.round(16 * c.scale)}px Righteous, Inter, sans-serif`;
                     ctx.textAlign = "center";
                     // Fade in over the first few frames, then ease out
                     ctx.globalAlpha = Math.max(0, Math.min(1, (1 - c.alpha) * 8, c.alpha));

@@ -36,14 +36,14 @@
   .fs-head { position: fixed; top: 0; left: 0; right: 0; z-index: 20; padding: 8px; max-width: 42rem; margin: 0 auto; pointer-events: none; }
   .fs-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(2,6,23,.9); border: 1px solid rgba(30,41,59,.9); border-radius: 16px; padding: 8px 12px; }
   .fs-streak small { display: block; font-size: 10px; color: #94a3b8; }
-  .fs-streak b { font: 700 26px/1 'JetBrains Mono', monospace; color: #34d399; }
+  .fs-streak b { font: 700 26px/1 'JetBrains Mono', monospace; color: #ffc21a; }
   .fs-streak span { font-size: 10px; color: #64748b; margin-left: 6px; }
   .fs-state { flex: 1; min-width: 0; max-width: 220px; }
   .fs-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
   .fs-label { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .fs-pct { font: 600 10px 'JetBrains Mono', monospace; color: #6ee7b7; margin-left: 6px; }
+  .fs-pct { font: 600 10px 'JetBrains Mono', monospace; color: #ffc21a; margin-left: 6px; }
   .fs-meter { height: 4px; background: rgba(30,41,59,.8); border-radius: 99px; overflow: hidden; }
-  .fs-fill { height: 100%; width: 45%; border-radius: 99px; background: linear-gradient(90deg,#06b6d4,#34d399,#e879f9); transition: width .5s ease-out; }
+  .fs-fill { height: 100%; width: 45%; border-radius: 99px; background: #3d7bff; transition: width .5s ease-out, background .8s; }
   .fs-controls { display: flex; gap: 6px; pointer-events: auto; }
   .fs .fs-chip { white-space: nowrap; padding: 6px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; background: rgba(15,23,42,.9); border: 1px solid rgba(51,65,85,.7); }
   .fs-chip:active { transform: scale(.95); }
@@ -53,11 +53,11 @@
   .fs-over { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(2,6,23,.7); }
   .fs-over.show { display: flex; }
   .fs-card { max-width: 24rem; width: 100%; background: rgba(15,23,42,.96); border: 1px solid #1e293b; border-radius: 24px; padding: 24px; }
-  .fs-kicker { font: 600 10px 'JetBrains Mono', monospace; letter-spacing: .3em; text-transform: uppercase; color: rgba(103,232,249,.8); }
-  .fs-card h1 { margin: 8px 0; font-size: 27px; font-weight: 600; letter-spacing: -.01em; line-height: 1.15; color: #fff; }
+  .fs-kicker { font: 600 10px 'JetBrains Mono', monospace; letter-spacing: .3em; text-transform: uppercase; color: #ffc21a; }
+  .fs-card h1 { margin: 8px 0; font: 400 29px/1.15 Righteous, Inter, sans-serif; letter-spacing: .01em; line-height: 1.15; color: #fff; }
   .fs-card p { margin: 0 0 16px; font-size: 14px; line-height: 1.55; color: #94a3b8; }
   .fs-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 12px; color: #94a3b8; margin-bottom: 18px; }
-  .fs .fs-start { width: 100%; padding: 13px; border: 0; border-radius: 16px; font-size: 16px; font-weight: 600; color: #020617; background: linear-gradient(90deg,#34d399,#5eead4,#22d3ee); }
+  .fs .fs-start { width: 100%; padding: 13px; border: 0; border-radius: 16px; font-size: 16px; font-weight: 600; color: #1a0a00; background: #ff6a1a; }
   .fs-or { margin-top: 10px; text-align: center; font-size: 12px; color: #64748b; }
   .fs-rows div { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: #cbd5e1; margin: 6px 0; }
   .fs-note { margin-top: 10px; font-size: 12px; color: #64748b; }
@@ -65,7 +65,8 @@
   .fs-hint div { display: inline-block; padding: 6px 14px; border-radius: 99px; font-size: 11px; color: #cbd5e1; background: rgba(2,6,23,.8); border: 1px solid rgba(30,41,59,.9); }
   #fs-typer { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; border: 0; padding: 0; font-size: 16px; }`;
 
-  const DEFAULT_COLORS = ["#38bdf8", "#34d399", "#c084fc", "#f472b6"];
+  // Hot colours, 70s sci-fi rather than neon: blue, green, pink, orange
+  const DEFAULT_COLORS = ["#3d7bff", "#22d36b", "#ff2d8a", "#ff6a1a"];
   const kbd = (k) => `<span class="kbd">${k}</span>`;
 
   function mount(g) {
@@ -86,8 +87,8 @@
         <div class="fs-streak"><small>Streak</small><b data-streak>0</b><span>best <strong data-best>0</strong></span></div>
         <div class="fs-state"><div class="fs-row"><span class="fs-label" data-label></span><span class="fs-pct" data-pct>45%</span></div><div class="fs-meter"><div class="fs-fill" data-fill></div></div></div>
         <div class="fs-controls">
-          <button class="fs-chip" data-track style="color:#67e8f9" title="Switch track (Tab)"></button>
-          <button class="fs-chip fs-voice" data-voice style="color:#a5b4fc" title="Switch voice (Shift+Tab)"></button>
+          <button class="fs-chip" data-track style="color:#ffc21a" title="Switch track (Tab)"></button>
+          <button class="fs-chip fs-voice" data-voice style="color:#ff4f9e" title="Switch voice (Shift+Tab)"></button>
           <button class="fs-chip fs-icon" data-pause title="Pause (Esc)" aria-label="Pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg></button>
           <button class="fs-chip fs-icon" data-mute title="Mute (0)" aria-label="Mute"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.6 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.6l4.7-4.7c.6-.6 1.7-.2 1.7.7v14c0 .9-1.1 1.3-1.7.7z"/><path data-waves d="M15.5 8.5a5 5 0 010 7M18.4 5.6a9 9 0 010 12.8"/><path data-cross d="M17 10l4 4m0-4l-4 4" style="display:none"/></svg></button>
         </div></div></header>
@@ -105,7 +106,7 @@
         <div style="font-size:24px;font-weight:600;color:#fff">Paused</div>
         <div style="font-size:14px;color:#94a3b8;margin-top:6px">Tap or ${kbd("Esc")} to resume</div>
         <div style="display:flex;gap:8px;justify-content:center;margin-top:14px">
-          <button class="fs-chip" data-ptrack style="color:#67e8f9"></button><button class="fs-chip" data-pvoice style="color:#a5b4fc"></button>
+          <button class="fs-chip" data-ptrack style="color:#ffc21a"></button><button class="fs-chip" data-pvoice style="color:#ff4f9e"></button>
         </div></div></div>
       <div class="fs-over" data-keyscard><div class="fs-card" style="max-width:20rem;padding:20px">
         <div style="font-weight:600;color:#fff;margin-bottom:6px">Keys</div>
@@ -222,7 +223,7 @@
     eng.on("beat", (n) => {
       if (started && !eng.paused && g.onBeat) g.onBeat(n, api);
     });
-    eng.on("lock", () => api.callout("In sync", W / 2, H * 0.3, "#5eead4", 1.05));
+    eng.on("lock", () => api.callout("In sync", W / 2, H * 0.3, "#ffc21a", 1.05));
     eng.on("auto", hud);
     eng.on("manual", hud);
     eng.on("pause", (why) => {
@@ -240,10 +241,11 @@
       const pct = Math.round(eng.flowIndex * 100);
       q("[data-pct]").textContent = pct + "%";
       q("[data-fill]").style.width = pct + "%";
+      q("[data-fill]").style.background = api.color();
       let label = eng.tier === 1 ? (eng.locked ? "In sync" : tierNames[0]) : tierNames[eng.tier - 1];
       let c = api.color();
       if (eng.paused) [label, c] = ["Paused", "#94a3b8"];
-      else if (eng.auto && started) [label, c] = [g.autoLabel || "Autopilot · " + (typing ? "type" : "tap") + " to take over", "#fcd34d"];
+      else if (eng.auto && started) [label, c] = [g.autoLabel || "Autopilot · " + (typing ? "type" : "tap") + " to take over", "#ffc21a"];
       q("[data-label]").textContent = label;
       q("[data-label]").style.color = c;
       q("[data-track]").textContent = q("[data-ptrack]").textContent = eng.trackName.toLowerCase();
@@ -268,8 +270,8 @@
         hud();
       });
     const note = (text, color) => api.callout(text, W / 2, 130, color || "#94a3b8", 0.95);
-    press("[data-track]", () => note(eng.cycleTrack().toLowerCase(), "#67e8f9"));
-    press("[data-voice]", () => note(eng.cycleVoice().toLowerCase(), "#a5b4fc"));
+    press("[data-track]", () => note(eng.cycleTrack().toLowerCase(), "#ffc21a"));
+    press("[data-voice]", () => note(eng.cycleVoice().toLowerCase(), "#ff4f9e"));
     press("[data-ptrack]", () => eng.cycleTrack());
     press("[data-pvoice]", () => eng.cycleVoice());
     press("[data-pause]", () => setPaused(!eng.paused));
@@ -328,7 +330,7 @@
       else if (e.key === "Enter" && started) eng.setAuto(!eng.auto);
       else if (e.key === "Tab") {
         e.preventDefault();
-        note((e.shiftKey ? eng.cycleVoice() : eng.cycleTrack()).toLowerCase(), e.shiftKey ? "#a5b4fc" : "#67e8f9");
+        note((e.shiftKey ? eng.cycleVoice() : eng.cycleTrack()).toLowerCase(), e.shiftKey ? "#ff4f9e" : "#ffc21a");
       } else if (e.key === "-") note(`Volume ${Math.round(eng.changeVolume(-0.1) * 100)}%`);
       else if (e.key === "=" || e.key === "+") note(`Volume ${Math.round(eng.changeVolume(0.1) * 100)}%`);
       else if (e.key === "0") eng.toggleMute();
@@ -385,14 +387,14 @@
         }
         ctx.textAlign = "center";
         for (const c of callouts) {
-          ctx.font = `600 ${Math.round(15 * c.scale)}px Inter, sans-serif`;
+          ctx.font = `${Math.round(16 * c.scale)}px Righteous, Inter, sans-serif`;
           ctx.globalAlpha = Math.max(0, Math.min(1, (1 - c.a) * 8, c.a));
           ctx.fillStyle = c.color;
           ctx.fillText(c.text, c.x, c.y);
         }
         ctx.globalAlpha = 1;
         if (flash > 0) {
-          ctx.fillStyle = `rgba(56, 189, 248, ${flash * 0.18})`;
+          ctx.fillStyle = `rgba(255, 45, 138, ${flash * 0.16})`;
           ctx.fillRect(0, 0, W, H);
         }
       }

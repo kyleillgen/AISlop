@@ -6,7 +6,7 @@
 //
 // The synth below (tracks, CHORD_PROGRESSION, GROOVE_VOICES, CoCreationResonanceSynth) is
 // copied unchanged from games/flow-resonance.html, including its beat bookkeeping
-// (getBeatOffset, nudgePhase, holdTonic). Keep the two in step until Flow runs on this file.
+// (getBeatOffset, nudgePhase, setAutopilot and the drift arrangement). Keep the two in step until Flow runs on this file.
 //
 //   const eng = FlowEngine.create({ key: "myGame" });
 //   eng.start();                 // first user gesture
@@ -128,6 +128,21 @@
           this.currentCutoff = 900;
           this.cushionedFilterTimer = 0; // Smooth 2-second filter crossfade on gentle pipe clip
           this.queuedTapNotes = [];      // Quantized notes triggered by player taps
+
+          // Drift: the autopilot arrangement. autoMix crossfades 0 (game) to 1 (drift) over
+          // about 6 s going in and 3 s coming back, so nothing ever switches abruptly.
+          this.autoTarget = 0;
+          this.autoMix = 0;
+          this.lastMixTime = 0;
+          this.resolvePending = false;
+          this.driftDegree = 4;     // the drift melody's position in the scale (random walk)
+          this.driftPhraseOn = true;
+      }
+
+      // Autopilot on: resolve home at the next bar, then drift into the long-form arrangement
+      setAutopilot(on) {
+          this.autoTarget = on ? 1 : 0;
+          if (on) this.resolvePending = true;
       }
 
       init() {
@@ -407,6 +422,11 @@
               this.nextStepTime = now;
           }
 
+          const mixDt = Math.max(0, Math.min(0.1, now - (this.lastMixTime || now)));
+          this.lastMixTime = now;
+          const fadeSec = this.autoTarget > this.autoMix ? 6 : 3;
+          this.autoMix += Math.max(-mixDt / fadeSec, Math.min(mixDt / fadeSec, this.autoTarget - this.autoMix));
+
           while (this.nextStepTime < now + 0.09) {
               this.scheduleStep(this.stepIndex, this.nextStepTime, flowIndex, tier, callbacks);
               this.stepIndex = (this.stepIndex + 1) % 16;
@@ -414,8 +434,21 @@
                   this.barCount++;
                   // Cycle through the 4-chord progression (faster cycling in Tier 4 for lush movement)
                   const barsPerChord = tier >= 4 ? 1 : 2;
-                  if (this.holdTonic) {
-                      this.chordIndex = 0; // stopping cue: resolve home and stay there
+                  if (this.resolvePending) {
+                      this.chordIndex = 0; // stopping cue: resolve home first
+                      this.resolvePending = false;
+                      this.driftBar = 0;
+                  } else if (this.autoMix > 0.5) {
+                      // Drift: four bars a chord, wandering rather than looping. The next chord
+                      // is any other one, leaning toward a step forward, so no two passes match.
+                      this.driftBar = (this.driftBar || 0) + 1;
+                      if (this.driftBar % 4 === 0) {
+                          const n = CHORD_PROGRESSION.length;
+                          const step = Math.random() < 0.6 ? 1 : 1 + Math.floor(Math.random() * (n - 1));
+                          this.chordIndex = (this.chordIndex + step) % n;
+                      }
+                      // Melody phrases come and go: roughly two bars on, one or two off
+                      this.driftPhraseOn = this.driftPhraseOn ? Math.random() < 0.55 : Math.random() < 0.6;
                   } else if (this.barCount % barsPerChord === 0) {
                       this.chordIndex = (this.chordIndex + 1) % CHORD_PROGRESSION.length;
                   }
@@ -447,20 +480,23 @@
                   padOsc.type = voice === 0 ? "sine" : voice === 1 ? "sawtooth" : "triangle";
                   padOsc.frequency.setValueAtTime(freq, time);
 
-                  const padAmp = voice === 2 ? 0.055 : 0.038;
+                  const padAmp = (voice === 2 ? 0.055 : 0.038) * (1 + 0.45 * this.autoMix);
+                  const padRelease = 1.9 + 2.4 * this.autoMix; // drift pads overlap into a wash
                   padGain.gain.setValueAtTime(0.001, time);
-                  padGain.gain.linearRampToValueAtTime(padAmp, time + 0.35);
-                  padGain.gain.exponentialRampToValueAtTime(0.0008, time + 1.9);
+                  padGain.gain.linearRampToValueAtTime(padAmp, time + 0.35 + 0.5 * this.autoMix);
+                  padGain.gain.exponentialRampToValueAtTime(0.0008, time + padRelease);
 
                   padOsc.connect(padGain);
                   padGain.connect(this.padFilter);
                   padOsc.start(time);
-                  padOsc.stop(time + 1.95);
+                  padOsc.stop(time + padRelease + 0.05);
               });
           }
 
-          // 2. Sub-Kick & Percussion Pocket (Adapted per Groove Voice)
-          if (step % 4 === 0) {
+          // 2. Sub-Kick & Percussion Pocket (Adapted per Groove Voice); in drift, a soft
+          //    half-time pulse that fades almost away
+          const drumMix = 1 - 0.8 * this.autoMix;
+          if (step % 4 === 0 && (this.autoMix < 0.5 || step % 8 === 0)) {
               const kickOsc = this.ctx.createOscillator();
               const kickGain = this.ctx.createGain();
               kickOsc.type = "sine";
@@ -468,7 +504,7 @@
               kickOsc.frequency.setValueAtTime(startPitch, time);
               kickOsc.frequency.exponentialRampToValueAtTime(42, time + 0.13);
 
-              const kickAmp = voice === 2 ? 0.22 : 0.30;
+              const kickAmp = (voice === 2 ? 0.22 : 0.30) * drumMix;
               kickGain.gain.setValueAtTime(kickAmp, time);
               kickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
 
@@ -479,7 +515,7 @@
           }
 
           // Off-beat dusty shaker / hat
-          if (voice !== 2 && (step % 4 === 2 || (tier >= 2 && (step === 7 || step === 15)))) {
+          if (voice !== 2 && this.autoMix < 0.9 && (step % 4 === 2 || (tier >= 2 && (step === 7 || step === 15)))) {
               const hatOsc = this.ctx.createOscillator();
               const hatGain = this.ctx.createGain();
               hatOsc.type = "square";
@@ -489,8 +525,8 @@
               hatFilter.type = "highpass";
               hatFilter.frequency.value = 3000;
 
-              const amp = step % 4 === 2 ? 0.026 : 0.012;
-              hatGain.gain.setValueAtTime(amp, time);
+              const amp = (step % 4 === 2 ? 0.026 : 0.012) * (1 - this.autoMix);
+              hatGain.gain.setValueAtTime(Math.max(0.0006, amp), time);
               hatGain.gain.exponentialRampToValueAtTime(0.0005, time + 0.04);
 
               hatOsc.connect(hatFilter);
@@ -501,7 +537,8 @@
           }
 
           // 3. Tier 2+ Rolling Dorian/Chord Bassline
-          if (tier >= 2 || step % 4 === 0) {
+          const bassStep = this.autoMix > 0.5 ? step % 8 === 0 : tier >= 2 || step % 4 === 0;
+          if (bassStep) {
               const bassFreq = chord.bass[step % 8];
               if (bassFreq > 0) {
                   const bassOsc = this.ctx.createOscillator();
@@ -509,21 +546,45 @@
                   bassOsc.type = voice === 1 ? "sawtooth" : "triangle";
                   bassOsc.frequency.setValueAtTime(bassFreq, time);
 
-                  const amp = 0.12 + Math.min(0.06, tier * 0.015);
+                  const amp = (0.12 + Math.min(0.06, tier * 0.015)) * (1 - 0.45 * this.autoMix);
+                  const bassDecay = 0.15 + 0.7 * this.autoMix; // long, round notes in drift
                   bassGain.gain.setValueAtTime(0.001, time);
                   bassGain.gain.linearRampToValueAtTime(amp, time + 0.012);
-                  bassGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+                  bassGain.gain.exponentialRampToValueAtTime(0.001, time + bassDecay);
 
                   bassOsc.connect(bassGain);
                   bassGain.connect(this.bassFilter);
                   bassOsc.start(time);
-                  bassOsc.stop(time + 0.16);
+                  bassOsc.stop(time + bassDecay + 0.01);
               }
           }
 
           // 4. Quantized Player Co-Creation Lead OR Tier 3+ Lush Auto-Arpeggiator
           const queuedTap = this.queuedTapNotes.shift();
-          const shouldAutoArp = tier >= 3 && (step % 2 === 1);
+          const shouldAutoArp = tier >= 3 && (step % 2 === 1) && Math.random() > this.autoMix;
+
+          // Drift melody: on eighth notes, a slow random walk through the scale, phrased with
+          // rests, ringing out through the delay. Generated, so it never repeats exactly.
+          if (this.autoMix > 0.05 && step % 2 === 0 && this.driftPhraseOn && !queuedTap) {
+              const chance = (step % 8 === 0 ? 0.55 : 0.22) * this.autoMix;
+              if (Math.random() < chance) {
+                  const moves = [-2, -1, -1, 1, 1, 2, 0];
+                  this.driftDegree = Math.max(2, Math.min(chord.scale.length - 2, this.driftDegree + moves[Math.floor(Math.random() * moves.length)]));
+                  const dOsc = this.ctx.createOscillator();
+                  const dGain = this.ctx.createGain();
+                  dOsc.type = voice === 1 ? "triangle" : "sine";
+                  dOsc.frequency.setValueAtTime(chord.scale[this.driftDegree], time);
+                  const dPeak = 0.07 * this.autoMix;
+                  dGain.gain.setValueAtTime(0.001, time);
+                  dGain.gain.linearRampToValueAtTime(dPeak, time + 0.03);
+                  dGain.gain.exponentialRampToValueAtTime(0.0006, time + 1.1);
+                  dOsc.connect(dGain);
+                  dGain.connect(this.padFilter);
+                  dGain.connect(this.delayNode);
+                  dOsc.start(time);
+                  dOsc.stop(time + 1.15);
+              }
+          }
 
           if (queuedTap || shouldAutoArp) {
               const normH = queuedTap ? queuedTap.heightNorm : ((step * 3) % 10) / 10;
@@ -561,7 +622,9 @@
   // and the research-brief changes (docs/flow-engine-research.md).
   // ==========================================================================
   const BAND_MIN = 96;
-  const BAND_MAX = 124;
+  // Raised from the brief's 124 so fast tappers and typists aren't capped (2026-10-27);
+  // 136 is the synth's own ceiling
+  const BAND_MAX = 136;
 
   function median(a) {
     const s = a.slice().sort((x, y) => x - y);
@@ -573,16 +636,17 @@
   // actions may make up one beat: Flow's taps use [0.5, 1, 2] (half time, on the beat,
   // double time); typing uses [2, 3, 4] keystrokes per beat. In-band fits win, then the
   // one nearest the current tempo, so the reading doesn't flip between folds.
-  function fitTempo(intervalMs, perBeat, currentBpm) {
+  function fitTempoFold(intervalMs, perBeat, currentBpm) {
     let best = null;
     for (const k of perBeat) {
       const bpm = 60000 / (intervalMs * k);
       const clamped = Math.max(BAND_MIN, Math.min(BAND_MAX, bpm));
       const cost = Math.abs(bpm - clamped) * 4 + Math.abs(clamped - currentBpm);
-      if (!best || cost < best.cost) best = { bpm: clamped, cost };
+      if (!best || cost < best.cost) best = { bpm: clamped, k, cost };
     }
-    return best.bpm;
+    return best;
   }
+  const fitTempo = (intervalMs, perBeat, currentBpm) => fitTempoFold(intervalMs, perBeat, currentBpm).bpm;
 
   function createController(options) {
     const o = Object.assign(
@@ -608,6 +672,7 @@
       saved: false,
       tapTimes: [],
       tapCount: 0,
+      fold: 0, // actions per beat currently assumed (from perBeat)
       rhythmScore: 0.85,
       flowIndex: 0.45,
       locked: false,
@@ -653,8 +718,21 @@
       const cv = sd / Math.max(mean, 60);
       const consistency = Math.max(0.35, Math.min(1, 1 - (cv - 0.16) * 0.95));
       c.rhythmScore = c.rhythmScore * 0.75 + consistency * 0.25;
-      // Median, not mean: one long pause or double hit doesn't drag the reading (brief)
-      const fit = fitTempo(median(intervals), o.perBeat, c.bpm);
+      // Median, not mean: one long pause or double hit doesn't drag the reading (brief).
+      // Keep the current fold (actions per beat) while the pace stays within 15% of the band,
+      // so a ragged player whose pace sits between two folds doesn't flip between them. The
+      // fold is only committed once there are 4 intervals to judge from.
+      const med = median(intervals);
+      let fit = null;
+      if (c.fold) {
+        const b = 60000 / (med * c.fold);
+        if (b >= BAND_MIN * 0.85 && b <= BAND_MAX * 1.15) fit = Math.max(BAND_MIN, Math.min(BAND_MAX, b));
+      }
+      if (fit === null) {
+        const r = fitTempoFold(med, o.perBeat, c.bpm);
+        fit = r.bpm;
+        if (intervals.length >= 4) c.fold = r.k;
+      }
       c.detected = c.detected * 0.82 + fit * 0.18;
       c.recent = fit;
       c.tapCount++;
@@ -698,7 +776,7 @@
 
       const wasLocked = c.locked;
       const calibrated =
-        (c.tapCount >= o.minTaps * 3 && Math.abs(c.bpm - c.detected) < 3) ||
+        (c.tapCount >= o.minTaps * 3 && Math.abs(c.bpm - c.detected) < 1.5) ||
         (c.tapCount >= (c.saved ? o.savedMinTaps : o.minTaps) &&
           Math.abs(c.detected - c.recent) < o.stableTol &&
           Math.abs(c.bpm - c.recent) < 2);
@@ -954,12 +1032,12 @@
         const evt = ctrl.events.shift();
         if (evt === "lock") store(TEMPO_KEY, ctrl.bpm.toFixed(1));
         if (evt === "auto") {
-          synth.holdTonic = true; // stopping cue: resolve home and stay there
+          synth.setAutopilot(true); // stopping cue: resolve home, then drift
           saveTelemetry();
           maybeAskFlowCheck();
         }
         if (evt === "manual") {
-          synth.holdTonic = false;
+          synth.setAutopilot(false); // crossfade back to the game arrangement
           closeFlowCheck();
         }
         emit(evt);
