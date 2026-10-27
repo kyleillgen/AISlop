@@ -40,19 +40,16 @@ const capY=()=>groundY()-S*0.15;
 const capH=()=>S*(0.15-0.09*capT);
 const th=()=>S*0.06;
 
-// audio
-let ac=null;
-function initAudio(){if(ac)return;try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
-function blip(f,d,type,v){
-  if(!ac)return;try{
-  const o=ac.createOscillator(),g=ac.createGain();
-  o.type=type||'sine';o.frequency.setValueAtTime(f,ac.currentTime);
-  o.frequency.exponentialRampToValueAtTime(f*(type==='triangle'?0.5:1.5),ac.currentTime+d);
-  g.gain.setValueAtTime(0.0001,ac.currentTime);
-  g.gain.exponentialRampToValueAtTime(v||0.06,ac.currentTime+0.015);
-  g.gain.exponentialRampToValueAtTime(0.0001,ac.currentTime+d);
-  o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+d+0.02);}catch(e){}
-}
+// audio: all from Flow's engine (presses voiced in key, squeezes play its harmony, bonks
+// its soft cushion)
+
+// Gaps ride Flow's calibrated beat like Flow's pipes: one every two beats, each reaching
+// the cap exactly one bar after it appears, so every squeeze lands on a beat
+const TRAVEL_BEATS=4;
+let beatClock=0;
+const beatNow=()=>window.Flow?Flow.beatPos:beatClock;
+let beatN=0;
+if(window.Flow)Flow.onBeat(()=>{if(state==='play'&&(beatN++)%2===0)spawn();});
 
 function reset(){
   gaps=[];parts=[];texts=[];score=0;glow=1;capT=0.3;combo=0;passed=0;squash=0;lastGw=0.5;
@@ -63,7 +60,6 @@ function gameOver(){
   state='over';overAt=time;glow=0;
   if(score>best){best=score;try{localStorage.setItem('snugcap_best',best)}catch(e){}}
   window.Flow&&Flow.miss();
-  blip(220,0.6,'triangle',0.05);
 }
 
 function spawn(){
@@ -73,7 +69,7 @@ function spawn(){
   gw=Math.max(0.24,Math.min(0.76,gw));lastGw=gw;
   const eyes=[];const n=2+Math.floor(Math.random()*3);
   for(let i=0;i<n;i++)eyes.push({side:i%2,u:0.15+Math.random()*0.7,p:Math.random()*20});
-  gaps.push({y:-th(),gw,done:false,hit:false,fade:1,eyes,wob:Math.random()*6});
+  gaps.push({y:-th(),b:beatNow(),gw,done:false,hit:false,fade:1,eyes,wob:Math.random()*6});
 }
 
 function burst(x,y,n,hue,sp){
@@ -90,7 +86,6 @@ function resolve(g){
     burst(cx-gp/2,cy,10,290,S*0.5);burst(cx+gp/2,cy,10,290,S*0.5);
     addText('bonk',cx,cy-S*0.12,'#d7b8ff');
     window.Flow&&Flow.miss();
-    blip(160,0.25,'triangle',0.06);
     return;
   }
   passed++;
@@ -106,7 +101,6 @@ function resolve(g){
   addText(label+' +'+pts+(mult>1?'  x'+mult:''),cx,cy-S*0.14,'hsl('+hue+',90%,78%)');
   burst(cx-gp/2,cy,gain>0?8:3,hue,S*0.35);burst(cx+gp/2,cy,gain>0?8:3,hue,S*0.35);
   if(r>=0.93)burst(cx,cy-capH()*0.3,14,320,S*0.4);
-  blip(440+r*500,0.18,'sine',0.035);
 }
 
 function update(dt){
@@ -114,14 +108,12 @@ function update(dt){
   for(const m of motes){m.y-=m.s*dt;m.p+=dt;if(m.y<-0.02){m.y=1.02;m.x=Math.random();}}
   if(state==='play'){
     capT=Math.max(0,Math.min(1,capT+(holding?1:-1)*dt*1.15));
-    const speed=S*(0.42+Math.min(0.38,passed*0.011));
-    const spacing=S*Math.max(0.6,0.95-passed*0.01);
-    const last=gaps[gaps.length-1];
-    if(!last||last.y>spacing)spawn();
-    const trigger=capY()-capH()*0.6;
-    for(const g of gaps){g.y+=speed*dt;if(!g.done&&g.y>=trigger)resolve(g);if(g.hit)g.fade=Math.max(0.15,g.fade-dt*2);}
+    if(!window.Flow){beatClock+=dt*1.8;if(beatClock-(gaps.length?gaps[gaps.length-1].b:-9)>=2)spawn();}
+    // Position comes from the beat, not a speed: no ramp, and arrivals stay on the groove
+    const trigger=capY()-capH()*0.6,bn=beatNow();
+    for(const g of gaps){g.y=-th()+(trigger+th())*(bn-g.b)/TRAVEL_BEATS;if(!g.done&&g.y>=trigger)resolve(g);if(g.hit)g.fade=Math.max(0.15,g.fade-dt*2);}
     gaps=gaps.filter(g=>g.y<H+th()*2);
-    glow-=(0.05+Math.min(0.04,passed*0.0012))*dt;
+    glow-=0.05*dt;
     if(glow<=0)gameOver();
   }else if(state==='start'){capT=0.35+0.3*Math.sin(time*1.5)*0.5+0.15;}
   else{capT=Math.max(0,capT-dt*0.5);for(const g of gaps)g.y+=S*0.1*dt;}
@@ -291,8 +283,6 @@ function draw(){
 }
 
 function press(){
-  initAudio();
-  if(ac&&ac.state==='suspended')ac.resume();
   if(state==='start'){reset();holding=true;return;}
   if(state==='over'){if(time-overAt>0.6){reset();holding=true;}return;}
   holding=true;

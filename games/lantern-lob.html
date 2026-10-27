@@ -40,33 +40,20 @@ const keys={};
 try{best=+localStorage.getItem('lanternlob_best')||0}catch(e){}
 
 /* ---------- audio ---------- */
-let ac=null,master=null;
-function initAudio(){
-  if(ac){if(ac.state==='suspended')ac.resume();return}
-  try{
-    ac=new (window.AudioContext||window.webkitAudioContext)();
-    master=ac.createGain();master.gain.value=0.5;
-    const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2800;
-    master.connect(lp);lp.connect(ac.destination);
-  }catch(e){ac=null}
-}
-function tone(f,dl,dur,vol,type,slide){
-  if(!ac)return;
-  const tt=ac.currentTime+dl,o=ac.createOscillator(),g=ac.createGain();
-  o.type=type||'sine';o.frequency.setValueAtTime(f,tt);
-  if(slide)o.frequency.exponentialRampToValueAtTime(f*slide,tt+dur);
-  g.gain.setValueAtTime(0,tt);g.gain.linearRampToValueAtTime(vol,tt+0.015);
-  g.gain.exponentialRampToValueAtTime(0.0001,tt+dur);
-  o.connect(g);g.connect(master);o.start(tt);o.stop(tt+dur+0.05);
-}
-function noteFreq(i){
-  const m=MODES[mode],s=m.s,o=Math.floor(i/s.length),d=s[((i%s.length)+s.length)%s.length];
-  return 220*Math.pow(2,(m.r+d+12*o)/12);
-}
+// All sound comes from Flow's engine. Plankton combos climb the current chord on Flow's
+// 16th grid, landings play its harmony, and a pearl switches Flow's groove voice (the
+// game's "collecting changes the music" twist, done with Flow's own voices).
+function initAudio(){}
+const plankNote=i=>{if(window.Flow)Flow.note(Math.min(13,2+i));};
+
+// The world sways on the calibrated beat: jellies drift through one cycle every 2 or 4
+// beats and plankton bob every 2, so a well-timed fling lands with the groove
+const beatPos=()=>window.Flow?Flow.beatPos:t*1.8;
+const onBeatWave=(beats,ph)=>Math.sin(beatPos()/beats*Math.PI*2+ph);
 
 /* ---------- world ---------- */
 function mkJelly(x,y,r,amp){
-  return {bx:x,x:x,y:y,r:r,amp:amp,fq:0.5+rnd()*0.6,ph:rnd()*6.28,h:[170,200,290,320,140,40][rnd()*6|0],sq:0,visited:false};
+  return {bx:x,x:x,y:y,r:r,amp:amp,per:rnd()<0.5?2:4,ph:rnd()*6.28,h:[170,200,290,320,140,40][rnd()*6|0],sq:0,visited:false};
 }
 function gen(){
   const d=Math.min(1,gcount/45),p=lastJ;
@@ -115,14 +102,11 @@ function launch(a,p){
   const v=VMAX*(0.25+0.75*p);
   fish.vx=Math.cos(a)*v;fish.vy=Math.sin(a)*v;
   fromJ=fish.on;fromJ.sq=0.7;fish.on=null;fish.fly=0;fish.trail=[];combo=0;flightNotes=[];
-  tone(180,0,0.25,0.05,'sine',2.2);
 }
 function land(j){
   fish.on=j;fish.fly=0;fish.off=clamp(fish.x-j.x,-j.r*0.5,j.r*0.5);j.sq=1;
   const [sx,sy]=w2s(j.x,j.y-j.r*0.4);
   if(!j.visited){j.visited=true;count++;addScore(2)}
-  tone(noteFreq(0)/2,0,0.6,0.06,'triangle');
-  flightNotes.slice(0,8).forEach((n,i)=>tone(noteFreq(n),0.08+i*0.075,0.45,0.045,'sine'));
   burst(j.x,j.y-j.r*0.3,j.h,10,true);
   window.Flow&&Flow.hit(sx,sy);
   flightNotes=[];combo=0;
@@ -133,21 +117,21 @@ function collect(p){
   if(p.pearl){
     addScore(5);
     mode=(mode+1)%MODES.length;hueT=MODES[mode].h;
-    modeMsg='~ '+MODES[mode].n+' ~';modeMsgT=2.2;
-    [0,2,4,7].forEach((n,i)=>tone(noteFreq(n+5),i*0.06,0.7,0.045,'triangle'));
+    const voice=window.Flow?Flow.nextVoice():MODES[mode].n;
+    modeMsg='~ '+voice.toLowerCase()+' ~';modeMsgT=2.2;
     burst(p.x,p.y,hue+120,22,true);
+    window.Flow&&Flow.hit(sx,sy);
   }else{
     combo++;addScore(1);
     const idx=combo+1;flightNotes.push(idx);
-    tone(noteFreq(idx),0,0.45,0.06,'triangle');
+    plankNote(idx);
     burst(p.x,p.y,hue+150,7,true);
+    window.Flow&&Flow.hit(sx,sy,true);
   }
-  window.Flow&&Flow.hit(sx,sy);
 }
 function gameOver(){
   state='over';overT=performance.now();
   if(score>best){best=score;try{localStorage.setItem('lanternlob_best',best)}catch(e){}}
-  tone(noteFreq(2),0,0.8,0.05,'sine',0.5);
   window.Flow&&Flow.miss();
 }
 function startOrRestart(){
@@ -198,7 +182,7 @@ addEventListener('keyup',e=>{if(KM[e.code])keys[KM[e.code]]=false});
 function update(dt){
   hue+=(hueT-hue)*Math.min(1,dt*1.5);
   if(modeMsgT>0)modeMsgT-=dt;
-  for(const j of jellies){j.x=j.bx+j.amp*Math.sin(t*j.fq+j.ph);j.sq*=Math.pow(0.02,dt)}
+  for(const j of jellies){j.x=j.bx+j.amp*onBeatWave(j.per,j.ph);j.sq*=Math.pow(0.02,dt)}
   for(let i=parts.length-1;i>=0;i--){
     const p=parts[i];p.life+=dt;
     if(!p.ring){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vx*=1-2.5*dt;p.vy*=1-2.5*dt}
@@ -224,7 +208,7 @@ function update(dt){
       if(f.x<FR){f.x=FR;f.vx=Math.abs(f.vx)*0.6}
       if(f.x>COLW-FR){f.x=COLW-FR;f.vx=-Math.abs(f.vx)*0.6}
       for(let i=plank.length-1;i>=0;i--){
-        const p=plank[i],py=p.y+Math.sin(t*2+p.ph)*4;
+        const p=plank[i],py=p.y+onBeatWave(2,p.ph)*4;
         if(Math.hypot(p.x-f.x,py-f.y)<FR+(p.pearl?16:11)){plank.splice(i,1);collect(p)}
       }
       for(const j of jellies){
@@ -308,7 +292,7 @@ function drawJelly(j){
   }
 }
 function drawPlank(p){
-  const y=p.y+Math.sin(t*2+p.ph)*4;
+  const y=p.y+onBeatWave(2,p.ph)*4;
   if(p.pearl){
     const hh=(t*90)%360;
     glow(p.x,y,30,`hsla(${hh},100%,65%,A)`,0.5);

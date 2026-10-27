@@ -133,17 +133,28 @@ function colors(b){
   return out;
 }
 
+// Left alone, a ghost press sinks into the sand on a bar's downbeat now and then
+let ghostBeat=0;
+if(window.Flow)Flow.onBeat(()=>{
+  if((ghostBeat++)%4||performance.now()-lastInput<=5000||Math.random()<0.5)return;
+  press(null,tray.x+tray.w*(.2+Math.random()*.6),tray.y+tray.h*(.2+Math.random()*.6),true);
+});
+
 function step(now){
   requestAnimationFrame(step);
   const away=!!(window.Flow&&Flow.away);
   if(away&&now-lastDraw<100)return;
-  lastDraw=now;t+=1/60;
+  // Timing runs on real seconds (k converts per-frame rates), so holds and breaths feel
+  // the same on any display or in a throttled background window
+  const dt=Math.min(0.1,(now-(lastDraw||now))/1000),k=dt*60;
+  lastDraw=now;t+=dt;
 
-  const br=Math.sin(t*Math.PI*2/6.5);
+  // The tray breathes once every two bars of Flow's calibrated beat
+  const br=window.Flow?Math.sin(Flow.beatPos/8*Math.PI*2):Math.sin(t*Math.PI*2/6.5);
   const scale=1+0.013*br;
 
-  // idle ghost presses
-  if(now-lastInput>5000&&now>nextGhost){
+  // idle ghost presses (on the beat when Flow's engine is present; see onBeat below)
+  if(!window.Flow&&now-lastInput>5000&&now>nextGhost){
     nextGhost=now+4000+Math.random()*4000;
     press(null,tray.x+tray.w*(.2+Math.random()*.6),tray.y+tray.h*(.2+Math.random()*.6),true);
   }
@@ -152,19 +163,19 @@ function step(now){
   for(let i=presses.length-1;i>=0;i--){
     const p=presses[i];
     if(p.down){
-      p.held+=1/60;
+      p.held+=dt;
       const tgt=rMax*(p.ghost?.45:1)*(1-Math.exp(-p.held*1.1));
-      p.r+=(tgt-p.r)*.12;
+      p.r+=(tgt-p.r)*(1-Math.pow(1-.12,k));
       const s=Math.floor(p.r/rMax*5);
       if(s>p.step){p.step=s;note(3+s,{vol:p.ghost?.03:.07,dur:.9,type:'sine'});}
-      if(p.ghost){p.auto-=1/60;if(p.auto<=0)release(p);}
-    }else{p.r*=.9;if(p.r<1)presses.splice(i,1);}
+      if(p.ghost){p.auto-=dt;if(p.auto<=0)release(p);}
+    }else{p.r*=Math.pow(.9,k);if(p.r<1)presses.splice(i,1);}
   }
   for(let i=ripples.length-1;i>=0;i--){
-    const r=ripples[i];r.r+=2.4;r.amp*=.968;
+    const r=ripples[i];r.r+=2.4*k;r.amp*=Math.pow(.968,k);
     if(r.amp<.04)ripples.splice(i,1);
   }
-  if(hover){hover.life*=.97;if(hover.life<.05)hover=null;}
+  if(hover){hover.life*=Math.pow(.97,k);if(hover.life<.05)hover=null;}
 
   counts.fill(0);
   const K=.018,damp=.86,np=presses.length,nr=ripples.length;

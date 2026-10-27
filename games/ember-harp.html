@@ -143,7 +143,8 @@ cv.addEventListener('pointerup',up,{passive:false});
 cv.addEventListener('pointercancel',up,{passive:false});
 cv.addEventListener('pointerleave',()=>{hx=null;});
 
-// space: a slow warm strum
+// space: a slow warm strum, one string per 16th note of Flow's calibrated beat
+const beatSec=()=>window.Flow?Flow.beat:0.55;
 let strumming=false;
 window.addEventListener('keydown',e=>{
   if(e.code==='Space'){
@@ -155,7 +156,7 @@ window.addEventListener('keydown',e=>{
         const i=upDir?N-1-k:k;
         pluck(i,u+(k/N-0.5)*0.12,0.6,false);
         if(k===N-1)strumming=false;
-      },k*85);
+      },k*beatSec()*250);
     }
   }
 });
@@ -165,11 +166,18 @@ resize();
 
 function rr(a,b){return a+Math.random()*(b-a);}
 
+// Idle breeze rides the groove: a chance of a soft pluck on each bar's downbeat
+let breezeBeat=0;
+if(window.Flow)Flow.onBeat(()=>{
+  if((breezeBeat++)%4||time-lastTouch<=4||Math.random()<0.35)return;
+  pluck(Math.floor(Math.random()*strings.length),rr(0.2,0.8),rr(0.2,0.38),true);
+});
+
 function update(dt){
   time+=dt;
   energy*=Math.exp(-dt*0.5);
-  // breeze when idle
-  if(time-lastTouch>4){
+  // breeze when idle (on the downbeat when Flow's engine is present; see onBeat below)
+  if(!window.Flow&&time-lastTouch>4){
     nextBreeze-=dt;
     if(nextBreeze<=0){
       nextBreeze=rr(2.4,5.5);

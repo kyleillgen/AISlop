@@ -580,10 +580,29 @@
   // clock keeps the same beat, so gameplay stays calibrated either way.
   let kickAt = 0, lastTick = performance.now(), beatIndex = 0, silentPhase = 0;
   const beatListeners = [];
+  // Beats are scheduled slightly ahead of when they sound; remember each one's audio time
+  // so games can read a smooth beat position that matches what the player hears
+  const scheduled = [];
+  let heard = null;
   function beat() {
     kickAt = performance.now();
     beatIndex++;
+    // Inside the scheduler's callback, nextStepTime is the time this beat will sound
+    if (synth.isInitialized) {
+      scheduled.push({ i: beatIndex, at: synth.nextStepTime });
+      if (scheduled.length > 8) scheduled.shift();
+    }
     for (const fn of beatListeners) { try { fn(beatIndex); } catch (e) { console.error(e); } }
+  }
+  function beatSec() { return 60 / Math.max(88, Math.min(136, ctrl.bpm)); }
+  // Continuous beat count (e.g. 41.37), locked to the audible groove
+  function beatPos() {
+    if (synth.isInitialized && synth.ctx) {
+      const now = synth.ctx.currentTime;
+      while (scheduled.length && scheduled[0].at <= now) heard = scheduled.shift();
+      if (heard) return heard.i + Math.min(1.5, (now - heard.at) / beatSec());
+    }
+    return beatIndex + silentPhase;
   }
   setInterval(() => {
     const now = performance.now();
@@ -724,12 +743,17 @@
       if (opts && opts.now) playLead(1 - d / 13);
       else synth.queueQuantizedTap(1 - d / 13, ctrl.tier);
     },
+    // Switch Flow's groove voice (LO-FI RHODES / SYNTHWAVE PULSE / AMBIENT DRIFT); returns its name
+    nextVoice() { cycleVoice(); return synth.getCurrentVoiceName(); },
     // Count an input toward cadence (raw taps and action keys are counted automatically)
     tap(y) { onTap(typeof y === "number" ? y : H * 0.5); },
     // The calibrated beat: build speed and spacing on these, as Flow does
     onBeat(fn) { if (typeof fn === "function") beatListeners.push(fn); },
     get bpm() { return Math.max(88, Math.min(136, ctrl.bpm)); },
-    get beat() { return 60 / Math.max(88, Math.min(136, ctrl.bpm)); },
+    get beat() { return beatSec(); },
+    // Smooth position in beats, matched to what the player hears: drive beat-locked
+    // motion and on-beat judging from this rather than from a clock of your own
+    get beatPos() { return beatPos(); },
     get locked() { return ctrl.resonanceLocked; },
     get level() { return ctrl.flowIndex; },
     get away() { return !document.hasFocus(); }

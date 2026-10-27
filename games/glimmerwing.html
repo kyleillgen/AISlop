@@ -36,21 +36,13 @@ try{best=parseInt(localStorage.getItem('glimmerwing_best')||'0',10)||0;}catch(e)
 function saveBest(){try{localStorage.setItem('glimmerwing_best',String(best));}catch(e){}}
 
 // ---------- audio ----------
-let ac=null;
-function initAudio(){
-  if(ac)return;
-  try{const A=window.AudioContext||window.webkitAudioContext;if(A)ac=new A();}catch(e){ac=null;}
-}
-function blip(f,dur,vol){
-  if(!ac)return;
-  try{
-    const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();
-    o.type='sine';o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*1.5,t+dur);
-    g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol||0.04,t+0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    o.connect(g);g.connect(ac.destination);o.start(t);o.stop(t+dur+0.02);
-  }catch(e){}
-}
+// All sound comes from Flow's engine: each sugarling you gather plays a rising note on
+// Flow's 16th grid, a delivered bouquet plays its harmony and then an arpeggio as the
+// motes fly in one per 16th, and a scattering wisp plays its soft cushion.
+function initAudio(){}
+const beatSec=()=>window.Flow?Flow.beat:0.55;
+// The light breathes on the calibrated beat
+const beatPulse=()=>window.Flow?Math.pow(1-(((Flow.beatPos%1)+1)%1),3):0;
 
 // ---------- state ----------
 let state='start',overAt=0,score=0,t=0,L=1,R=100,group=[],free=[],flying=[],wisps=[],parts=[],texts=[],hist=[],invuln=0;
@@ -176,7 +168,7 @@ function update(dt){
     t+=dt;
     // light
     const sf=Math.min(1,speed/(M*0.55));
-    const drain=Math.min(0.16,0.05+0.0018*t);
+    const drain=0.07; // steady, never escalating
     L+=(sf*0.115-drain)*dt;
     if(L>1)L=1;
     if(L<=0){L=0;gameOver();}
@@ -196,7 +188,7 @@ function update(dt){
     if(state==='play'&&m.a>0.5&&d2(m.x,m.y,bird.x,bird.y)<(M*0.05+16)**2){
       free.splice(i,1);group.push(m);
       pop(m.x,m.y,m.c,false);
-      blip(520+group.length*30,0.12,0.035);
+      window.Flow&&Flow.note(Math.min(13,2+group.length));
     }
   }
   // group follows the trail
@@ -212,7 +204,9 @@ function update(dt){
     blossom.a+=dt;blossom.pulse=Math.max(0,blossom.pulse-dt*2);
     if(state==='play'&&group.length>0&&d2(blossom.x,blossom.y,bird.x,bird.y)<(M*0.06+26)**2){
       const n=group.length,mult=1+Math.floor(n/5);
-      group.forEach((m,i)=>{m.delay=i*0.07;m.mult=mult;flying.push(m);});
+      // One mote per 16th note, so the bouquet lands as an arpeggio in time
+      group.forEach((m,i)=>{m.delay=i*beatSec()/4;m.mult=mult;m.i=i;flying.push(m);});
+      window.Flow&&Flow.hit(blossom.x,blossom.y);
       group=[];
       L=Math.min(1,L+0.14+0.035*n);
       if(n>=5)floatText(blossom.x,blossom.y-40,'×'+mult+' bouquet!','#ffe66d');
@@ -232,7 +226,8 @@ function update(dt){
       pop(blossom.x+rand(-8,8),blossom.y+rand(-8,8),m.c,true);
       floatText(blossom.x+rand(-20,20),blossom.y-20,'+'+m.mult,m.c);
       window.Flow&&Flow.score(score);
-      window.Flow&&Flow.hit(blossom.x,blossom.y);
+      window.Flow&&Flow.note(Math.min(13,7+(m.i||0)%7),{now:true});
+      window.Flow&&Flow.hit(blossom.x,blossom.y,true);
       blossom.pulse=1;
     }
   }
@@ -243,7 +238,7 @@ function update(dt){
       const side=(Math.random()*4)|0,r=M*0.045+10;
       let x=side===0?-r:side===1?W+r:rand(0,W),y=side===2?-r:side===3?H+r:rand(0,H);
       if(side<2)y=rand(0,H);
-      const a=Math.atan2(H/2-y,W/2-x)+rand(-0.6,0.6),s=rand(28,48)+Math.min(30,t*0.2);
+      const a=Math.atan2(H/2-y,W/2-x)+rand(-0.6,0.6),s=rand(28,48); // no speed ramp
       wisps.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,r,p:Math.random()*TAU,a:0});
     }
   }
@@ -259,7 +254,6 @@ function update(dt){
           m.vx=Math.cos(a)*s;m.vy=Math.sin(a)*s;m.a=0.2;free.push(m);}
         group=[];
         window.Flow&&Flow.miss();
-        blip(220,0.25,0.03);
       }
       const a=Math.atan2(bird.y-w.y,bird.x-w.x);bird.vx+=Math.cos(a)*200;bird.vy+=Math.sin(a)*200;
     }
@@ -364,7 +358,8 @@ function draw(now){
     const y=((b.y-now*b.s*0.00005)%1+1)%1;
     glow(b.x*W+Math.sin(now*0.0004+b.p)*12,y*H,b.r,b.c,0.25);
   }
-  // darkness with a pool of light around the bird
+  // darkness with a pool of light around the bird, breathing on the beat
+  const R0=R;R=R0*(1+0.05*beatPulse());
   const dk=ctx.createRadialGradient(bird.x,bird.y,R*0.35,bird.x,bird.y,R);
   dk.addColorStop(0,'rgba(10,5,24,0)');dk.addColorStop(1,'rgba(10,5,24,0.9)');
   ctx.fillStyle=dk;ctx.fillRect(0,0,W,H);
@@ -373,6 +368,7 @@ function draw(now){
   ctx.globalCompositeOperation='source-over';
   ctx.strokeStyle='rgba(255,210,240,'+(0.12+(L<0.25?0.2*Math.sin(now*0.01)**2:0))+')';
   ctx.lineWidth=2;ctx.beginPath();ctx.arc(bird.x,bird.y,R,0,TAU);ctx.stroke();
+  R=R0;
 
   drawBlossom();
   for(const m of free){

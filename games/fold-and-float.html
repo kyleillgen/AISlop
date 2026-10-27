@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Visual flow only: the game plays its own beat-matched music -->
-<script src="flow-layer.js" data-music="off" data-step="25"></script>
+<!-- Flow's engine plays the groove; the gates ride its calibrated beat -->
+<script src="flow-layer.js" data-step="25"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Fold &amp; Float</title>
@@ -22,33 +22,15 @@ addEventListener('resize',resize);resize();
 
 const SPB=18,GW=10,GROUND=92;
 let state='start',score=0,best=0,combo=0,calm=1,ts=1,held=false,holdT=0;
-let beats=0,lastBeat=-1,bpm=90,scroll=0,clkFrozen=0,t=0,flash=0,shake=0,overAt=0,lastGapY=48,sky=0;
+// beats counts this run's beats; anchor maps it onto Flow's audible beat (Flow.beatPos)
+let beats=0,lastBeat=-1,bpm=108,anchor=0,scroll=0,clkFrozen=0,t=0,flash=0,shake=0,overAt=0,lastGapY=48,sky=0;
 let gates=[],parts=[],smoke=[],floats=[],trail=[],shoot=[];
 const pl={y:45,vy:0};
 try{best=parseInt(localStorage.getItem('foldfloat_best'))||0}catch(e){}
 
 // ---------- audio ----------
-let AC=null,master=null;
-function initAudio(){
-  if(AC){if(AC.state==='suspended')AC.resume();return;}
-  try{
-    AC=new (window.AudioContext||window.webkitAudioContext)();
-    master=AC.createGain();master.gain.value=0.5;
-    const lp=AC.createBiquadFilter();lp.type='lowpass';lp.frequency.value=2400;
-    master.connect(lp);lp.connect(AC.destination);
-  }catch(e){AC=null}
-}
-function note(f,dur,type,vol,att){
-  if(!AC)return;att=att||0.005;
-  const now=AC.currentTime,o=AC.createOscillator(),g=AC.createGain();
-  o.type=type;o.frequency.value=f;
-  g.gain.setValueAtTime(0.0001,now);g.gain.linearRampToValueAtTime(vol,now+att);
-  g.gain.exponentialRampToValueAtTime(0.0001,now+dur);
-  o.connect(g);g.connect(master);o.start(now);o.stop(now+dur+0.05);
-}
-const m2f=m=>440*Math.pow(2,(m-69)/12);
-const CH=[[60,64,67,71],[57,60,64,67],[53,57,60,64],[55,59,62,67]];
-const rate=()=>0.62+0.38*ts;
+// All sound comes from Flow's engine (flow-layer.js): the groove, every tap voiced in key
+// on the 16th grid, lantern harmonies via Flow.hit and the soft cushion via Flow.miss.
 
 // ---------- helpers ----------
 const hs=i=>{const x=Math.sin(i*127.1+311.7)*43758.5453;return x-Math.floor(x)};
@@ -68,7 +50,9 @@ function addFloat(txt,x,y,col){floats.push({txt,x,y,col,t:0});}
 
 // ---------- game flow ----------
 function start(){
-  state='play';score=0;combo=0;calm=1;beats=0;lastBeat=-1;bpm=90;
+  state='play';score=0;combo=0;calm=1;lastBeat=-1;
+  // Beat 0 of the run is the next beat of the groove
+  if(window.Flow){bpm=Flow.bpm;anchor=Math.ceil(Flow.beatPos);beats=Flow.beatPos-anchor;}else{beats=0;}
   gates=[];parts=[];floats=[];trail=[];lastGapY=48;
   pl.y=45;pl.vy=-50;
   if(window.Flow)Flow.reset();
@@ -77,21 +61,13 @@ function crash(){
   state='over';overAt=performance.now();clkFrozen=beats;shake=0.35;held=false;
   if(window.Flow)Flow.miss();
   for(let i=0;i<24;i++)parts.push({x:px(),y:pl.y,vx:(Math.random()-0.5)*50,vy:(Math.random()-0.8)*50,l:1,c:i%2?'#fff6e6':'#f2c38b',r:Math.random()*6});
-  note(330,0.4,'triangle',0.15);setTimeout(()=>note(220,0.6,'triangle',0.13),120);setTimeout(()=>note(165,0.9,'sine',0.14),260);
   if(score>best){best=score;try{localStorage.setItem('foldfloat_best',best)}catch(e){}}
 }
+// Music now comes from Flow's engine; each beat here only drives visuals and gates.
+// A new gate every bar, as before, but the tempo is Flow's calibrated one, never a ramp.
 function onBeat(n){
   flash=1;
-  const ch=CH[Math.floor(n/4)%4],r=rate(),v=state==='play'?1:0.6;
-  note(m2f(ch[n%4]+12)*r,0.55,'sine',0.16*v);
-  note(m2f(ch[n%4]+24)*r,0.2,'triangle',0.03*v);
-  if(n%4===0){
-    const bd=4*60/bpm;
-    for(const m of ch)note(m2f(m-12)*r,bd*1.15,'triangle',0.03*v,0.4);
-    note(m2f(ch[0]-24)*r,bd,'sine',0.07*v,0.05);
-  }
   if(state==='play'&&n%4===0){
-    bpm=Math.min(128,90+score*0.7);
     const k=Math.ceil((VW+GW-px())/SPB);
     const h=Math.max(26,40-score*0.35),spread=14+Math.min(14,score*0.4);
     let y=lastGapY+(Math.random()*2-1)*spread;
@@ -103,23 +79,22 @@ function onBeat(n){
     if(x>-10&&x<VW+10)smoke.push({wx:scroll+x,y:g.y+g.h/2,l:1,r:1.5});
   }
 }
+// On-beat judging against the groove you hear (beats is phase-locked to Flow.beatPos);
+// the tap itself is voiced by Flow's engine, quantized and in key
 function tap(){
-  const f=beats-Math.round(beats),d=Math.abs(f)*60/bpm,ch=CH[Math.floor(Math.round(beats)/4)%4],r=rate();
+  const f=beats-Math.round(beats),d=Math.abs(f)*60/bpm;
   if(d<0.08){
     pl.vy=-56;combo++;calm=Math.min(1,calm+0.08);
     addFloat('perfect',px(),pl.y-7,'#ffd36b');
-    note(m2f(ch[2]+24)*r,0.6,'sine',0.12);note(m2f(ch[0]+36)*r,0.4,'sine',0.04);
     for(let i=0;i<6;i++)parts.push({x:px()-3,y:pl.y,vx:-10-Math.random()*20,vy:(Math.random()-0.5)*25,l:1,c:['#ffd36b','#ffb38a','#fff3d6'][i%3],r:Math.random()*6});
   }else if(d<0.15){
     pl.vy=-50;addFloat('nice',px(),pl.y-7,'#fff1dc');
-    note(m2f(ch[1]+24)*r,0.35,'sine',0.07);
   }else{
     pl.vy=-42;combo=0;addFloat('off-beat',px(),pl.y-7,'rgba(255,230,210,0.7)');
-    note(m2f(ch[0])*r*0.5,0.15,'triangle',0.08);
   }
 }
 function press(){
-  initAudio();held=true;holdT=0;
+  held=true;holdT=0;
   if(state==='start')start();
   else if(state==='over'){if(performance.now()-overAt>600)start();else held=false;}
   else tap();
@@ -146,8 +121,16 @@ function update(rdt){
   if(held)holdT+=rdt;
   ts+=((slow?0.4:1)-ts)*Math.min(1,rdt*8);
   if(slow)calm=Math.max(0,calm-rdt*0.4);else if(state==='play')calm=Math.min(1,calm+rdt*0.03);
+  if(window.Flow)bpm=Flow.bpm;
   const gdt=rdt*ts,db=gdt*bpm/60;
   beats+=db;
+  // Phase-lock to the audible groove. Holding slows the world (the game's twist); when you
+  // let go it glides back into phase, re-anchoring by whole beats so nothing jumps.
+  if(window.Flow&&state==='play'&&ts>0.95){
+    let err=(Flow.beatPos-anchor)-beats;
+    if(Math.abs(err)>0.5){const whole=Math.round(err);anchor+=whole;err-=whole;}
+    beats+=err*Math.min(1,rdt*4);
+  }
   while(lastBeat<Math.floor(beats)){lastBeat++;onBeat(lastBeat);}
   if(state!=='over')scroll+=db*SPB;
   flash=Math.max(0,flash-rdt*3);shake=Math.max(0,shake-rdt*2.5);
@@ -169,8 +152,7 @@ function update(rdt){
       const ly=g.ly+Math.sin(t*3+g.b)*0.8;
       if(!g.tk&&Math.hypot(X-x,pl.y-ly)<5){
         g.tk=1;score+=3;calm=Math.min(1,calm+0.25);addFloat('+3',x,ly-5,'#ffcf7a');
-        if(window.Flow){Flow.score(score);Flow.hit(x*U,ly*U,true);}
-        const ch=CH[Math.floor(lastBeat/4)%4];note(m2f(ch[3]+24)*rate(),0.7,'sine',0.1);note(m2f(ch[1]+36)*rate(),0.5,'sine',0.05);
+        if(window.Flow){Flow.score(score);Flow.hit(x*U,ly*U);}
       }
       if(!g.p&&x<X-GW/2){g.p=1;const gain=1+Math.floor(combo/4);score+=gain;addFloat('+'+gain,X+6,pl.y+6,'#fff1dc');if(window.Flow)Flow.score(score);}
     }

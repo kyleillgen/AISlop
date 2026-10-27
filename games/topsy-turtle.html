@@ -27,10 +27,15 @@ window.addEventListener('resize',resize);resize();
 let best=0;try{best=parseInt(localStorage.getItem('topsy_turtle_best'))||0}catch(e){}
 function saveBest(){try{localStorage.setItem('topsy_turtle_best',String(best))}catch(e){}}
 
-// audio
-let ac=null;
-function initAudio(){if(ac)return;try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){ac=null}}
-function blip(f,d,v){if(!ac)return;try{const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*1.5,t+d*0.6);g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(v||0.06,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+d);o.connect(g);g.connect(ac.destination);o.start(t);o.stop(t+d+0.02)}catch(e){}}
+// audio: all from Flow's engine (bounces and bubbles play its harmony via F.hit,
+// a dropped ball its soft cushion via F.miss)
+function initAudio(){}
+
+// The rhythm comes from Flow's calibrated beat: gravity flips every four bars and swings
+// over one, bubbles appear on the beat, and each bounce is sized to land two beats later
+const beatPos=()=>window.Flow?Flow.beatPos:time*1.8;
+const beatSec=()=>window.Flow?Flow.beat:0.55;
+let flipAnchor=0,flipCycle=-1;
 
 const F={
   score:s=>{try{window.Flow&&Flow.score(s)}catch(e){}},
@@ -53,6 +58,7 @@ function reset(){
   ball.x=W/2;ball.y=H*0.3;ball.vx=0;ball.vy=0;ball.spin=0;
   gs=1;gFrom=1;gTo=1;holdMax=holdT=9;transT=-1;flips=0;score=0;bounceCD=0;bubT=2.5;flipText=0;
   bubbles=[];parts=[];target=null;
+  flipAnchor=Math.ceil(beatPos());flipCycle=-1;
   F.reset();F.score(0);
 }
 
@@ -95,7 +101,7 @@ function gameOver(){
   state='over';overT=time;
   if(score>best){best=score;saveBest()}
   burst(ball.x,ball.y,'#ffd6f0',22,R*4);ring(ball.x,ball.y,'#fff');
-  blip(330,0.35,0.05);F.miss();
+  F.miss();
 }
 
 function addScore(n,x,y,col){
@@ -116,9 +122,17 @@ function update(dt){
     return;
   }
   // gravity schedule
-  if(transT<0){holdT-=dt;if(holdT<=0){transT=0;gFrom=gs;gTo=-gTo;flipText=1.6;blip(520,0.3,0.04)}}
-  else{transT+=dt;const p=Math.min(1,transT/TR);gs=gFrom+(gTo-gFrom)*ease(p);
-    if(p>=1){gs=gTo;transT=-1;flips++;holdMax=holdT=Math.max(5,9-flips*0.5)}}
+  // Each four-bar cycle holds for three bars, then swings to the other side over the
+  // fourth, so the new gravity settles on a downbeat. holdT/holdMax/transT feed the dial.
+  {
+    const since=Math.max(0,beatPos()-flipAnchor),cyc=Math.floor(since/16),within=since-cyc*16;
+    const side=c=>c%2===0?1:-1;
+    if(within<12){gs=side(cyc);gTo=gs;transT=-1;holdMax=12*beatSec();holdT=(12-within)*beatSec();}
+    else{
+      if(cyc!==flipCycle){flipCycle=cyc;flipText=1.6;flips++;}
+      const p=(within-12)/4;transT=p*TR;gTo=side(cyc+1);gs=side(cyc)+(gTo-side(cyc))*ease(p);
+    }
+  }
   // turtle
   tur.px=tur.x;tur.py=tur.y;
   let kx=(keys['arrowright']||keys['d']?1:0)-(keys['arrowleft']||keys['a']?1:0);
@@ -132,7 +146,7 @@ function update(dt){
   if(Math.abs(tur.vx)>25)tur.face=tur.vx>0?1:-1;
   tur.rot=Math.acos(Math.max(-1,Math.min(1,gs)));
   // ball
-  const G=H*1.25*(1+Math.min(0.35,score*0.005));
+  const G=H*1.25; // no ramp with score
   ball.vy+=G*gs*dt;
   const drag2=0.25+1.6*(1-Math.abs(gs));
   ball.vx*=Math.exp(-dt*drag2*0.8);ball.vy*=Math.exp(-dt*drag2*0.5);
@@ -154,7 +168,8 @@ function update(dt){
       ball.vx-=1.8*vn*nx;ball.vy-=1.8*vn*ny;
       const facing=ny*sgn; // >0 when hitting the shell side
       if(facing>0.2){
-        const L=Math.max(H*0.35,Math.sqrt(2*G*Math.max(0.15,Math.abs(gs))*H*0.3));
+        // Launch speed for a two-beat airtime (2L/g = 2 beats), so bounces keep the groove's time
+        const L=G*Math.max(0.3,Math.abs(gs))*beatSec();
         const up=sgn,vu=ball.vy*up;
         if(vu<L)ball.vy+=(L-vu)*up;
         ball.vx+=nx*R*3+(Math.random()-0.5)*R*3;
@@ -163,28 +178,32 @@ function update(dt){
           const hx=ball.x-nx*BR,hy=ball.y-ny*BR;
           addScore(1,hx,hy-sgn*R*0.3,'#fff6c8');
           burst(hx,hy,'#bff7ff',8,R*3);ring(hx,hy,'#ffffff');
-          blip(440+Math.min(12,score%13)*30,0.15,0.05);
         }
       }
       const sp=Math.hypot(ball.vx,ball.vy),mx=H*2.2;if(sp>mx){ball.vx*=mx/sp;ball.vy*=mx/sp}
     }
   }
   // bonus bubbles
-  bubT-=dt;
-  if(bubT<=0&&bubbles.length<3){bubT=2.5+Math.random()*2.5;
-    bubbles.push({x:W*(0.12+Math.random()*0.76),y:H*(0.25+Math.random()*0.5),r:R*0.42,life:7,t:Math.random()*6,born:0})}
+  // (bonus bubbles now appear on the beat; see the Flow.onBeat hook below update)
   for(let i=bubbles.length-1;i>=0;i--){const b=bubbles[i];b.life-=dt;b.t+=dt;b.born=Math.min(1,b.born+dt*3);
     b.y-=gs*R*0.25*dt;
     if(b.life<=0){bubbles.splice(i,1);continue}
     const bx=b.x+Math.sin(b.t*1.5)*R*0.3;
     if(Math.hypot(ball.x-bx,ball.y-b.y)<BR+b.r){
       bubbles.splice(i,1);addScore(3,bx,b.y,'#ffc3e8');
-      burst(bx,b.y,'#ffd1f2',14,R*4);ring(bx,b.y,'#ffb0e0');blip(780,0.2,0.05);
+      burst(bx,b.y,'#ffd1f2',14,R*4);ring(bx,b.y,'#ffb0e0');
     }
   }
 }
 
 // drawing
+// A chance of a bonus bubble on every other beat, up to three at a time
+let bubBeat=0;
+if(window.Flow)Flow.onBeat(()=>{
+  if(state!=='play'||(bubBeat++)%2||bubbles.length>=3||Math.random()>0.35)return;
+  bubbles.push({x:W*(0.12+Math.random()*0.76),y:H*(0.25+Math.random()*0.5),r:R*0.42,life:7,t:Math.random()*6,born:0});
+});
+
 function lerpC(a,b,t){return 'rgb('+[0,1,2].map(i=>Math.round(a[i]+(b[i]-a[i])*t)).join(',')+')'}
 function drawBG(){
   const t=(1-gs)/2;

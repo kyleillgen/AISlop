@@ -33,24 +33,13 @@ try{best=parseInt(localStorage.getItem('dripbeat_best'))||0;}catch(e){}
 function saveBest(){try{localStorage.setItem('dripbeat_best',String(best));}catch(e){}}
 
 // ---------- audio ----------
-let ac=null;
-function initAudio(){
-  if(ac)return;
-  try{ac=new (window.AudioContext||window.webkitAudioContext)();}catch(e){ac=null;}
-}
-function plip(f,g,dur){
-  if(!ac)return;
-  try{
-    const t=ac.currentTime,o=ac.createOscillator(),gn=ac.createGain();
-    o.type='sine';o.frequency.setValueAtTime(f,t);o.frequency.exponentialRampToValueAtTime(f*0.55,t+dur);
-    gn.gain.setValueAtTime(0.0001,t);gn.gain.exponentialRampToValueAtTime(g,t+0.01);gn.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-    o.connect(gn);gn.connect(ac.destination);o.start(t);o.stop(t+dur+0.02);
-  }catch(e){}
-}
+// All sound comes from Flow's engine: taps are voiced in key on the 16th grid, hits play
+// its harmony and drifts its soft cushion. The halos ride Flow's calibrated beat.
 
 // ---------- state ----------
 let state='start',overAt=0,now=0;
-let score=0,streak=0,heat=0,bpm=80,size=1,beat=0,nextM=0;
+// beat is this run's position on Flow's audible beat (Flow.beatPos - anchor)
+let score=0,streak=0,heat=0,bpm=108,anchor=0,size=1,beat=0,nextM=0;
 let notes=[],pops=[],parts=[],texts=[],wobble=0,flash=0,auroraT=0;
 const WIN=0.14,PERF=0.055;
 
@@ -70,7 +59,10 @@ function gen(){
   for(const o of pat)notes.push({b:m*4+o,j:false,off:(o%1)!==0});
 }
 function begin(){
-  state='play';score=0;streak=0;heat=0;bpm=80;size=1;beat=-4;nextM=0;
+  state='play';score=0;streak=0;heat=0;size=1;nextM=0;
+  // A one-bar count-in, starting on the groove's next beat
+  anchor=window.Flow?Math.ceil(Flow.beatPos)+4:0;
+  beat=window.Flow?Flow.beatPos-anchor:-4;
   notes=[];pops=[];parts=[];texts=[];wobble=0;flash=0;
   window.Flow&&Flow.reset();
   window.Flow&&Flow.score(0);
@@ -100,7 +92,6 @@ function hitNote(n,dtS){
     parts.push({x:L.cx,y:L.hy,vx:Math.cos(a)*s,vy:Math.sin(a)*s-60,life:1,hue:n.off?320:180});
   }
   texts.push({x:L.cx+(Math.random()-0.5)*40,y:L.hy-L.R0*2.6,t:perfect?'perfect':'nice',life:1});
-  plip(perfect?880:660,0.05,0.18);
   window.Flow&&Flow.hit(L.cx,L.hy);
   window.Flow&&Flow.score(score);
 }
@@ -109,7 +100,6 @@ function missNote(n){
   streak=0;heat*=0.5;size-=0.22;wobble=1;
   const L=layout();
   texts.push({x:L.cx,y:L.hy-L.R0*2.6,t:'drift',life:1,soft:true});
-  plip(170,0.04,0.25);
   window.Flow&&Flow.miss();
   if(size<=0.2)gameOver();
 }
@@ -125,8 +115,6 @@ function tap(){
   if(size<=0.2)gameOver();
 }
 function press(){
-  initAudio();
-  if(ac&&ac.state==='suspended')try{ac.resume();}catch(e){}
   if(state==='start'){begin();return;}
   if(state==='over'){if(now-overAt>600)begin();return;}
   tap();
@@ -141,12 +129,10 @@ window.addEventListener('keydown',e=>{
 
 // ---------- update ----------
 function update(dt){
-  if(state==='play'){
-    const target=80+Math.min(heat,64)*1.15;
-    bpm+=(target-bpm)*Math.min(1,dt*0.6);
-  }else{bpm+=(80-bpm)*Math.min(1,dt*0.8);}
-  beat+=dt*bpm/60;
-  auroraT+=dt*bpm/80;
+  // Tempo is Flow's calibrated beat, never a ramp; doing well ("heat") makes the sky come
+  // alive and the patterns richer instead of making the beat faster
+  if(window.Flow){bpm=Flow.bpm;beat=Flow.beatPos-anchor;}else{beat+=dt*bpm/60;}
+  auroraT+=dt*(bpm/80)*(1+Math.min(heat,64)/48);
   if(state==='play'){
     while(nextM*4<beat+10)gen();
     for(const n of notes){
@@ -161,7 +147,7 @@ function update(dt){
   parts=parts.filter(p=>p.life>0);
   for(const t of texts){t.life-=dt*1.3;t.y-=dt*30;}
   texts=texts.filter(t=>t.life>0);
-  const rs=(H*0.6+bpm*6)*dt;
+  const rs=(H*0.6+bpm*6)*(1+Math.min(heat,64)/64)*dt;
   for(const r of rain){r.y+=rs*r.s;if(r.y>H+30){r.y=-30;r.x=Math.random()*W;}}
 }
 
@@ -287,8 +273,9 @@ function draw(){
   }else if(state==='start'){
     ctx.fillStyle='rgba(5,8,25,0.35)';ctx.fillRect(0,0,W,H);
     txt('Dripbeat',W/2,H*0.32,Math.round(big*0.12)+10,'rgba(235,248,255,0.97)','800');
-    txt('Tap / Space as each halo meets the raindrop.',W/2,H*0.32+big*0.1+10,Math.max(13,Math.round(big*0.032)),'rgba(210,225,255,0.85)','500');
-    txt('Stay on beat and the whole sky speeds up.',W/2,H*0.32+big*0.1+38,Math.max(13,Math.round(big*0.032)),'rgba(210,225,255,0.7)','500');
+    const fs=Math.max(13,Math.round(big*0.032)),ly=H*0.32+big*0.1+10;
+    txt('Tap / Space as each halo meets the raindrop.',W/2,ly,fs,'rgba(210,225,255,0.85)','500');
+    txt('The beat finds your pace; stay on it and the sky comes alive.',W/2,ly+fs*1.7,fs,'rgba(210,225,255,0.7)','500');
     if(best)txt('best '+best,W/2,H*0.88,14,'rgba(200,215,255,0.6)');
     txt('tap to begin',W/2,L.hy+L.R0*3,16,'rgba(220,240,255,'+(0.5+0.4*pulse)+')');
   }else{
