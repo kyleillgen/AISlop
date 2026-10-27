@@ -114,7 +114,6 @@
     </div>
     <div class="hero-actions">
       <button class="btn play" id="heroPlay">Play</button>
-      <button class="btn" id="heroZen">Zen (toy)</button>
     </div>
   </section>
   <section data-panel="arcade">
@@ -336,7 +335,6 @@
 
   const byId = (id) => games.find((g) => g.id === id);
   document.getElementById("heroPlay").addEventListener("click", () => openGame(byId("flow-resonance")));
-  document.getElementById("heroZen").addEventListener("click", () => openGame(byId("flow-zen")));
 
   // Tabs
   const tabs = document.querySelectorAll("#tabs button");

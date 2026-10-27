@@ -39,23 +39,6 @@
         .start-btn-glow {
             animation: pulseGlow 2.4s infinite ease-in-out;
         }
-        #hudHeader {
-            transition: opacity 1.2s ease;
-        }
-        /* Desktop: one centred stage, minimal HUD, keyboard-first */
-        .desktop-mode #gameCanvas {
-            box-shadow: 0 0 80px rgba(34, 211, 238, 0.08), 0 0 0 1px rgba(30, 41, 59, 0.9);
-        }
-        /* Desktop keeps every control the original has: groove voice, cadence lock, telemetry */
-        .desktop-mode #featureList {
-            display: none;
-        }
-        .desktop-only {
-            display: none;
-        }
-        .desktop-mode .desktop-only {
-            display: block;
-        }
     </style>
 </head>
 <body class="relative w-full h-full select-none overflow-hidden bg-[#05070e]">
@@ -117,7 +100,7 @@
         </div>
 
         <!-- Secondary Row: Resonance & Phrase Telemetry Pills -->
-        <div id="telemetryRow" class="grid grid-cols-4 gap-1.5">
+        <div class="grid grid-cols-4 gap-1.5">
             <div class="bg-slate-950/75 backdrop-blur-md border border-slate-800/80 rounded-xl px-2.5 py-1 flex items-center justify-between">
                 <span class="text-[9px] font-mono-tech text-slate-400 uppercase">CADENCE</span>
                 <span id="bpmReadout" class="text-[11px] font-mono-tech font-bold text-emerald-300">108 BPM</span>
@@ -139,7 +122,7 @@
 
     <!-- Bottom Subtle Guidance Banner -->
     <div id="touchHint" class="absolute bottom-4 left-0 right-0 z-10 pointer-events-none flex justify-center transition-opacity duration-700 opacity-85 px-4">
-        <div id="touchHintText" class="px-4 py-1.5 rounded-full bg-slate-950/80 border border-slate-800/90 text-[10px] sm:text-[11px] font-mono-tech text-slate-300 tracking-wider uppercase text-center shadow-lg">
+        <div class="px-4 py-1.5 rounded-full bg-slate-950/80 border border-slate-800/90 text-[10px] sm:text-[11px] font-mono-tech text-slate-300 tracking-wider uppercase text-center shadow-lg">
             If It's Flow, It's Go • Physics Lock To Your Rhythm • Follow The Harmonic Guide Ribbon
         </div>
     </div>
@@ -161,12 +144,7 @@
                 </p>
             </div>
 
-            <div class="desktop-only w-full bg-slate-950/90 border border-slate-800/90 rounded-2xl p-3.5 text-[11px] font-mono-tech text-slate-300 space-y-1.5">
-                <div><span class="text-emerald-300">SPACE / CLICK</span> flap · <span class="text-sky-300">↓ / S</span> dive · <span class="text-cyan-300">M</span> mute · <span class="text-fuchsia-300">V</span> voice · <span class="text-amber-300">L</span> lock cadence</div>
-                <div class="text-slate-500">Find a steady rhythm. The music bends to meet you, then holds.</div>
-            </div>
-
-            <div id="featureList" class="w-full bg-slate-950/90 border border-slate-800/90 rounded-2xl p-3.5 text-left space-y-2 text-[11px] font-mono-tech">
+            <div class="w-full bg-slate-950/90 border border-slate-800/90 rounded-2xl p-3.5 text-left space-y-2 text-[11px] font-mono-tech">
                 <div class="flex items-center justify-between text-emerald-300">
                     <span>• CADENCE LOCK-IN (&ge;75% FLOW)</span>
                     <span>→ FREEZES SWEET SPOT</span>
@@ -248,29 +226,6 @@
                     this.currentCutoff = 900;
                     this.cushionedFilterTimer = 0; // Smooth 2-second filter crossfade on gentle pipe clip
                     this.queuedTapNotes = [];      // Quantized notes triggered by player taps
-
-                    this.lastBeatTime = 0;         // Audio-clock time of the most recently scheduled quarter beat
-                    this.beatSec = 60 / 108;
-                }
-
-                // Audio time at which the player is hearing "now" (taps react to sound, which lags the clock)
-                getHeardTime() {
-                    if (!this.ctx) return 0;
-                    return this.ctx.currentTime - (this.ctx.outputLatency || this.ctx.baseLatency || 0);
-                }
-
-                // Signed seconds from the nearest eighth-note on the grid (+ = late, - = early)
-                getBeatOffset(atTime) {
-                    if (!this.lastBeatTime) return null;
-                    const half = this.beatSec / 2;
-                    const rel = (atTime - this.lastBeatTime) / half;
-                    return (rel - Math.round(rel)) * half;
-                }
-
-                // Phase entrainment: slide the whole grid a little toward the player's pulse
-                nudgePhase(sec) {
-                    this.nextStepTime += sec;
-                    this.lastBeatTime += sec;
                 }
 
                 init() {
@@ -341,19 +296,6 @@
                     return CHORD_PROGRESSION[this.chordIndex].name;
                 }
 
-                // Each era modulates the whole progression to a new key
-                setTranspose(semitones) {
-                    this.transposeRatio = Math.pow(2, semitones / 12);
-                }
-
-                getChord() {
-                    const chord = CHORD_PROGRESSION[this.chordIndex];
-                    const r = this.transposeRatio || 1;
-                    if (r === 1) return chord;
-                    const shift = (freqs) => freqs.map((f) => f * r);
-                    return { name: chord.name, bass: shift(chord.bass), pad: shift(chord.pad), scale: shift(chord.scale) };
-                }
-
                 toggleMute() {
                     this.isMuted = !this.isMuted;
                     if (this.masterGain && this.ctx) {
@@ -401,7 +343,7 @@
                 queueQuantizedTap(heightNorm, tier) {
                     if (!this.isInitialized || this.isMuted) return;
                     const now = this.ctx.currentTime;
-                    const chord = this.getChord();
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
                     const clampedH = Math.max(0, Math.min(1, 1 - heightNorm));
 
                     // Queue for the 16th-note grid scheduler so it lands 100% in time and in key
@@ -435,7 +377,7 @@
                 playPipeHarmony(streak, quality) {
                     if (!this.isInitialized || this.isMuted) return;
                     const now = this.ctx.currentTime;
-                    const chord = this.getChord();
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
 
                     const indices =
                         quality === "PERFECT"
@@ -469,7 +411,7 @@
                 playGoldenOrbShimmer() {
                     if (!this.isInitialized || this.isMuted) return;
                     const now = this.ctx.currentTime;
-                    const chord = this.getChord();
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
 
                     chord.scale.slice(3, 9).forEach((freq, idx) => {
                         const start = now + idx * 0.036;
@@ -494,7 +436,7 @@
                 playSlipstreamTick(stepCounter) {
                     if (!this.isInitialized || this.isMuted) return;
                     const now = this.ctx.currentTime;
-                    const chord = this.getChord();
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
                     const freq = chord.scale[(stepCounter + 4) % chord.scale.length];
 
                     const osc = this.ctx.createOscillator();
@@ -515,7 +457,7 @@
                 playGentleCushionChord() {
                     if (!this.isInitialized || this.isMuted) return;
                     const now = this.ctx.currentTime;
-                    const chord = this.getChord();
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
 
                     chord.pad.forEach((freq) => {
                         const osc = this.ctx.createOscillator();
@@ -538,7 +480,6 @@
                     if (!this.isInitialized || !this.ctx) return;
                     const now = this.ctx.currentTime;
                     const secondsPerBeat = 60.0 / Math.max(88, Math.min(136, bpm));
-                    this.beatSec = secondsPerBeat;
                     const sixteenthDuration = secondsPerBeat / 4.0;
 
                     if (this.nextStepTime < now - 0.2) {
@@ -561,9 +502,8 @@
                 }
 
                 scheduleStep(step, time, flowIndex, tier, callbacks) {
-                    if (step % 4 === 0) {
-                        this.lastBeatTime = time;
-                        if (callbacks && callbacks.onQuarterBeat) callbacks.onQuarterBeat(step / 4);
+                    if (step % 4 === 0 && callbacks && callbacks.onQuarterBeat) {
+                        callbacks.onQuarterBeat(step / 4);
                     }
                     if (callbacks && callbacks.onSixteenth) {
                         callbacks.onSixteenth(step);
@@ -571,7 +511,7 @@
 
                     if (this.isMuted) return;
 
-                    const chord = this.getChord();
+                    const chord = CHORD_PROGRESSION[this.chordIndex];
                     const voice = this.voiceIndex; // 0: LO-FI RHODES, 1: SYNTHWAVE PULSE, 2: AMBIENT DRIFT
 
                     // 1. Warm Pad Swell on Step 0 of each bar
@@ -698,30 +638,6 @@
             const ctx = canvas.getContext("2d");
             const synth = new CoCreationResonanceSynth();
 
-            // Mobile is the full experience; desktop gets a centred stage, a lean HUD and fewer systems.
-            // Override with ?mode=desktop or ?mode=mobile.
-            const forcedMode = new URLSearchParams(window.location.search).get("mode");
-            const IS_DESKTOP = forcedMode
-                ? forcedMode === "desktop"
-                : window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-            if (IS_DESKTOP) document.body.classList.add("desktop-mode");
-
-            // Zen (?zen=1): Flow as a toy. Clips pass through with no streak loss, difficulty
-            // never climbs, and the music, eras and Platinum still evolve as you play.
-            const ZEN = new URLSearchParams(window.location.search).has("zen");
-            const BEST_KEY = ZEN ? "flowBirdResonanceBestZen" : "flowBirdResonanceBest";
-            if (ZEN) {
-                document.querySelector("#startOverlay h1").textContent = "ZEN // JUST FLOW";
-                document.querySelector("#startOverlay h1").nextElementSibling.textContent =
-                    "Nothing to lose here. Clip a pipe and you simply glide through. Find a rhythm, ride the ribbon, and let the world evolve around you.";
-            }
-
-            // Adaptive challenge (0..1): keeps play in the flow channel, just past comfortable.
-            // Speed never changes; only gap size and contour depth move.
-            const CHALLENGE = IS_DESKTOP
-                ? { start: 0.15, max: 0.6, gapEasy: 196, gapHard: 150, ampEasy: 0.5, ampHard: 1.0 }
-                : { start: 0.25, max: 1.0, gapEasy: 190, gapHard: 138, ampEasy: 0.55, ampHard: 1.15 };
-
             // DOM Elements
             const startOverlay = document.getElementById("startOverlay");
             const startBtn = document.getElementById("startBtn");
@@ -741,15 +657,6 @@
             const chordReadout = document.getElementById("chordReadout");
             const tierReadout = document.getElementById("tierReadout");
             const touchHint = document.getElementById("touchHint");
-            const hudHeader = document.getElementById("hudHeader");
-
-            if (IS_DESKTOP) {
-                document.getElementById("touchHintText").textContent =
-                    "Space or click to flap • Down to dive • Ride the glowing ribbon";
-            } else {
-                document.getElementById("touchHintText").textContent =
-                    "Tap to flap • Swipe down to dive • Ride the glowing ribbon";
-            }
 
             let width = window.innerWidth;
             let height = window.innerHeight;
@@ -758,32 +665,8 @@
             let gameStarted = false;
             let streak = 0;
             let bestStreak = 0;
-
-            // Long-game evolution: every 500 points is a new era (palette, key, wave shapes).
-            // Eras follow the run's peak, so a clip never drops you back out of one.
-            const ERA_SPAN = 500;
-            const ERAS = [
-                { name: "ORIGIN", bg: null, transpose: 0 },
-                { name: "ABYSSAL TIDE", bg: ["#031326", "#06304a", "#0a4d5c"], transpose: 2 },
-                { name: "PLATINUM", bg: ["#12141a", "#2b303b", "#565d6b"], transpose: 5 },
-                { name: "EMBER DUSK", bg: ["#1a0612", "#3d0f2e", "#6b2a1a"], transpose: 3 },
-                { name: "VERDANT HALO", bg: ["#03140f", "#0b3326", "#1f4d2b"], transpose: 7 },
-                { name: "SOLAR CROWN", bg: ["#1a1204", "#3d2a06", "#5c3d0a"], transpose: 4 }
-            ];
-            const PLATINUM_AT = 1000;
-            let runPeak = 0;
-            let eraIndex = 0;
-            let eraVisualPos = 0; // Smoothed runPeak / ERA_SPAN that drives the background blend
-
-            function getEra(i) {
-                return i < ERAS.length ? ERAS[i] : ERAS[1 + ((i - 1) % (ERAS.length - 1))];
-            }
-
-            function isPlatinum() {
-                return runPeak >= PLATINUM_AT;
-            }
             try {
-                bestStreak = parseInt(localStorage.getItem(BEST_KEY) || "0", 10) || 0;
+                bestStreak = parseInt(localStorage.getItem("flowBirdResonanceBest") || "0", 10) || 0;
                 bestStreakDisplay.textContent = bestStreak;
             } catch (e) {
                 bestStreak = 0;
@@ -808,35 +691,8 @@
                     // Sweeping wide curves paired with streams of Golden Flow Orbs
                     getNormY: (stepInBar) => 0.5 + 0.32 * Math.sin((stepInBar / 4) * Math.PI),
                     orbChance: 0.85
-                },
-                {
-                    id: "DOUBLE HELIX",
-                    minEra: 1,
-                    // A long swell with a quicker ripple riding on it
-                    getNormY: (stepInBar) =>
-                        0.5 +
-                        0.22 * Math.sin((stepInBar / 8) * Math.PI * 2) +
-                        0.1 * Math.sin((stepInBar / 8) * Math.PI * 6),
-                    orbChance: 0.6
-                },
-                {
-                    id: "TIDAL STAIRS",
-                    minEra: 2,
-                    // Even steps up, even steps down
-                    getNormY: (stepInBar) => 0.75 - 0.5 * (Math.abs((stepInBar % 8) - 4) / 4),
-                    orbChance: 0.5
                 }
             ];
-
-            function advancePhrase() {
-                for (let n = 1; n <= HARMONIC_PHRASES.length; n++) {
-                    const i = (flowCtrl.phraseIndex + n) % HARMONIC_PHRASES.length;
-                    if ((HARMONIC_PHRASES[i].minEra || 0) <= eraIndex) {
-                        flowCtrl.phraseIndex = i;
-                        return;
-                    }
-                }
-            }
 
             // Cadence Discovery & Lock-In Controller ("If it's flow, it's go")
             const flowCtrl = {
@@ -853,14 +709,10 @@
                 phraseIndex: 0,
                 phraseStep: 0,
 
-                challenge: CHALLENGE.start,
-
                 shieldCharge: 0.0,
                 shieldReady: false,
                 tapTimes: [],
                 tapRhythmScore: 0.85,
-                pocketScore: 0.6,         // How often taps land on the eighth-note grid
-                lastDisruptionMs: 0,      // Clips & tier changes bring the HUD back; calm play lets it fade
                 bulletTimeTimer: 0,
                 timeScale: 1.0,
                 hyperGlideTimer: 0
@@ -873,9 +725,6 @@
                 radius: 14,
                 gravity: 0.31,
                 jumpImpulse: -6.4,
-                diveSpeed: 7.0,      // Dive: a flat-out drop held for diveTime, then a hard level-off
-                diveTime: 0.13,
-                diveTimer: 0,
                 ghostTimer: 0,
                 shakeTimer: 0,
                 washAlpha: 0,
@@ -893,7 +742,6 @@
             let pipeSpawnCounter = 0;
             let kickPulse = 0;
             let sixteenthPulse = 0;
-            let pocketPulse = 0;
             let slipstreamTickCounter = 0;
 
             function initStarfield() {
@@ -910,15 +758,8 @@
             }
 
             function resizeCanvas() {
-                // Desktop plays in a portrait-ish column so the look-ahead and pacing match mobile
-                width = IS_DESKTOP
-                    ? Math.min(window.innerWidth, Math.max(520, Math.round(window.innerHeight * 0.8)))
-                    : window.innerWidth;
+                width = window.innerWidth;
                 height = window.innerHeight;
-                canvas.style.width = width + "px";
-                canvas.style.left = Math.round((window.innerWidth - width) / 2) + "px";
-                canvas.style.right = "auto";
-                if (IS_DESKTOP) hudHeader.style.maxWidth = width + "px";
                 dpr = Math.min(window.devicePixelRatio || 1, 2);
                 canvas.width = width * dpr;
                 canvas.height = height * dpr;
@@ -998,24 +839,6 @@
                             flowCtrl.detectedCadenceBpm * 0.82 + clampedBpm * 0.18;
                     }
                 }
-
-                // Visual only: a soft ring when a flap lands on the beat. The beat grid itself
-                // is never moved; tempo follows you exactly as the original engine does.
-                const offset = synth.isInitialized ? synth.getBeatOffset(synth.getHeardTime()) : null;
-                if (offset !== null && Math.abs(offset) < 0.055) pocketPulse = 1.0;
-            }
-
-            function adjustChallenge(delta) {
-                if (ZEN) return;
-                flowCtrl.challenge = Math.max(0, Math.min(CHALLENGE.max, flowCtrl.challenge + delta));
-            }
-
-            function getChallengeGap() {
-                return CHALLENGE.gapEasy + (CHALLENGE.gapHard - CHALLENGE.gapEasy) * flowCtrl.challenge;
-            }
-
-            function getChallengeAmplitude() {
-                return CHALLENGE.ampEasy + (CHALLENGE.ampHard - CHALLENGE.ampEasy) * flowCtrl.challenge;
             }
 
             function incrementStreak(amount) {
@@ -1025,42 +848,13 @@
                     bestStreak = streak;
                     bestStreakDisplay.textContent = bestStreak;
                     try {
-                        localStorage.setItem(BEST_KEY, String(bestStreak));
+                        localStorage.setItem("flowBirdResonanceBest", String(bestStreak));
                     } catch (e) {}
                 }
                 streakDisplay.textContent = streak;
                 flowCtrl.tier = computeTierFromStreak(streak);
 
-                if (streak > runPeak) {
-                    const wasPlatinum = isPlatinum();
-                    runPeak = streak;
-                    const newEra = Math.floor(runPeak / ERA_SPAN);
-                    if (newEra > eraIndex) {
-                        eraIndex = newEra;
-                        const era = getEra(newEra);
-                        synth.setTranspose(era.transpose);
-                        flowCtrl.lastDisruptionMs = performance.now();
-                        if (isPlatinum() && !wasPlatinum) {
-                            spawnCallout("PLATINUM • " + PLATINUM_AT, width * 0.5, height * 0.3, "#f1f5f9", 1.35);
-                            spawnBeatRing(bird.x, bird.y, 320, "#e2e8f0");
-                            spawnParticles(bird.x, bird.y, "#f8fafc", 40);
-                            triggerHaptic([20, 40, 20, 40, 30]);
-                        } else {
-                            spawnCallout(
-                                `ERA ${newEra + 1} • ${era.name}`,
-                                width * 0.5,
-                                height * 0.3,
-                                "#e0f2fe",
-                                1.2
-                            );
-                            spawnBeatRing(bird.x, bird.y, 240, "#7dd3fc");
-                            triggerHaptic([15, 30, 15]);
-                        }
-                    }
-                }
-
                 if (flowCtrl.tier > prevTier) {
-                    flowCtrl.lastDisruptionMs = performance.now();
                     const tierNames = [
                         "",
                         "TIER 1 • CALIBRATING",
@@ -1092,35 +886,20 @@
                 const targetY = getHarmonicGuideYAtX(bird.x);
                 bird.vy = (targetY - bird.y) * 0.08 - 2.2;
 
-                if (ZEN) {
-                    // Glide straight through: a soft shimmer, no penalty, no HUD flare-up
-                    bird.ghostTimer = 0.9;
-                    bird.washAlpha = 0.18;
-                    bird.washColor = "#a78bfa";
-                    synth.playGentleCushionChord();
-                    spawnParticles(bird.x, impactY || bird.y, "#a78bfa", 10);
-                    return;
-                }
-
-                flowCtrl.lastDisruptionMs = performance.now();
-
                 if (flowCtrl.shieldReady) {
                     // Shield absorbs the clip with zero streak loss!
                     flowCtrl.shieldReady = false;
                     flowCtrl.shieldCharge = 0.0;
-                    adjustChallenge(-0.06);
                     spawnCallout("SHIELD GLIDE • STREAK INTACT", bird.x + 28, bird.y - 28, "#38bdf8", 1.1);
                 } else {
                     // Unshielded clip: gently step down 25% (or 1 tier step) instead of wiping to 0
                     streak = Math.max(0, Math.floor(streak * 0.75));
-                    adjustChallenge(-0.12);
                     streakDisplay.textContent = streak;
                     flowCtrl.tier = computeTierFromStreak(streak);
                     spawnCallout("SOFT CUSHION • KEEP GROOVING", bird.x + 28, bird.y - 28, "#a78bfa", 1.05);
                 }
 
                 flowCtrl.bulletTimeTimer = 0.45;
-                bird.diveTimer = 0;
                 bird.ghostTimer = 1.15;
                 bird.shakeTimer = 0.12;
                 bird.washAlpha = 0.32;
@@ -1161,8 +940,9 @@
                     flowCtrl.bpm += (flowCtrl.detectedCadenceBpm - flowCtrl.bpm) * Math.min(1.0, dt * 1.4);
                     const matchedVx = 2.85 + ((flowCtrl.bpm - 96) / 28) * 0.55;
                     flowCtrl.vx += (matchedVx - flowCtrl.vx) * Math.min(1.0, dt * 1.2);
+                    // Gap stays wide and generous (172 - 178px)
+                    flowCtrl.gapHeight = 175;
                 }
-                flowCtrl.gapHeight = getChallengeGap();
 
                 synth.updateSynesthesia(flowCtrl.flowIndex, flowCtrl.tier, flowCtrl.bpm, dt);
             }
@@ -1182,10 +962,7 @@
                 const gap = flowCtrl.gapHeight;
 
                 const phrase = HARMONIC_PHRASES[flowCtrl.phraseIndex];
-                const normY = Math.max(
-                    0,
-                    Math.min(1, 0.5 + (phrase.getNormY(flowCtrl.phraseStep) - 0.5) * getChallengeAmplitude())
-                );
+                const normY = phrase.getNormY(flowCtrl.phraseStep);
 
                 const minCenterY = topBoundary + gap * 0.5 + 24;
                 const maxCenterY = bottomBoundary - gap * 0.5 - 24;
@@ -1208,7 +985,7 @@
                 flowCtrl.phraseStep++;
                 if (flowCtrl.phraseStep >= 8) {
                     flowCtrl.phraseStep = 0;
-                    advancePhrase();
+                    flowCtrl.phraseIndex = (flowCtrl.phraseIndex + 1) % HARMONIC_PHRASES.length;
                 }
 
                 const spacing = getQuantizedPipeSpacing();
@@ -1228,7 +1005,7 @@
                 }
 
                 // Tier 3+ Spontaneous "Harmonic Slipstreams" (Glowing wind tunnels between pipes)
-                if (!IS_DESKTOP && flowCtrl.tier >= 3 && prevPipe && pipeSpawnCounter % 3 === 0) {
+                if (flowCtrl.tier >= 3 && prevPipe && pipeSpawnCounter % 3 === 0) {
                     slipstreams.push({
                         xStart: prevPipe.x + prevPipe.width,
                         xEnd: startX,
@@ -1275,24 +1052,22 @@
                 const normDist = deltaY / Math.max(halfGap, 45);
 
                 if (normDist < 0.28) {
-                    // Per-pipe feedback is sound, rings and light only: reading text breaks flow
                     incrementStreak(2);
-                    adjustChallenge(0.03);
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.055);
                     synth.playPipeHarmony(streak, "PERFECT");
                     triggerHaptic(10);
+                    spawnCallout("HARMONIC LOCK +2", bird.x + 24, bird.y - 26, "#34d399", 1.08);
                     spawnBeatRing(bird.x, bird.y, 115, "#10b981");
                     spawnParticles(bird.x, bird.y, "#34d399", 14);
                 } else if (normDist > 0.72 || pipe.wasGrazed) {
                     incrementStreak(2);
-                    adjustChallenge(0.015);
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.04);
                     synth.playPipeHarmony(streak, "GRAZE");
+                    spawnCallout("VELVET GRAZE +2", bird.x + 24, bird.y - 26, "#f472b6", 1.05);
                     spawnBeatRing(bird.x, bird.y, 95, "#ec4899");
                     spawnParticles(bird.x, bird.y, "#f472b6", 12);
                 } else {
                     incrementStreak(1);
-                    adjustChallenge(0.02);
                     flowCtrl.flowIndex = Math.min(1.0, flowCtrl.flowIndex + 0.035);
                     synth.playPipeHarmony(streak, "CLEAN");
                     spawnBeatRing(bird.x, bird.y, 80, "#22d3ee");
@@ -1337,7 +1112,6 @@
                 recordTapAndEntrainCadence(nowMs);
 
                 const speedScale = Math.sqrt(flowCtrl.vx / 3.1);
-                bird.diveTimer = 0; // A flap always wins over a dive in progress
                 bird.vy = bird.jumpImpulse * Math.max(0.92, Math.min(1.06, speedScale));
 
                 const heightNorm = Math.max(0, Math.min(1, (bird.y - 108) / (height - 146)));
@@ -1352,19 +1126,6 @@
                 if (touchHint) {
                     touchHint.style.opacity = "0";
                 }
-            }
-
-            // Dive: the sharp counterpart to the soft flap arc. One press drops a fixed notch
-            // straight down and levels off, for quick, angular line corrections.
-            function triggerDive() {
-                if (!gameStarted) return;
-                bird.diveTimer = bird.diveTime;
-                bird.vy = bird.diveSpeed;
-
-                // A lower note than a flap from the same height, still quantized and in key
-                const heightNorm = Math.max(0, Math.min(1, (bird.y - 108) / (height - 146)));
-                synth.queueQuantizedTap(Math.min(1, heightNorm + 0.35), flowCtrl.tier);
-                spawnParticles(bird.x + 6, bird.y - 10, getTierPrimaryColor(), 4);
             }
 
             function startGame(e) {
@@ -1388,10 +1149,6 @@
                     spawnNextHarmonicPipe(width + 90 + spacing);
                     spawnNextHarmonicPipe(width + 90 + spacing * 2);
                     spawnNextHarmonicPipe(width + 90 + spacing * 3);
-
-                    // ?warp=N starts the run at N points (for previewing later eras)
-                    const warp = parseInt(new URLSearchParams(window.location.search).get("warp") || "0", 10);
-                    if (warp > 0) incrementStreak(warp);
                 }
                 triggerFlap();
             }
@@ -1399,79 +1156,44 @@
             startBtn.addEventListener("pointerdown", startGame, { passive: false });
             startOverlay.addEventListener("pointerdown", startGame, { passive: false });
 
-            // Anywhere on the page flaps (desktop's side margins included); HUD buttons stop propagation
-            document.addEventListener(
+            canvas.addEventListener(
                 "pointerdown",
                 (e) => {
-                    if (e.target.closest("button") || e.target.closest("#startOverlay")) return;
                     e.preventDefault();
                     if (!gameStarted) {
                         startGame(e);
                     } else {
                         triggerFlap();
-                        swipe = { y: e.clientY, t: performance.now(), used: false };
                     }
                 },
                 { passive: false }
             );
 
-            // Touch dive: a quick downward swipe. The touch already flapped, so the dive
-            // overrides it and the flap is taken back out of the cadence history.
-            let swipe = null;
-            document.addEventListener("pointermove", (e) => {
-                if (!swipe || swipe.used) return;
-                if (e.clientY - swipe.y > 26 && performance.now() - swipe.t < 350) {
-                    swipe.used = true;
-                    flowCtrl.tapTimes.pop();
-                    triggerDive();
-                }
-            });
-            document.addEventListener("pointerup", () => {
-                swipe = null;
-            });
-
             canvas.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 
             window.addEventListener("keydown", (e) => {
-                if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW") {
+                if (e.code === "Space" || e.code === "ArrowUp") {
                     e.preventDefault();
-                    if (e.repeat) return; // Holding the key must not machine-gun flaps
                     if (!gameStarted) {
                         startGame(e);
                     } else {
                         triggerFlap();
                     }
-                } else if (e.code === "ArrowDown" || e.code === "KeyS") {
-                    e.preventDefault();
-                    if (!e.repeat) triggerDive();
-                } else if (!e.repeat && e.code === "KeyM") {
-                    toggleMute();
-                } else if (!e.repeat && e.code === "KeyV") {
-                    cycleVoice();
-                } else if (!e.repeat && e.code === "KeyL") {
-                    toggleCadenceLock();
                 }
             });
 
             // Groove Voice Selector (`LO-FI RHODES`, `SYNTHWAVE PULSE`, `AMBIENT DRIFT`)
-            function cycleVoice() {
+            voiceBtn.addEventListener("pointerdown", (e) => {
+                e.stopPropagation();
                 synth.init();
                 const voiceName = synth.cycleVoice();
                 voiceBtn.textContent = voiceName;
                 spawnCallout(`VOICE • ${voiceName}`, width * 0.5, 138, "#38bdf8", 1.0);
-            }
-            voiceBtn.addEventListener("pointerdown", (e) => {
-                e.stopPropagation();
-                cycleVoice();
             });
 
             // Lock Current Cadence Toggle Pill
             lockCadenceBtn.addEventListener("pointerdown", (e) => {
                 e.stopPropagation();
-                toggleCadenceLock();
-            });
-
-            function toggleCadenceLock() {
                 synth.init();
                 flowCtrl.manualLock = !flowCtrl.manualLock;
                 flowCtrl.resonanceLocked = flowCtrl.manualLock || flowCtrl.flowIndex >= 0.75;
@@ -1483,22 +1205,18 @@
                     flowCtrl.manualLock ? "#34d399" : "#cbd5e1",
                     1.0
                 );
-            }
+            });
 
-            function toggleMute() {
+            muteBtn.addEventListener("pointerdown", (e) => {
+                e.stopPropagation();
                 synth.init();
                 const muted = synth.toggleMute();
                 speakerOnIcon.classList.toggle("hidden", muted);
                 speakerOffIcon.classList.toggle("hidden", !muted);
-            }
-            muteBtn.addEventListener("pointerdown", (e) => {
-                e.stopPropagation();
-                toggleMute();
             });
 
             function getTierPrimaryColor() {
                 if (flowCtrl.hyperGlideTimer > 0) return "#fbbf24";
-                if (isPlatinum()) return "#e5e7eb";
                 if (flowCtrl.tier === 4) return "#f472b6";
                 if (flowCtrl.tier === 3) return "#c084fc";
                 if (flowCtrl.tier === 2) return "#10b981";
@@ -1580,15 +1298,6 @@
 
                 kickPulse = Math.max(0, kickPulse - rawDt * 4.2);
                 sixteenthPulse = Math.max(0, sixteenthPulse - rawDt * 7.5);
-                pocketPulse = Math.max(0, pocketPulse - rawDt * 3.5);
-                eraVisualPos += (runPeak / ERA_SPAN - eraVisualPos) * Math.min(1, rawDt * 0.8);
-
-                // Zen HUD: once you're locked in and nothing has gone wrong for a while, the HUD recedes
-                const calm =
-                    gameStarted &&
-                    flowCtrl.resonanceLocked &&
-                    performance.now() - flowCtrl.lastDisruptionMs > 6000;
-                hudHeader.style.opacity = calm ? "0.3" : "1";
 
                 if (!gameStarted) {
                     bird.y = height * 0.52 + Math.sin(performance.now() * 0.004) * 10;
@@ -1615,11 +1324,6 @@
                 const gravScale = flowCtrl.hyperGlideTimer > 0 ? 0.80 : flowCtrl.tier >= 4 ? 0.90 : 1.0;
                 bird.vy += bird.gravity * gravScale * frameScale;
                 bird.vy = Math.min(bird.vy, 8.2);
-                if (bird.diveTimer > 0) {
-                    bird.diveTimer -= dt;
-                    // Hold the drop flat-out, then snap level: an angular notch, not a swoop
-                    bird.vy = bird.diveTimer > 0 ? bird.diveSpeed : 0.6;
-                }
                 bird.y += bird.vy * frameScale;
 
                 // Subtle Resonant Buoyancy toward the Harmonic Guide Ribbon (effortless cruising)
@@ -1655,6 +1359,7 @@
                                 incrementStreak(1);
                                 synth.playSlipstreamTick(slipstreamTickCounter);
                                 spawnParticles(bird.x, bird.y, "#c084fc", 4);
+                                spawnCallout("SLIPSTREAM +1", bird.x + 18, bird.y - 22, "#e879f9", 0.92);
                             }
                         }
                     }
@@ -1696,7 +1401,6 @@
                     bird.vy = Math.max(0.6, bird.vy * 0.25);
                 } else if (bird.y + bird.radius > floorY) {
                     bird.y = floorY - bird.radius;
-                    bird.diveTimer = 0;
                     bird.vy = bird.jumpImpulse * 0.76;
                     spawnParticles(bird.x, floorY, "#38bdf8", 5);
                 }
@@ -1830,25 +1534,6 @@
             // ============================================================================
             // 7. 4-TIER SYNESTHETIC RENDERER (AURORA, GUIDE RIBBON & SLIPSTREAMS)
             // ============================================================================
-            function getTierBackdropStops(tier) {
-                if (tier === 4) return ["#0b041d", "#190a36", "#061d2c"];
-                if (tier === 3) return ["#08061a", "#110d2e", "#071829"];
-                if (tier === 2) return ["#050914", "#071827", "#041e20"];
-                return ["#050711", "#08101e", "#0b1326"];
-            }
-
-            function smoothstep(t) {
-                return t * t * (3 - 2 * t);
-            }
-
-            function mixHex(a, b, t) {
-                const pa = parseInt(a.slice(1), 16);
-                const pb = parseInt(b.slice(1), 16);
-                const ch = (shift) =>
-                    Math.round(((pa >> shift) & 255) + ((((pb >> shift) & 255) - ((pa >> shift) & 255)) * t));
-                return `rgb(${ch(16)}, ${ch(8)}, ${ch(0)})`;
-            }
-
             function renderScene() {
                 ctx.save();
 
@@ -1861,16 +1546,24 @@
                 const primaryColor = getTierPrimaryColor();
                 const nowSec = performance.now() * 0.001;
 
-                // 1. Evolving Backdrop: tier palettes in the first era, then a continuous
-                //    blend toward each next era's palette across every 500 points
-                const eraBase = Math.floor(eraVisualPos);
-                const eraT = smoothstep(eraVisualPos - eraBase);
-                const fromStops = eraBase === 0 ? getTierBackdropStops(tier) : getEra(eraBase).bg;
-                const toStops = getEra(eraBase + 1).bg;
+                // 1. 4-Tier Evolving Backdrop
                 const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
-                bgGrad.addColorStop(0, mixHex(fromStops[0], toStops[0], eraT));
-                bgGrad.addColorStop(0.55, mixHex(fromStops[1], toStops[1], eraT));
-                bgGrad.addColorStop(1, mixHex(fromStops[2], toStops[2], eraT));
+                if (tier === 4) {
+                    bgGrad.addColorStop(0, "#0b041d");
+                    bgGrad.addColorStop(0.5, "#190a36");
+                    bgGrad.addColorStop(1, "#061d2c");
+                } else if (tier === 3) {
+                    bgGrad.addColorStop(0, "#08061a");
+                    bgGrad.addColorStop(0.55, "#110d2e");
+                    bgGrad.addColorStop(1, "#071829");
+                } else if (tier === 2) {
+                    bgGrad.addColorStop(0, "#050914");
+                    bgGrad.addColorStop(0.6, "#071827");
+                    bgGrad.addColorStop(1, "#041e20");
+                } else {
+                    bgGrad.addColorStop(0, "#050711");
+                    bgGrad.addColorStop(1, "#0b1326");
+                }
                 ctx.fillStyle = bgGrad;
                 ctx.fillRect(0, 0, width, height);
 
@@ -1999,17 +1692,9 @@
                     if (isGhost) ctx.globalAlpha = 0.42;
 
                     const pipeGrad = ctx.createLinearGradient(p.x, 0, p.x + p.width, 0);
-                    if (isPlatinum()) {
-                        // Brushed platinum with a slow sheen that drifts across the column
-                        const sheen = 0.5 + Math.sin(nowSec * 1.3 + p.x * 0.01) * 0.3;
-                        pipeGrad.addColorStop(0, "#2a2f3a");
-                        pipeGrad.addColorStop(sheen, "#a8b0bd");
-                        pipeGrad.addColorStop(1, "#2a2f3a");
-                    } else {
-                        pipeGrad.addColorStop(0, "#090f1d");
-                        pipeGrad.addColorStop(0.5, "#162238");
-                        pipeGrad.addColorStop(1, "#090f1d");
-                    }
+                    pipeGrad.addColorStop(0, "#090f1d");
+                    pipeGrad.addColorStop(0.5, "#162238");
+                    pipeGrad.addColorStop(1, "#090f1d");
                     ctx.fillStyle = pipeGrad;
 
                     ctx.fillRect(p.x, 102, p.width, Math.max(0, topPipeBottom - 102));
@@ -2123,15 +1808,6 @@
                 ctx.beginPath();
                 ctx.arc(0, 0, haloR, 0, Math.PI * 2);
                 ctx.fill();
-
-                // In-the-pocket tap: a soft ring that blooms when your flap lands on the beat
-                if (pocketPulse > 0) {
-                    ctx.strokeStyle = `rgba(255, 255, 255, ${pocketPulse * 0.55})`;
-                    ctx.lineWidth = 1.5;
-                    ctx.beginPath();
-                    ctx.arc(0, 0, bird.radius + 4 + (1 - pocketPulse) * 16, 0, Math.PI * 2);
-                    ctx.stroke();
-                }
 
                 if (flowCtrl.shieldReady) {
                     ctx.strokeStyle = "rgba(56, 189, 248, 0.88)";

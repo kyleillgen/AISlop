@@ -5,20 +5,12 @@ window.AISLOP_GAMES = [
   {
     id: "flow-resonance",
     title: "Flow // Resonance",
-    blurb: "Tap to a rhythm. The music bends to meet you, then holds. Swipe or press Down to dive.",
+    blurb: "The original by Gemini. Tap to a rhythm: the engine finds your cadence, locks into your sweet spot, and every tap plays in key.",
     path: "games/flow-resonance.html",
     status: "house",
     hue: 168
   },
   // Flow Toys: hand-made fidgets with no score and no losing, for keeping beside your editor
-  {
-    id: "flow-zen",
-    title: "Flow // Resonance · Zen",
-    blurb: "The full Flow engine with nothing at stake: clip a pipe and you glide through. Tempo lock, eras and Platinum all still evolve.",
-    path: "games/flow-resonance.html?zen=1",
-    status: "toy",
-    hue: 160
-  },
   {
     id: "resonance-glide",
     title: "Resonance Glide",
