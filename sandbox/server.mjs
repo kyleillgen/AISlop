@@ -47,6 +47,23 @@ if (LIVE) {
 // ---------------------------------------------------------------------------
 // Model calls
 
+// The Flow layer travels in two forms. Portable: <script src="flow-layer.js" data-…></script>,
+// what the model writes and what lives in games/. Inline: the layer's code in the page, which
+// is what the sandbox serves, since its CSP only allows inline scripts.
+const FLOW_SRC = /<script\s+src="flow-layer\.js"([^>]*)><\/script>/i;
+const FLOW_INLINE = /<script\s+data-flow-layer([^>]*)>[\s\S]*?<\/script>/i;
+const flowCode = await readFile(path.join(ROOT, "games", "flow-layer.js"), "utf8");
+
+function inlineFlow(html) {
+  if (FLOW_INLINE.test(html)) return html;
+  if (!FLOW_SRC.test(html)) html = html.replace(/<head[^>]*>/i, (m) => `${m}\n<script src="flow-layer.js"></script>`);
+  return html.replace(FLOW_SRC, (m, attrs) => `<script data-flow-layer${attrs}>\n${flowCode}\n</script>`);
+}
+
+function portableFlow(html) {
+  return html.replace(FLOW_INLINE, (m, attrs) => `<script src="flow-layer.js"${attrs}></script>`);
+}
+
 function extractHtml(text) {
   const start = text.search(/<!doctype html|<html/i);
   const end = text.toLowerCase().lastIndexOf("</html>");
@@ -100,8 +117,9 @@ function mockFix(html, instruction) {
 
 function newRunId() { return "g" + Date.now().toString(36) + randomBytes(3).toString("hex"); }
 
-async function saveGame(id, html) { await writeFile(path.join(OUT, id + ".html"), html, "utf8"); }
-async function loadGame(id) { return readFile(path.join(OUT, id + ".html"), "utf8"); }
+async function saveGame(id, html) { await writeFile(path.join(OUT, id + ".html"), inlineFlow(html), "utf8"); }
+// The model sees the portable form so it never spends tokens on (or edits) the layer itself
+async function loadGame(id) { return portableFlow(await readFile(path.join(OUT, id + ".html"), "utf8")); }
 
 async function produce(run, html) {
   run.version = (run.version || 0) + 1;

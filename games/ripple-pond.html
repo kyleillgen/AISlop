@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<script src="flow-layer.js" data-bpm="80" data-step="5"></script>
 <title>Ripple Pond</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0b2a33; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -58,6 +59,7 @@
     leaves = []; ripples = []; spawnT = 1; score = 0; lives = 5; t = 0;
     placeLily();
     addLeaf(); addLeaf();
+    if (window.Flow) Flow.reset();
   }
   reset();
 
@@ -105,11 +107,13 @@
       if (Math.hypot(l.x - lily.x, l.y - lily.y) < LILY_R - 6) {
         leaves.splice(i, 1); score++;
         ripples.push({ x: lily.x, y: lily.y, t: 0, gold: true });
+        if (window.Flow) { Flow.score(score); Flow.hit(lily.x, lily.y); }
         placeLily();
         continue;
       }
       if (l.x < -20 || l.x > W + 20 || l.y < 60 || l.y > H + 20) {
         leaves.splice(i, 1); lives--;
+        if (window.Flow) Flow.miss();
         if (lives <= 0) { state = "over"; overAt = performance.now(); saveBest(score); return; }
       }
     }

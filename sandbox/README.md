@@ -35,6 +35,7 @@ Open http://localhost:4190 and use **+ Make one**.
 - POSTs must come from the sandbox's own origin, one model call in flight per player.
 - Fix text is capped at 100 characters and framed to the model as design feedback only.
 - Generated games are served with a CSP that blocks all network access, and play inside `sandbox="allow-scripts"` iframes with no access to the arcade page.
+- Every generated game gets the shared Flow layer (`games/flow-layer.js`) inlined, so it carries the arcade's chill, beat-synced look and groove.
 - Everything is logged to `sandbox/out/log.jsonl`, including token usage per call.
 
 ## Before this goes public

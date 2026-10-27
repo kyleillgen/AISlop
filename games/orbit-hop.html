@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<script src="flow-layer.js" data-bpm="92" data-step="10"></script>
 <title>Orbit Hop</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #070a16; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -57,6 +58,7 @@
     for (let i = 0; i < 8; i++) addNode();
     p = { mode: "orbit", node: nodes[0], a: -Math.PI / 2, rad: 64, dir: 1, x: 0, y: 0, vx: 0, vy: 0, flyT: 0, lastNode: null };
     camY = 0; score = 0; trail = []; sparks = [];
+    if (window.Flow) Flow.reset();
   }
   reset();
 
@@ -78,6 +80,7 @@
   function gameOver() {
     state = "over"; overAt = performance.now();
     saveBest(score);
+    if (window.Flow) Flow.miss();
   }
 
   function press() {
@@ -112,7 +115,10 @@
           p.rad = Math.max(n.r + 16, d);
           p.a = Math.atan2(dy, dx);
           p.dir = dx * p.vy - dy * p.vx > 0 ? 1 : -1; // keep spinning the way you arrived
-          if (!n.visited) { n.visited = true; score++; burst(n.x, n.y, n.hue); }
+          if (!n.visited) {
+            n.visited = true; score++; burst(n.x, n.y, n.hue);
+            if (window.Flow) { Flow.score(score); Flow.hit(n.x, n.y - camY); }
+          }
           break;
         }
       }

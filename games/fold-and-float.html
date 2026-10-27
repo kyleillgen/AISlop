@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<!-- Visual flow only: the game plays its own beat-matched music -->
+<script src="flow-layer.js" data-bpm="90" data-music="off" data-step="25"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Fold &amp; Float</title>
@@ -69,9 +71,11 @@ function start(){
   state='play';score=0;combo=0;calm=1;beats=0;lastBeat=-1;bpm=90;
   gates=[];parts=[];floats=[];trail=[];lastGapY=48;
   pl.y=45;pl.vy=-50;
+  if(window.Flow)Flow.reset();
 }
 function crash(){
-  state='over';overAt=performance.now();clkFrozen=beats;shake=1;held=false;
+  state='over';overAt=performance.now();clkFrozen=beats;shake=0.35;held=false;
+  if(window.Flow)Flow.miss();
   for(let i=0;i<24;i++)parts.push({x:px(),y:pl.y,vx:(Math.random()-0.5)*50,vy:(Math.random()-0.8)*50,l:1,c:i%2?'#fff6e6':'#f2c38b',r:Math.random()*6});
   note(330,0.4,'triangle',0.15);setTimeout(()=>note(220,0.6,'triangle',0.13),120);setTimeout(()=>note(165,0.9,'sine',0.14),260);
   if(score>best){best=score;try{localStorage.setItem('foldfloat_best',best)}catch(e){}}
@@ -165,9 +169,10 @@ function update(rdt){
       const ly=g.ly+Math.sin(t*3+g.b)*0.8;
       if(!g.tk&&Math.hypot(X-x,pl.y-ly)<5){
         g.tk=1;score+=3;calm=Math.min(1,calm+0.25);addFloat('+3',x,ly-5,'#ffcf7a');
+        if(window.Flow){Flow.score(score);Flow.hit(x*U,ly*U,true);}
         const ch=CH[Math.floor(lastBeat/4)%4];note(m2f(ch[3]+24)*rate(),0.7,'sine',0.1);note(m2f(ch[1]+36)*rate(),0.5,'sine',0.05);
       }
-      if(!g.p&&x<X-GW/2){g.p=1;const gain=1+Math.floor(combo/4);score+=gain;addFloat('+'+gain,X+6,pl.y+6,'#fff1dc');}
+      if(!g.p&&x<X-GW/2){g.p=1;const gain=1+Math.floor(combo/4);score+=gain;addFloat('+'+gain,X+6,pl.y+6,'#fff1dc');if(window.Flow)Flow.score(score);}
     }
     gates=gates.filter(g=>gateX(g)>-GW-5);
     trail.push({s:scroll,y:pl.y});if(trail.length>40)trail.shift();

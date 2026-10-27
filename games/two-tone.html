@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<script src="flow-layer.js" data-bpm="104" data-step="25"></script>
 <title>Two Tone</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0c0b14; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -48,6 +49,7 @@
   function reset() {
     px = W / 2; tone = 0; drops = []; spawnT = 0; score = 0; combo = 0; lives = 3; hurtT = 0; t = 0; pops = [];
     targetX = null;
+    if (window.Flow) Flow.reset();
   }
   reset();
 
@@ -117,8 +119,10 @@
         if (d.c === tone) {
           combo++; score += combo >= 10 ? 2 : 1;
           pops.push({ x: d.x, y: d.y, c: COLORS[d.c], t: 0 });
+          if (window.Flow) { Flow.score(score); Flow.hit(d.x, d.y); }
         } else if (hurtT <= 0) {
           lives--; combo = 0; hurtT = 0.8;
+          if (window.Flow) Flow.miss();
           if (lives <= 0) { state = "over"; overAt = performance.now(); saveBest(score); return; }
         }
         continue;

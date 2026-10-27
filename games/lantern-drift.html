@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<script src="flow-layer.js" data-bpm="84" data-step="100"></script>
 <title>Lantern Drift</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0a0d1c; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -64,12 +65,14 @@
     lx = W / 2; lvx = 0; fuel = 1; dist = 0; t = 0;
     rows = []; embers = [];
     for (let i = 0; i < 6; i++) addRow(-i * 220 + H * 0.2);
+    if (window.Flow) Flow.reset();
   }
   reset();
 
   function end(reason) {
     state = "over"; overAt = performance.now(); overReason = reason;
     saveBest(Math.floor(dist / 10));
+    if (window.Flow) Flow.miss();
   }
 
   function press() {
@@ -117,8 +120,12 @@
     }
     for (const e of embers) {
       e.y += dy;
-      if (!e.taken && Math.hypot(e.x - lx, e.y - ly) < R + 12) { e.taken = true; fuel = Math.min(1, fuel + 0.22); }
+      if (!e.taken && Math.hypot(e.x - lx, e.y - ly) < R + 12) {
+        e.taken = true; fuel = Math.min(1, fuel + 0.22);
+        if (window.Flow) Flow.hit(e.x, e.y);
+      }
     }
+    if (window.Flow) Flow.score(Math.floor(dist / 10));
     rows = rows.filter((r) => r.y < H + 40);
     embers = embers.filter((e) => e.y < H + 40 && !e.taken);
     while (rows.length < 6) addRow(rows[rows.length - 1].y - 220);

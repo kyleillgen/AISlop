@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- Pad only: the garden keeps its own beat and notes -->
+<script src="flow-layer.js" data-bpm="100" data-music="pad" data-step="30"></script>
 <title>Pulse Garden</title>
 <style>
   html, body { margin: 0; height: 100%; overflow: hidden; background: #06140f; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -62,6 +64,7 @@
   function reset() {
     clock = 0; nextBeat = 0.5; beatCount = 0;
     seeds = []; blooms = []; score = 0; combo = 0; petals = 5; flash = null;
+    if (window.Flow) Flow.reset();
   }
   reset();
 
@@ -83,12 +86,14 @@
     else if (err < 0.15) { combo++; score += 1; flash = { text: "good", t: 0.4 }; }
     else { miss(); return; }
     tone(seed.note, 0.5, 0.18, "triangle");
+    if (window.Flow) { Flow.score(score); Flow.hit(seed.x, seed.y, true); }
     blooms.push({ x: seed.x, y: seed.y, t: 0, hue: 300 + Math.random() * 80 });
   }
 
   function miss() {
     combo = 0; petals--;
     flash = { text: "miss", t: 0.4 };
+    if (window.Flow) Flow.miss();
     tone(110, 0.25, 0.12, "sine");
     if (petals <= 0) { state = "over"; overAt = performance.now(); saveBest(score); }
   }
@@ -138,7 +143,7 @@
     clock += dt;
     while (clock >= nextBeat) {
       beatCount++;
-      tone(beatCount % 4 === 1 ? 880 : 660, 0.05, 0.04, "square");
+      tone(beatCount % 4 === 1 ? 880 : 660, 0.05, 0.025, "sine");
       spawnSeed();
       // Busier garden as you grow: an off-beat seed every other bar, then every bar
       const extra = score > 60 ? beatCount % 2 === 0 : score > 25 ? beatCount % 4 === 2 : false;

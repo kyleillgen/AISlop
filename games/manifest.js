@@ -64,5 +64,51 @@ window.AISLOP_GAMES = [
     path: "games/fold-and-float.html",
     status: "fresh",
     hue: 28
+  },
+  // Batch 2: five live random rolls, each built on the shared Flow layer
+  {
+    id: "lantern-lob",
+    title: "Lantern Lob",
+    blurb: "Drag back and fling a little lantern fish from jelly to jelly; every catch shifts the tune.",
+    prompt: "Random roll: a lantern fish, aiming and launching, where collecting things changes the music; neon at night",
+    path: "games/lantern-lob.html",
+    status: "fresh",
+    hue: 200
+  },
+  {
+    id: "topsy-turtle",
+    title: "Topsy Turtle",
+    blurb: "Keep a beach ball bouncing off your shell while gravity flips and you swim to the other side.",
+    prompt: "Random roll: a sea turtle, keeping something balanced, where gravity slowly flips back and forth; bright and bouncy",
+    path: "games/topsy-turtle.html",
+    status: "fresh",
+    hue: 250
+  },
+  {
+    id: "glimmerwing",
+    title: "Glimmerwing",
+    blurb: "Keep moving to stay bright; gather the sugarlings and lead them home to the blossom.",
+    prompt: "Random roll: a hummingbird, gathering things into a group, where the light around you shrinks unless you keep moving; candy-coloured",
+    path: "games/glimmerwing.html",
+    status: "fresh",
+    hue: 290
+  },
+  {
+    id: "snugcap",
+    title: "Snugcap",
+    blurb: "Hold to swell your mushroom cap, let go to shrink, and squeeze through gaps as snugly as you dare.",
+    prompt: "Random roll: a glowing mushroom, matching a shape or gap, where points come from near misses; eerie but cute",
+    path: "games/snugcap.html",
+    status: "fresh",
+    hue: 180
+  },
+  {
+    id: "dripbeat",
+    title: "Dripbeat",
+    blurb: "Tap as each halo meets the raindrop. Stay on beat and the whole aurora sky speeds up.",
+    prompt: "Random roll: a raindrop, rhythm taps on a beat, where everything speeds up only while you're doing well; aurora sky",
+    path: "games/dripbeat.html",
+    status: "fresh",
+    hue: 160
   }
 ];
